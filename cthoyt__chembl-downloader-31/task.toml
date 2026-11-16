@@ -1,0 +1,68 @@
+version = "1.0"
+
+[task]
+name = "default/cthoyt__chembl-downloader-31"
+description = "Fix analysis on ChEMBL v9"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "chembl-downloader",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "cthoyt/chembl-downloader"
+ref = "f1b70a02eca9a337c406edd991c59d4babaf4ddc"
+reference = "https://github.com/cthoyt/chembl-downloader/pull/31"
+source_access = "auto"
+built_at = "2026-11-16T11:22:56.920921+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:a960ba8cd09a695d9b4c9d4624355a5d19ce0272f5fe4c85aff49618d9236e43"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2025-08-27T10:55:41Z"
+diff_format = "unified"
+context_files = [
+    "README.md",
+    "docs/_data/summary-diff.svg",
+    "docs/_data/summary-diff.tsv",
+    "docs/_data/summary.svg",
+    "docs/_data/summary.tsv",
+    "src/chembl_downloader/api.py",
+    "src/chembl_downloader/cli.py",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 1554
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

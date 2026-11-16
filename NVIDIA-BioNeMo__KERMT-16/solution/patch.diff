@@ -1,0 +1,239 @@
+diff --git a/.claude/skills b/.claude/skills
+new file mode 120000
+index 0000000..747ed1b
+--- /dev/null
++++ b/.claude/skills
+@@ -0,0 +1 @@
++../agent/skills
+\ No newline at end of file
+diff --git a/.gitignore b/.gitignore
+index 8094968..7dc6960 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -9,6 +9,9 @@ __pycache__/
+ # VSCode
+ *.code-workspace
+ 
++# Local Claude Code notes (personal dev notes, not for the public repo)
++CLAUDE.local.md
++
+ # Distribution / packaging
+ .Python
+ build/
+diff --git a/CLAUDE.md b/CLAUDE.md
+new file mode 120000
+index 0000000..47dc3e3
+--- /dev/null
++++ b/CLAUDE.md
+@@ -0,0 +1 @@
++AGENTS.md
+\ No newline at end of file
+diff --git a/agent/README.md b/agent/README.md
+index cfe1c0c..5597fc9 100644
+--- a/agent/README.md
++++ b/agent/README.md
+@@ -176,8 +176,20 @@ Other agentskills.io-compatible agents should also work; see the
+ 
+ ### Claude Code
+ 
+-Claude Code expects skills at `~/.claude/skills/<skill-name>/SKILL.md`. From
+-a clone of the kermt repo:
++Claude Code discovers skills at `~/.claude/skills/<skill-name>/SKILL.md`
++(personal scope, available from any directory) or
++`<repo>/.claude/skills/<skill-name>/SKILL.md` (project scope, this checkout
++only).
++
++**Project scope works out of the box.** This repo ships a committed
++`.claude/skills` → `../agent/skills` symlink (and a `CLAUDE.md` → `AGENTS.md`
++symlink), so opening Claude Code from the repo root discovers all eight
++`kermt-*` skills with no install step — `agent/skills/` stays the single,
++tool-agnostic source of truth (Codex / Nemotron read it directly). Restart
++Claude Code once after your first checkout so it picks up the entries.
++
++Personal scope (optional — to use the skills from any directory, not just this
++checkout) — symlink them into your personal skills dir:
+ 
+ ```bash
+ for d in agent/skills/kermt-*/; do
+@@ -186,11 +198,10 @@ for d in agent/skills/kermt-*/; do
+ done
+ ```
+ 
+-Restart Claude Code once after the first install so it picks up the new
+-`~/.claude/skills/` entries. The symlinked form means future `git pull` updates
+-to the skill content take effect without re-installing. If you ever rename a
+-skill on disk (e.g. `kermt-foo` → `kermt-bar`), clean the stale entry first:
+-`rm -rf ~/.claude/skills/kermt-foo` before re-running the snippet above.
++The symlinked form means future `git pull` updates to the skill content take
++effect without re-installing. If you ever rename a skill on disk (e.g.
++`kermt-foo` → `kermt-bar`), clean the stale entry first
++(`rm -rf ~/.claude/skills/kermt-foo`) before re-running the snippet.
+ 
+ ### Codex
+ 
+diff --git a/agent/scripts/run_pretrain_local.py b/agent/scripts/run_pretrain_local.py
+index 5964ec0..6d1a235 100644
+--- a/agent/scripts/run_pretrain_local.py
++++ b/agent/scripts/run_pretrain_local.py
+@@ -260,6 +260,12 @@ def _build_argv(
+     if applied.get("use_cuikmolmaker_featurization", {}).get("value"):
+         argv += ["--use_cuikmolmaker_featurization"]
+ 
++    # W&B logging (pass-through; pretrain_ddp.py only inits W&B when project is set).
++    if "wandb_project" in applied:
++        argv += ["--wandb_project", str(applied["wandb_project"]["value"])]
++        if "wandb_run_name" in applied:
++            argv += ["--wandb_run_name", str(applied["wandb_run_name"]["value"])]
++
+     # Where pretrain_ddp.py auto-resumes from (we'll symlink the user ckpt there).
+     argv += ["--save_dir", str(out_dir / "ckpt")]
+ 
+@@ -562,6 +568,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
+         for f in CMIM_DECODER_FLAGS_FROM_CKPT:
+             applied[f] = {"value": saved_args[f], "source": "ckpt_saved_args"}
+ 
++    # Optional W&B logging: pass-through, no defaults — forwarded only when the
++    # user sets --wandb-project (run name is honored only alongside a project).
++    for f in ("wandb_project", "wandb_run_name"):
++        v = getattr(args, f, None)
++        if v is not None:
++            applied[f] = {"value": v, "source": "user"}
++
+     # 5. Build the pretrain_ddp.py argv.
+     argv = _build_argv(
+         world_size=world_size, gpus_str=gpus_str, out_dir=out_dir, manifest=manifest,
+@@ -689,6 +702,11 @@ def main(argv: list[str] | None = None) -> int:
+                  ("vocab-loss-weight", float), ("latent-dim", int),
+                  ("contrastive-temperature", float)]:
+         p.add_argument(f"--{f}", type=t, default=None)
++    # Optional W&B logging (pass-through to pretrain_ddp.py; off unless project is set).
++    p.add_argument("--wandb-project", type=str, default=None,
++                   help="W&B project name. When set, pretrain_ddp.py logs train/val losses.")
++    p.add_argument("--wandb-run-name", type=str, default=None,
++                   help="Optional W&B run name (only used when --wandb-project is set).")
+     args = p.parse_args(argv)
+ 
+     try:
+diff --git a/agent/skills/kermt-add-cmim-pretrain/SKILL.md b/agent/skills/kermt-add-cmim-pretrain/SKILL.md
+index cfe75d2..69b96a8 100644
+--- a/agent/skills/kermt-add-cmim-pretrain/SKILL.md
++++ b/agent/skills/kermt-add-cmim-pretrain/SKILL.md
+@@ -66,6 +66,8 @@ Optional (same as `kermt-continue-pretrain`):
+ - Training-hyperparameter overrides (`--epochs N`, `--batch-size N`, lr triple,
+   `--warmup-epochs F`, etc.).
+ - `--vocab-loss-weight F` / `--latent-dim N` / `--contrastive-temperature F`.
++- `--wandb-project NAME` / `--wandb-run-name NAME` — optional Weights & Biases
++  logging (run name honored only alongside a project). Off by default.
+ - `--gpus 0,2`.
+ 
+ ## Workflow
+diff --git a/agent/skills/kermt-continue-pretrain/SKILL.md b/agent/skills/kermt-continue-pretrain/SKILL.md
+index 41459e2..3280413 100644
+--- a/agent/skills/kermt-continue-pretrain/SKILL.md
++++ b/agent/skills/kermt-continue-pretrain/SKILL.md
+@@ -66,6 +66,10 @@ Optional:
+ - `--vocab-loss-weight F` (hybrid only) / `--latent-dim N` /
+   `--contrastive-temperature F` (cmim and hybrid only) — loss / decoder
+   overrides.
++- `--wandb-project NAME` / `--wandb-run-name NAME` — optional Weights & Biases
++  logging. When `--wandb-project` is set, rank 0 logs train/val losses; the run
++  name is honored only alongside a project. Off by default. (Independent of the
++  ckpt's `wandb_run_id` continuity handling under `--resume`.)
+ - `--resume` — see "Modes" section below.
+ - `--gpus 0,2` — restrict to a GPU subset. Default uses all visible GPUs.
+ - `--from-prepare <dir>` — skip the prepare step and reuse an existing
+diff --git a/agent/skills/kermt-pretrain-scratch/SKILL.md b/agent/skills/kermt-pretrain-scratch/SKILL.md
+index f473343..c0b3509 100644
+--- a/agent/skills/kermt-pretrain-scratch/SKILL.md
++++ b/agent/skills/kermt-pretrain-scratch/SKILL.md
+@@ -86,6 +86,9 @@ Optional:
+   Anything not given is filled from `agent/config/defaults_pretrain.json`.
+ - `--vocab-loss-weight F` (hybrid only) / `--latent-dim N` /
+   `--contrastive-temperature F` (cmim and hybrid only).
++- `--wandb-project NAME` / `--wandb-run-name NAME` — optional Weights & Biases
++  logging. When `--wandb-project` is set, rank 0 logs train/val losses; the run
++  name is honored only alongside a project. Off by default.
+ - `--gpus 0,2` — restrict to a GPU subset.
+ 
+ ## Workflow
+diff --git a/agent/tests/test_run_pretrain_local.py b/agent/tests/test_run_pretrain_local.py
+index 0ba718c..b56f08b 100644
+--- a/agent/tests/test_run_pretrain_local.py
++++ b/agent/tests/test_run_pretrain_local.py
+@@ -285,6 +285,33 @@ def test_dispatch_hybrid(tmp_path: Path) -> None:
+     assert "--vocab_loss_weight" in argv
+ 
+ 
++def test_wandb_flags_forwarded_when_set(tmp_path: Path) -> None:
++    ckpt, prep, val = _setup(tmp_path, "grover_base")
++    code, m = _run(
++        "--ckpt", str(ckpt), "--prepare-manifest", str(prep),
++        "--ckpt-validator-out", str(val),
++        "--out", str(tmp_path / "run"), "--gpus", "0", "--dry-run",
++        "--wandb-project", "myproj", "--wandb-run-name", "myrun",
++    )
++    assert code == 0, m
++    argv = m["manifest"]["argv"]
++    assert argv[argv.index("--wandb_project") + 1] == "myproj"
++    assert argv[argv.index("--wandb_run_name") + 1] == "myrun"
++
++
++def test_wandb_flags_absent_by_default(tmp_path: Path) -> None:
++    ckpt, prep, val = _setup(tmp_path, "grover_base")
++    code, m = _run(
++        "--ckpt", str(ckpt), "--prepare-manifest", str(prep),
++        "--ckpt-validator-out", str(val),
++        "--out", str(tmp_path / "run"), "--gpus", "0", "--dry-run",
++    )
++    assert code == 0, m
++    argv = m["manifest"]["argv"]
++    assert "--wandb_project" not in argv
++    assert "--wandb_run_name" not in argv
++
++
+ def test_dispatch_rejects_finetuned(tmp_path: Path) -> None:
+     ckpt, prep, val = _setup(tmp_path, "finetuned")
+     code, m = _run(
+diff --git a/main_hpo.py b/main_hpo.py
+index 6ee5c9c..318d3bc 100644
+--- a/main_hpo.py
++++ b/main_hpo.py
+@@ -103,9 +103,9 @@ def objective_all(trial, args, logger):
+     ensemble_scores, min_val_loss = run_training(args, logger, return_val=True)
+     print(f"*************** min_val_loss for trial {trial_number}: {min_val_loss} ***************")
+     trial_dict = vars(args)
+-    trial_dict["min_val_loss"] = min_val_loss
+-    trial_dict["test_metric"] = np.nanmean(ensemble_scores)
+-    with open(f"{args.save_dir}/params.json", "w") as outfile: 
++    trial_dict["min_val_loss"] = float(min_val_loss)
++    trial_dict["test_metric"] = float(np.nanmean(ensemble_scores))
++    with open(f"{args.save_dir}/params.json", "w") as outfile:
+         json.dump(trial_dict, outfile)
+ 
+     # Move ckpt to actual path
+diff --git a/scripts/clean_smiles.py b/scripts/clean_smiles.py
+index 67098fa..6dacce2 100644
+--- a/scripts/clean_smiles.py
++++ b/scripts/clean_smiles.py
+@@ -139,6 +139,12 @@ def main():
+         default=0,
+         help="Column index containing SMILES (default: 0)",
+     )
++    parser.add_argument(
++        "--restart",
++        action="store_true",
++        help="Overwrite an existing --output without the interactive prompt "
++        "(for scripted / non-interactive re-runs; matches save_features.py --restart).",
++    )
+ 
+     args = parser.parse_args()
+ 
+@@ -147,7 +153,7 @@ def main():
+         print(f"❌ Error: Input file not found: {args.input}")
+         sys.exit(1)
+ 
+-    if os.path.exists(args.output):
++    if os.path.exists(args.output) and not args.restart:
+         response = input(
+             f"⚠️  Output file already exists: {args.output}\n   Overwrite? (y/n): "
+         )

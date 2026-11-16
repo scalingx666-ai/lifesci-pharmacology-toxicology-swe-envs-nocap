@@ -1,0 +1,988 @@
+diff --git a/BENCHMARKS.md b/BENCHMARKS.md
+index f8eb74f..4e56dea 100644
+--- a/BENCHMARKS.md
++++ b/BENCHMARKS.md
+@@ -37,21 +37,38 @@ python -u tests/<path>/<test>.py    # or cellsim <subcommand> …
+ 
+ ## 1.3 Docking: pose-recovery on bundled cocrystals
+ 
+-Re-docking gate — canonical Astex/PDBBind convention (top-1 ≤ 2.5 Å
+-**AND** best-of-top-3 < 2.0 Å).
+-
+-| System | ligand | top-1 RMSD | top-3-best | status | notes |
+-|---|---|:-:|:-:|:-:|---|
+-| 1STP streptavidin | biotin | 2.02 Å | 1.99 Å | ✅ PASS | canonical benchmark since AutoDock 1.0 |
+-| 3PTB trypsin | benzamidine | 1.30 Å | 1.30 Å | ✅ PASS | classic S1-pocket test |
+-| 1M17 EGFR kinase | erlotinib | 4.23 Å | 4.23 Å | ❌ FAIL | Vina scoring-function failure; known hard kinase case |
+-
+-**Aggregate: 2/3 = 67 %** at canonical gate.
+-Vina papers report ~75–85 % on Astex Diverse Set (85 systems) at
+-exhaustiveness=32; our 3-cocrystal set is deliberately harder
+-(includes a known failure case — erlotinib).
+-
+-Reproducer: `python tests/dock/test_mini_bench.py`.
++> **CORRECTION (2026-07):** the per-system RMSDs previously tabulated
++> here (1STP 2.02 Å, 1M17 4.23 Å, …) were computed on molecules
++> *scrambled* by a Meeko atom-order bug in the pose reconstruction —
++> `_build_pose_mol` / `pose_rmsd` assumed Meeko preserves SMILES atom
++> order, which it does not. The bug is fixed (docked poses are now
++> reconstructed via Meeko's reverse conversion) and the numbers below
++> are recomputed on correct molecules. It made good poses look bad —
++> e.g. biotin/1STP went from a reported 2.02 Å to the real **0.69 Å**.
++
++**Blind pose recovery — 15 diverse cocrystals**, structures + ligand
++SMILES fetched from RCSB at run time (not hard-coded, so not circular
++on our own inputs). Reproducer:
++`python scripts/run_blind_dock_bench.py benchmarks/pdbbind/blind_set.yaml`.
++
++| Metric | Result | Campaign-1 gate |
++|---|:-:|:-:|
++| PoseBusters physical validity (#3) | **100 %** (15/15) | ✅ ≥ 95 % |
++| Pose recovery, top-1 ≤ 2 Å (#1) | **73 %** (11/15) | ⚠️ ≥ 75 % |
++| Pose recovery, top-3 ≤ 2 Å | **87 %** (13/15) | — |
++
++The top-1/top-3 gap is the headline: Vina's **sampling** finds the
++correct pose 87 % of the time, but its **scoring** ranks it #1 only
++73 %. The remaining top-1 misses are two ranking failures (1M17, 1HPX —
++correct pose at rank 2–3) and two genuine sampling near-misses (1FKG,
++1DWD, top-3 best 2.26 / 2.34 Å). A UFF-strain re-rank does *not* recover
++the ranking failures (the correct pose is not lower-strain), so top-1 is
++a Vina-scoring limitation — the same root as the kinase-ranking result
++below, which is what FEP addresses.
++
++The legacy 3-cocrystal re-dock smoke (`tests/dock/test_mini_bench.py`)
++still runs as an API-regression gate; the 15-cocrystal blind set above
++is the real accuracy measurement.
+ 
+ ---
+ 
+diff --git a/README.md b/README.md
+index d7e9b5e..4faf63d 100755
+--- a/README.md
++++ b/README.md
+@@ -68,12 +68,12 @@ omit `--center` / `--box` and CellSim auto-detects pockets via fpocket
+ |---|---|---|
+ | **1.1 Chem** | SMILES → OpenFF-parametrised system (AM1-BCC charges) | ✅ 9/10 full tier, 10/10 RDKit tier |
+ | **1.2 MD** | Classical Langevin MD, solvated protein loader (AMBER14 + TIP3P) | ✅ 1 ps ubiquitin Cα RMSD 0.74 Å |
+-| **1.3 Docking** | Vina + Meeko + PoseBusters + fpocket auto-site | ✅ mini-bench 2/3 canonical gate |
++| **1.3 Docking** | Vina + Meeko + PoseBusters + fpocket auto-site | ✅ blind 15-cocrystal: top-3 87 %, PoseBusters 100 %; top-1 73 % |
+ | **1.3 FEP** | Alchemical ΔG_hyd + ΔG_bind (DDM); `cellsim fep-binding {dg,ddg,bench,validate}` + `fep-report` + `bench-all` | ✅ **Milestone A PASS** (FreeSolv-12 MAE 1.42 kcal/mol on `milestone-a-pilot-3`, Pearson r +0.913); pipeline complete end-to-end; 107+ smoke tests; Milestone B binding pending GPU |
+ | **1.4 Quantum** | xTB GFN2 single-point + CYP3A4 SoM predictor (BDE) | ✅ 10/10 sane + 3/3 SoM smoke |
+ | **1.5 Coarse-grained** | Martini 3 membrane / bilayer MD | ⏳ scaffold only |
+ | **1.6 UQ** | Monte-Carlo / Sobol / split-conformal for ΔG bounds | ✅ triad shipped |
+-| **1.7 Blind harness** | PDBBind scale gate + red-team slot | ⏳ 3-cocrystal mini-bench shipped; PDBBind scale pending |
++| **1.7 Blind harness** | RCSB-fetched blind pose recovery + PoseBusters | ✅ 15-cocrystal blind set; PoseBusters #3 PASS (100 %); CASF/full-PDBBind scale pending |
+ | **x-cut cache** | SQLite physics-prior memoisation (AM1-BCC, Vina, xTB) | ✅ shipped; wired into Layers 1.1 / 1.3 / 1.4 |
+ 
+ **Cross-cutting UX:**
+@@ -168,8 +168,14 @@ per-row reproducers.
+ 
+ Headline numbers today:
+ 
+-- **3-cocrystal mini-bench:** 2/3 = 67 % pose recovery at canonical
+-  top-3 < 2 Å gate.
++- **Blind pose recovery (15 diverse cocrystals, RCSB-fetched):**
++  top-1 ≤ 2 Å = **73 %**, top-3 ≤ 2 Å = **87 %**, PoseBusters physical
++  validity = **100 %**. The top-1/top-3 gap is Vina's *scoring* (it
++  ranks the correct pose #1 only 73 % of the time) vs its *sampling*
++  (it generates the correct pose 87 % of the time). Reproduce:
++  `python scripts/run_blind_dock_bench.py benchmarks/pdbbind/blind_set.yaml`.
++  (Earlier "2/3 mini-bench" numbers were computed on molecules
++  scrambled by a Meeko atom-order bug, now fixed — see BENCHMARKS.md.)
+ - **Streptavidin calibration:** Spearman ρ = **1.00** across
+   14 orders of magnitude of K_d (but Pearson r = 0.98 hides the
+   fact that Vina's absolute ΔG saturates on tight binders — MAE
+diff --git a/benchmarks/pdbbind/.gitignore b/benchmarks/pdbbind/.gitignore
+new file mode 100644
+index 0000000..b118389
+--- /dev/null
++++ b/benchmarks/pdbbind/.gitignore
+@@ -0,0 +1 @@
++structures/
+diff --git a/benchmarks/pdbbind/blind_set.yaml b/benchmarks/pdbbind/blind_set.yaml
+new file mode 100644
+index 0000000..6618414
+--- /dev/null
++++ b/benchmarks/pdbbind/blind_set.yaml
+@@ -0,0 +1,21 @@
++# Layer 1.7 blind pose-recovery + PoseBusters validation set.
++# Diverse, standard re-docking cocrystals across protein families.
++# SMILES + coordinates are fetched from RCSB at run time (never
++# hard-coded), so this benchmark is not circular on our own inputs.
++# `resname` is given only where auto-pick could grab a cofactor.
++entries:
++  - {pdb: 1stp, resname: BTN, name: streptavidin_biotin}
++  - {pdb: 3ptb, resname: BEN, name: trypsin_benzamidine}
++  - {pdb: 1m17, resname: AQ4, name: egfr_erlotinib}
++  - {pdb: 1hvr, resname: XK2, name: hivprotease_xk263}
++  - {pdb: 2hyy, resname: STI, name: abl_imatinib}
++  - {pdb: 3ert, resname: OHT, name: er_hydroxytamoxifen}
++  - {pdb: 1err, resname: RAL, name: er_raloxifene}
++  - {pdb: 1oyt, name: thrombin}
++  - {pdb: 1fkg, name: fkbp12}
++  - {pdb: 1ke5, name: cdk2}
++  - {pdb: 1cbx, name: carboxypeptidase_a}
++  - {pdb: 1dwd, name: thrombin_napap}
++  - {pdb: 1hpx, name: hivprotease_kni272}
++  - {pdb: 1e1v, name: cdk2_inhibitor}
++  - {pdb: 1lpz, name: factor_xa}
+diff --git a/benchmarks/pdbbind/blind_set_results.csv b/benchmarks/pdbbind/blind_set_results.csv
+new file mode 100644
+index 0000000..5520122
+--- /dev/null
++++ b/benchmarks/pdbbind/blind_set_results.csv
+@@ -0,0 +1,16 @@
++pdb,name,resname,smiles,n_lig_heavy,dG_kcalmol,top1_rmsd_A,top3_best_rmsd_A,posebusters_ok,wall_s,error
++1stp,streptavidin_biotin,BTN,C1[C@H]2[C@@H]([C@@H](S1)CCCCC(=O)O)NC(=O)N2,16,-7.4,0.69,0.69,True,9.7,
++3ptb,trypsin_benzamidine,BEN,[H]/N=C(\c1ccccc1)/N,9,-6.02,1.13,1.1,True,4.9,
++1m17,egfr_erlotinib,AQ4,COCCOc1cc2c(cc1OCCOC)ncnc2Nc3cccc(c3)C#C,29,-7.25,2.61,1.71,True,19.3,
++1hvr,hivprotease_xk263,XK2,c1ccc(cc1)C[C@@H]2[C@@H]([C@H]([C@H](N(C(=O)N2Cc3ccc4ccccc4c3)Cc5ccc6ccccc6c5)Cc7ccccc7)O)O,46,-11.63,0.74,0.74,True,137.2,
++2hyy,abl_imatinib,STI,Cc1ccc(cc1Nc2nccc(n2)c3cccnc3)NC(=O)c4ccc(cc4)CN5CCN(CC5)C,37,-11.89,0.8,0.8,True,42.3,
++3ert,er_hydroxytamoxifen,OHT,CC/C(=C(\c1ccc(cc1)O)/c2ccc(cc2)OCCN(C)C)/c3ccccc3,29,-9.74,1.08,1.0,True,20.8,
++1err,er_raloxifene,RAL,c1cc(ccc1c2c(c3ccc(cc3s2)O)C(=O)c4ccc(cc4)OCCN5CCCCC5)O,34,-10.85,0.6,0.6,True,27.8,
++1oyt,thrombin,FSN,c1cc(ccc1CN2C(=O)[C@H]3[C@@H]4CCC[N@@]4[C@H]([C@H]3C2=O)c5ccc(cc5)C(=[NH2+])N)F,30,-10.92,0.26,0.26,True,14.2,
++1fkg,fkbp12,SB3,CCC(C)(C)C(=O)C(=O)N1CCCC[C@H]1C(=O)OC(CCc2ccccc2)c3ccccc3,33,-7.96,2.52,2.26,True,31.3,
++1ke5,cdk2,LS1,CNS(=O)(=O)c1ccc(cc1)N\C=C/2\c3ccccc3NC2=O,23,-9.45,1.19,0.32,True,10.1,
++1cbx,carboxypeptidase_a,BZS,c1ccc(cc1)C[C@H](CC(=O)O)C(=O)O,15,-7.51,0.32,0.32,True,10.5,
++1dwd,thrombin_napap,MID,[H]/N=C(/c1ccc(cc1)C[C@H](C(=O)N2CCCCC2)NC(=O)CNS(=O)(=O)c3ccc4ccccc4c3)\N,37,-9.96,3.12,2.34,True,37.1,
++1hpx,hivprotease_kni272,KNI,CC(C)(C)NC(=O)[C@@H]1CSCN1C(=O)[C@H]([C@H](Cc2ccccc2)NC(=O)[C@H](CSC)NC(=O)COc3cccc4c3ccnc4)O,46,-9.3,3.0,1.61,True,94.6,
++1e1v,cdk2_inhibitor,CMG,c1[nH]c2c(n1)c(nc(n2)N)OCC3CCCCC3,18,-7.55,1.03,1.03,True,9.0,
++1lpz,factor_xa,CMB,Cc1cccc2c1cc(n2Cc3cccc(c3)C(=N)N)C(=O)NCc4cc(cc(c4)Cl)Cl,32,-10.29,0.77,0.77,True,22.6,
+diff --git a/benchmarks/pdbbind/blind_set_results.summary.json b/benchmarks/pdbbind/blind_set_results.summary.json
+new file mode 100644
+index 0000000..1465f7e
+--- /dev/null
++++ b/benchmarks/pdbbind/blind_set_results.summary.json
+@@ -0,0 +1,11 @@
++{
++  "n_entries": 15,
++  "n_scored": 15,
++  "n_errored": 0,
++  "pose_recovery_top1_frac": 0.7333333333333333,
++  "pose_recovery_top3_frac": 0.8666666666666667,
++  "pose_recovery_gate": 0.75,
++  "posebusters_frac": 1.0,
++  "posebusters_gate": 0.95,
++  "errored_pdbs": []
++}
+\ No newline at end of file
+diff --git a/docs/campaign1_status.md b/docs/campaign1_status.md
+index 2fe3080..602cc42 100644
+--- a/docs/campaign1_status.md
++++ b/docs/campaign1_status.md
+@@ -9,13 +9,13 @@ the realistic timeline is to Stage 1 completion on CPU-only.
+ |---|---|---|---|
+ | **1.1 Chem foundation** (RDKit + OpenFF + AM1-BCC) | ✅ DONE | 10k ChEMBL round-trip, ADMET + AM1-BCC cache, profile dashboard | — |
+ | **1.2 Classical MD** (OpenMM + ff14SB + TIP3P) | ✅ DONE (MVP) | 1 ps ubiquitin Cα RMSD 0.74 Å; 100 ns ubiquitin gate awaits GPU | full 100 ns gate (GPU) |
+-| **1.3a Docking** (Vina + Meeko + PoseBusters + fpocket) | ✅ DONE | mini-bench 2/3 canonical re-dock; off-target panel; CYP3A4 SoM; strain-gate; triage rules + viewer | — |
++| **1.3a Docking** (Vina + Meeko + PoseBusters + fpocket) | ✅ DONE (with caveat) | blind 15-cocrystal: PoseBusters 100 % (#3 PASS), pose recovery top-3 87 % / top-1 73 % (#1 marginal — Vina *scoring*, not sampling); off-target panel; CYP3A4 SoM; strain-gate; triage rules + viewer. NB fixed a pose-reconstruction bug that had corrupted all prior RMSD/PoseBusters numbers. | lift top-1 via FEP ranking or re-scope #1 to top-3 |
+ | **1.3b FEP Milestone A** (hydration ΔG) | ✅ **PASS** (today) | FreeSolv-12 MAE **1.42 kcal/mol** (gate ≤ 1.5), Pearson r +0.913, GHMC 99%, tag `milestone-a-pilot-3` | 12/12 closure on 2 polar fails (structural, doc'd; not blocking) |
+ | **1.3c FEP Milestone B** (binding ΔG) | ⏳ in flight | streptavidin bench RUNNING on CPU (PID 75132, started 2026-05-30 22:15, ETA ~20 h); EGFR queued | both benches → fep-report → tarball |
+ | **1.4 Quantum** (xTB GFN2 + PySCF DFT) | ✅ DONE (MVP) | 10/10 sanity + 3/3 CYP3A4 SoM; 2/3 on literature validation (aspirin ✓, midazolam ✓, diazepam doc'd-fail) | optional: extend literature set to 20 |
+ | **1.5 Coarse-grained Martini 3** | ⏳ scaffold only | `src/cg/{bilayer,protein_cg}.py` are NotImplementedError stubs (~90 LOC total) | full bilayer builder + martinize2 wrapper + OpenMM-Martini MD driver + area-per-lipid validation |
+ | **1.6 UQ** (Sobol + MC + MAPIE) | ✅ DONE | MC-dock seeds, Sobol sensitivity, conformal quantiles, streptavidin/trypsin/EGFR calibration bundles | — |
+-| **1.7 Blind harness** (PDBBind / CASF / PoseBusters / ChEMBL) | ⏳ partial | PoseBusters integrated, fpocket integrated, 3-cocrystal mini-bench shipped; `benchmarks/{pdbbind,casf}/` are empty dirs | PDBBind 500-compound CPU subset (full 5k needs GPU); CASF-2016 ranking gate |
++| **1.7 Blind harness** (PDBBind / CASF / PoseBusters / ChEMBL) | ⏳ partial | `scripts/run_blind_dock_bench.py` fetches structures + ligand SMILES from RCSB and scores pose recovery + PoseBusters on a 15-cocrystal blind set (`benchmarks/pdbbind/blind_set.yaml`). #3 PoseBusters PASSES (100 %); #1 pose recovery measured honestly (top-1 73 %, top-3 87 %). | scale the blind set (30–50); CASF-2016 ranking gate |
+ 
+ ## CPU-only timeline to Stage 1 complete
+ 
+diff --git a/scripts/run_blind_dock_bench.py b/scripts/run_blind_dock_bench.py
+new file mode 100644
+index 0000000..e3ecfc2
+--- /dev/null
++++ b/scripts/run_blind_dock_bench.py
+@@ -0,0 +1,283 @@
++#!/usr/bin/env python
++"""Layer 1.7 — blind pose-recovery + PoseBusters validation harness.
++
++Campaign-1 exit criteria #1 (PDBBind blind pose recovery >= 75% within
++2 Å) and #3 (PoseBusters physical validity >= 95%) require a real,
++external, blind benchmark — not our own 3-cocrystal toy set. This
++harness closes that gap.
++
++For every entry `{pdb, resname?}` in the manifest it:
++  1. fetches the crystal structure from RCSB (cached),
++  2. picks the drug ligand (the given resname, else the largest
++     non-buffer HETATM group) and fetches its AUTHORITATIVE SMILES from
++     RCSB's chemical-component API — never from memory, so the
++     benchmark is not circular on our own inputs,
++  3. derives the search box from the crystal ligand centroid + extent,
++  4. re-docks the SMILES with AutoDock Vina (the docker never sees the
++     crystal pose),
++  5. scores the top pose's heavy-atom RMSD against the crystal pose and
++     runs PoseBusters.
++
++Aggregate gates:
++  - pose recovery: fraction with top-1 RMSD <= 2.0 Å  (criterion #1)
++  - PoseBusters:   fraction with posebusters_ok         (criterion #3)
++
++Entries that error (bad resname, unparseable ligand, fetch failure) are
++reported and EXCLUDED from the gate denominators — never silently
++counted as pass or fail.
++"""
++from __future__ import annotations
++
++import argparse
++import csv
++import json
++import sys
++import time
++import urllib.request
++from pathlib import Path
++
++REPO_ROOT = Path(__file__).resolve().parents[1]
++sys.path.insert(0, str(REPO_ROOT))
++
++STRUCT_DIR = REPO_ROOT / "benchmarks" / "pdbbind" / "structures"
++
++# HETATM residue names that are NOT the drug: water, ions, common
++# cryo/crystallisation additives and buffers. Used to auto-pick the
++# real ligand when the manifest doesn't name one.
++_NON_DRUG_HET = {
++    "HOH", "DOD", "WAT", "SO4", "PO4", "GOL", "EDO", "PEG", "PG4",
++    "1PE", "2PE", "ACT", "ACY", "FMT", "DMS", "MPD", "TRS", "EPE",
++    "MES", "BME", "IMD", "TLA", "CIT", "FLC", "BOG", "NAG", "MAN",
++    "BMA", "IOD", "NO3", "NH4", "AZI", "CO3", "BCT", "OXL",
++    # monatomic ions
++    "NA", "K", "CL", "BR", "MG", "CA", "MN", "ZN", "FE", "FE2",
++    "CU", "NI", "CO", "CD", "HG", "CS", "RB", "SR", "BA", "LI",
++}
++
++
++def _fetch(url: str, timeout: int = 30) -> bytes:
++    req = urllib.request.Request(url, headers={"User-Agent": "cellsim-blind-bench"})
++    with urllib.request.urlopen(req, timeout=timeout) as f:
++        return f.read()
++
++
++def fetch_pdb(pdb_id: str) -> Path:
++    STRUCT_DIR.mkdir(parents=True, exist_ok=True)
++    out = STRUCT_DIR / f"{pdb_id.lower()}.pdb"
++    if not out.exists() or out.stat().st_size == 0:
++        data = _fetch(f"https://files.rcsb.org/download/{pdb_id.upper()}.pdb")
++        out.write_bytes(data)
++    return out
++
++
++def fetch_ligand_smiles(resname: str) -> str | None:
++    """Authoritative isomeric SMILES for a PDB chemical component."""
++    try:
++        d = json.loads(_fetch(
++            f"https://data.rcsb.org/rest/v1/core/chemcomp/{resname.upper()}"))
++    except Exception:
++        return None
++    desc = d.get("rcsb_chem_comp_descriptor", {}) or {}
++    return desc.get("SMILES_stereo") or desc.get("SMILES")
++
++
++def pick_ligand_resname(pdb_path: Path) -> str | None:
++    """Largest non-buffer HETATM group by heavy-atom count."""
++    counts: dict[str, int] = {}
++    for line in pdb_path.read_text(errors="replace").splitlines():
++        if not line.startswith("HETATM"):
++            continue
++        rn = line[17:20].strip()
++        if rn in _NON_DRUG_HET:
++            continue
++        elem = (line[76:78].strip() or line[12:14].strip()).title()
++        if elem == "H":
++            continue
++        counts[rn] = counts.get(rn, 0) + 1
++    if not counts:
++        return None
++    # Prefer a drug-sized ligand (>= 6 heavy atoms); ignore tiny groups.
++    drug = {k: v for k, v in counts.items() if v >= 6}
++    pool = drug or counts
++    return max(pool, key=pool.get)
++
++
++def _center_box(coords: list[dict], pad: float = 8.0,
++                lo: float = 18.0, hi: float = 30.0) -> tuple:
++    xs = [c["x"] for c in coords]
++    ys = [c["y"] for c in coords]
++    zs = [c["z"] for c in coords]
++    center = ((min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2,
++              (min(zs) + max(zs)) / 2)
++    span = max(max(xs) - min(xs), max(ys) - min(ys), max(zs) - min(zs))
++    side = min(hi, max(lo, span + pad))
++    return center, (side, side, side)
++
++
++def run_one(entry: dict, *, exhaustiveness: int, num_modes: int,
++            seed: int, cpu: int, refine_poses: bool = False) -> dict:
++    from src.dock import (
++        dock_ligand, attach_crystal_rmsd, attach_posebusters,
++        extract_hetatm_ligand, refine_pose_openff)
++
++    pdb_id = entry["pdb"].replace(".pdb", "")
++    rec: dict = {"pdb": pdb_id, "name": entry.get("name", pdb_id)}
++    t0 = time.time()
++    try:
++        pdb_path = fetch_pdb(pdb_id)
++        resname = entry.get("resname") or pick_ligand_resname(pdb_path)
++        if not resname:
++            rec.update(error="no drug ligand found in structure")
++            return rec
++        rec["resname"] = resname
++        smiles = fetch_ligand_smiles(resname)
++        if not smiles:
++            rec.update(error=f"no SMILES for ligand {resname}")
++            return rec
++        rec["smiles"] = smiles
++        # ONE ligand copy for the box centre. Crystals with the ligand
++        # in several chains (e.g. imatinib in 2hyy, 4 copies) would
++        # otherwise centre the box on the centroid of ALL copies —
++        # between the binding sites — and dock into empty space.
++        coords = extract_hetatm_ligand(pdb_path, resname, first_copy_only=True)
++        if len(coords) < 4:
++            rec.update(error=f"ligand {resname} has < 4 heavy atoms in file")
++            return rec
++        center, box = _center_box(coords)
++        r = dock_ligand(pdb_path, smiles, center_A=center, box_size_A=box,
++                        exhaustiveness=exhaustiveness, num_modes=num_modes,
++                        seed=seed, cpu=cpu)
++        if not r.ok:
++            rec.update(error=f"dock failed: {r.reason}")
++            return rec
++        # Optional OpenMM geometry refinement. NORMALLY UNNECESSARY: the
++        # pose is reconstructed via Meeko's reverse conversion (correct
++        # atom mapping + true Vina geometry), which passes PoseBusters
++        # directly. Refinement is off by default because it is slow
++        # (AM1-BCC per pose) and its restraints move the pose enough to
++        # hurt the crystal RMSD. Kept opt-in for pre-FEP relaxation use.
++        if refine_poses:
++            try:
++                r.poses = [refine_pose_openff(p, r.ligand_smiles)
++                           for p in r.poses]
++            except Exception as e:  # noqa: BLE001
++                rec["refine_warn"] = f"{type(e).__name__}: {str(e)[:80]}"
++        r = attach_crystal_rmsd(r, crystal_pdb=pdb_path, ligand_resname=resname)
++        # PoseBusters for PHYSICAL validity only (criterion #3): pass the
++        # receptor (clash / in-pocket / geometry tests) but NOT the
++        # crystal — including the crystal folds the RMSD<=2 test into
++        # posebusters_ok, which would conflate physical validity with
++        # pose-recovery accuracy (criterion #1, measured separately).
++        r = attach_posebusters(r, receptor_pdb=pdb_path)
++        top = r.poses[0]
++        top3 = [p.rmsd_vs_reference_A for p in r.poses[:3]
++                if p.rmsd_vs_reference_A is not None]
++        rec.update(
++            n_lig_heavy=len(coords),
++            dG_kcalmol=round(top.affinity_kcalmol, 2),
++            top1_rmsd_A=(round(top.rmsd_vs_reference_A, 2)
++                         if top.rmsd_vs_reference_A is not None else None),
++            top3_best_rmsd_A=(round(min(top3), 2) if top3 else None),
++            posebusters_ok=top.posebusters_ok,
++        )
++    except Exception as e:  # noqa: BLE001 — one bad entry must not kill the run
++        rec.update(error=f"{type(e).__name__}: {str(e)[:160]}")
++    finally:
++        rec["wall_s"] = round(time.time() - t0, 1)
++    return rec
++
++
++def summarise(rows: list[dict]) -> dict:
++    scored = [r for r in rows if r.get("top1_rmsd_A") is not None]
++    errored = [r for r in rows if r.get("error")]
++    n = len(scored)
++    recov = [r for r in scored if r["top1_rmsd_A"] <= 2.0]
++    recov3 = [r for r in scored
++              if r.get("top3_best_rmsd_A") is not None
++              and r["top3_best_rmsd_A"] <= 2.0]
++    pb_scored = [r for r in scored if r.get("posebusters_ok") is not None]
++    pb_ok = [r for r in pb_scored if r["posebusters_ok"]]
++    return {
++        "n_entries": len(rows),
++        "n_scored": n,
++        "n_errored": len(errored),
++        # top-1 = Vina's own #1-ranked pose (scoring + sampling);
++        # top-3 = best of the top 3 (sampling power, ranking-independent).
++        "pose_recovery_top1_frac": (len(recov) / n) if n else None,
++        "pose_recovery_top3_frac": (len(recov3) / n) if n else None,
++        "pose_recovery_gate": 0.75,
++        "posebusters_frac": (len(pb_ok) / len(pb_scored)) if pb_scored else None,
++        "posebusters_gate": 0.95,
++        "errored_pdbs": [r["pdb"] for r in errored],
++    }
++
++
++def main(argv=None) -> int:
++    import yaml
++    ap = argparse.ArgumentParser(description=__doc__)
++    ap.add_argument("manifest", help="YAML with entries: [{pdb, resname?, name?}]")
++    ap.add_argument("--out-csv", default=None)
++    ap.add_argument("--exhaustiveness", type=int, default=16)
++    ap.add_argument("--num-modes", type=int, default=9)
++    ap.add_argument("--seed", type=int, default=1)
++    ap.add_argument("--cpu", type=int, default=4)
++    ap.add_argument("--limit", type=int, default=None,
++                    help="only run the first N entries (smoke)")
++    ap.add_argument("--refine", action="store_true",
++                    help="opt-in OpenMM pose geometry refinement "
++                         "(slow, normally unnecessary — Meeko "
++                         "reconstruction already yields valid geometry)")
++    args = ap.parse_args(argv)
++
++    entries = yaml.safe_load(Path(args.manifest).read_text()).get("entries", [])
++    if args.limit:
++        entries = entries[:args.limit]
++    print(f"[blind-dock-bench] {args.manifest}  ({len(entries)} entries)")
++    rows = []
++    for i, e in enumerate(entries, 1):
++        r = run_one(e, exhaustiveness=args.exhaustiveness,
++                    num_modes=args.num_modes, seed=args.seed, cpu=args.cpu,
++                    refine_poses=args.refine)
++        rows.append(r)
++        if r.get("error"):
++            print(f"  [{i}/{len(entries)}] {r['pdb']:6s} ERROR: {r['error']}"
++                  f"  ({r['wall_s']}s)", flush=True)
++        else:
++            pb = {True: "PB✓", False: "PB✗", None: "PB?"}[r.get("posebusters_ok")]
++            print(f"  [{i}/{len(entries)}] {r['pdb']:6s} {r.get('resname',''):4s} "
++                  f"top1={r['top1_rmsd_A']}Å top3={r['top3_best_rmsd_A']}Å "
++                  f"dG={r['dG_kcalmol']} {pb}  ({r['wall_s']}s)", flush=True)
++
++    s = summarise(rows)
++    print()
++    print(f"[blind-dock-bench] scored {s['n_scored']}/{s['n_entries']} "
++          f"({s['n_errored']} errored: {s['errored_pdbs']})")
++    if s["pose_recovery_top1_frac"] is not None:
++        pr = s["pose_recovery_top1_frac"]
++        pr3 = s["pose_recovery_top3_frac"]
++        print(f"  pose recovery top-1 <= 2.0 Å: {pr:.0%}  "
++              f"[gate >= 75%] {'PASS' if pr >= 0.75 else 'FAIL'}")
++        print(f"  pose recovery top-3 <= 2.0 Å: {pr3:.0%}  "
++              f"(sampling power; ranking-independent)")
++    if s["posebusters_frac"] is not None:
++        pb = s["posebusters_frac"]
++        print(f"  PoseBusters validity:           {pb:.0%}  "
++              f"[gate >= 95%] {'PASS' if pb >= 0.95 else 'FAIL'}")
++
++    if args.out_csv:
++        cols = ["pdb", "name", "resname", "smiles", "n_lig_heavy",
++                "dG_kcalmol", "top1_rmsd_A", "top3_best_rmsd_A",
++                "posebusters_ok", "wall_s", "error"]
++        outp = Path(args.out_csv)
++        outp.parent.mkdir(parents=True, exist_ok=True)
++        with outp.open("w", newline="", encoding="utf-8") as fo:
++            w = csv.DictWriter(fo, fieldnames=cols, extrasaction="ignore")
++            w.writeheader()
++            w.writerows(rows)
++        (outp.with_suffix(".summary.json")).write_text(json.dumps(s, indent=2))
++        print(f"  wrote {outp} + {outp.with_suffix('.summary.json').name}")
++    return 0
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/src/dock/pose_rmsd.py b/src/dock/pose_rmsd.py
+index ad5f609..137224f 100644
+--- a/src/dock/pose_rmsd.py
++++ b/src/dock/pose_rmsd.py
+@@ -39,18 +39,37 @@
+ 
+ 
+ def extract_hetatm_ligand(
+-    pdb_path: str | Path, resname: str
++    pdb_path: str | Path, resname: str, *,
++    first_copy_only: bool = False,
+ ) -> list[dict]:
+-    """Return [{elem, x, y, z}] for all HETATM rows with `resname`.
++    """Return [{elem, x, y, z}] for heavy HETATM rows with `resname`.
+ 
+     Only heavy atoms (no H); biologists compare heavy-atom RMSD.
++
++    `first_copy_only=True` returns just ONE ligand copy — the atoms of
++    the first (chain, residue-number) instance encountered, keeping only
++    the blank/'A' alternate location. Crystals routinely contain the
++    same ligand in several chains (e.g. imatinib in 2hyy appears 4×) or
++    at multiple alternate conformations; grabbing all of them makes the
++    atom count a multiple of the real ligand and breaks the RMSD atom
++    match. RMSD comparisons should use one copy.
+     """
+     rows: list[dict] = []
++    first_key = None
+     for line in Path(pdb_path).read_text().splitlines():
+         if not line.startswith("HETATM"):
+             continue
+         if line[17:20].strip() != resname:
+             continue
++        if first_copy_only:
++            altloc = line[16]
++            if altloc not in (" ", "A"):
++                continue
++            key = (line[21], line[22:27])   # chain id, resSeq + iCode
++            if first_key is None:
++                first_key = key
++            elif key != first_key:
++                continue
+         elem = (line[76:78].strip() or line[12:14].strip()).title()
+         if elem == "H":
+             continue
+@@ -64,6 +83,97 @@ def extract_hetatm_ligand(
+     return rows
+ 
+ 
++def _build_ref_mol(ref_heavy_atoms: list[dict], template):
++    """Build a one-copy crystal-ligand RDKit mol from the HETATM heavy-
++    atom snippet, with bond ORDERS copied from the SMILES template.
++    `ref_heavy_atoms` must already be a single ligand copy (see
++    extract_hetatm_ligand first_copy_only)."""
++    from rdkit import Chem
++    from rdkit.Chem import AllChem
++
++    lines = ["HEADER    ref"]
++    for i, row in enumerate(ref_heavy_atoms, 1):
++        lines.append(
++            f"HETATM{i:5d}  {row['elem']:<3s} LIG A   1    "
++            f"{row['x']:8.3f}{row['y']:8.3f}{row['z']:8.3f}"
++            f"  1.00  0.00           {row['elem']:>2s}")
++    lines.append("END")
++    ref_mol = Chem.MolFromPDBBlock(
++        "\n".join(lines), sanitize=False, removeHs=True)
++    if ref_mol is None:
++        return None
++    if template is not None:
++        try:
++            ref_mol = AllChem.AssignBondOrdersFromTemplate(template, ref_mol)
++        except Exception:
++            pass  # keep distance-inferred connectivity
++    return ref_mol
++
++
++def _robust_heavy_rmsd(probe, ref_mol) -> Optional[float]:
++    """Symmetry-aware heavy-atom RMSD between a docked-pose mol and a
++    crystal reference mol, tolerant of atom-count differences.
++
++    - Same heavy-atom count → `GetBestRMS` (symmetry-minimal, aligned;
++      on an already-pocketed pose the alignment is ~identity).
++    - Different count (crystal missing a disordered atom, or the
++      deposited SMILES carries an extra) → in-place RMSD over the
++      maximum common substructure, so the pose still scores instead of
++      being dropped.
++    """
++    from rdkit import Chem
++    from rdkit.Chem import rdMolAlign, rdFMCS
++    import numpy as np
++
++    # The crystal ref mol is built with sanitize=False (to tolerate raw
++    # geometry), so ring perception may be uninitialised — FindMCS /
++    # substructure matching then raise "RingInfo not initialized".
++    # Initialise it (best effort) on both mols first.
++    for m in (probe, ref_mol):
++        try:
++            m.UpdatePropertyCache(strict=False)
++            Chem.FastFindRings(m)
++        except Exception:
++            pass
++
++    try:
++        if probe.GetNumAtoms() == ref_mol.GetNumAtoms():
++            return float(rdMolAlign.GetBestRMS(probe, ref_mol))
++    except Exception as e:
++        logger.debug("GetBestRMS failed: %s; trying MCS", e)
++    try:
++        res = rdFMCS.FindMCS(
++            [probe, ref_mol], timeout=15,
++            atomCompare=rdFMCS.AtomCompare.CompareElements,
++            bondCompare=rdFMCS.BondCompare.CompareAny,
++            ringMatchesRingOnly=True, completeRingsOnly=False)
++        if res.canceled or res.numAtoms < 3:
++            return None
++        q = Chem.MolFromSmarts(res.smartsString)
++        if q is None:
++            return None
++        ref_match = ref_mol.GetSubstructMatch(q)
++        probe_matches = probe.GetSubstructMatches(
++            q, uniquify=False, maxMatches=500)
++        if not ref_match or not probe_matches:
++            return None
++        rc = ref_mol.GetConformer()
++        pc = probe.GetConformer()
++        ref_xyz = np.array([list(rc.GetAtomPosition(i)) for i in ref_match])
++        best = None
++        for match in probe_matches:
++            if len(match) != len(ref_match):
++                continue
++            pxyz = np.array([list(pc.GetAtomPosition(i)) for i in match])
++            rmsd = float(np.sqrt(((pxyz - ref_xyz) ** 2).sum(1).mean()))
++            if best is None or rmsd < best:
++                best = rmsd
++        return best
++    except Exception as e:
++        logger.debug("MCS RMSD failed: %s", e)
++        return None
++
++
+ def pose_rmsd_symmetry_aware(
+     pose: DockingPose, smiles: str, ref_heavy_atoms: list[dict],
+     *, reference_pdb: Optional[str | Path] = None,
+@@ -99,68 +209,46 @@ def pose_rmsd_symmetry_aware(
+     from rdkit import Chem
+     from rdkit.Chem import AllChem, rdMolAlign
+ 
+-    # Pose heavy atoms (filter hydrogens).
++    # Pose heavy atoms (used by the legacy path + last-resort ref).
+     pose_heavy = [
+         (elem, pose.positions_A[i])
+         for i, elem in enumerate(pose.elements)
+         if elem.upper() != "H"
+     ]
+-    if len(pose_heavy) != len(ref_heavy_atoms):
+-        logger.debug(
+-            "pose heavy=%d ref heavy=%d; element count mismatch",
+-            len(pose_heavy), len(ref_heavy_atoms))
+-        return None
+ 
+-    # Authoritative topology from SMILES.
+     template = Chem.MolFromSmiles(smiles)
++    if template is not None:
++        template = Chem.RemoveHs(template)
++
++    # One-copy crystal reference mol (with template bond orders).
++    ref_mol = _build_ref_mol(ref_heavy_atoms, template)
++
++    # PREFERRED PATH: robust RMSD from the Meeko-reconstructed pose mol
++    # (true atom mapping) against the crystal mol. Tolerates atom-count
++    # differences via an MCS common-core match, so it scores cases the
++    # exact-count legacy path used to drop to None (crystals routinely
++    # miss a disordered atom, or the deposited SMILES carries an extra).
++    molblock = getattr(pose, "rdkit_molblock", None)
++    if molblock and ref_mol is not None:
++        probe = Chem.MolFromMolBlock(molblock, removeHs=True, sanitize=True)
++        if probe is not None and probe.GetNumConformers() > 0:
++            rmsd = _robust_heavy_rmsd(probe, ref_mol)
++            if rmsd is not None:
++                return rmsd
++
++    # LEGACY FALLBACK (exact-count, template + SMILES-order probe). Only
++    # reached when no molblock is available or the robust path failed;
++    # requires the counts to line up.
+     if template is None:
+         return None
+-    template = Chem.RemoveHs(template)
+     n_heavy = template.GetNumAtoms()
+-    if n_heavy != len(pose_heavy):
++    if (len(pose_heavy) != len(ref_heavy_atoms)
++            or n_heavy != len(pose_heavy)):
+         logger.debug(
+-            "smiles heavy=%d pose heavy=%d; topology mismatch",
+-            n_heavy, len(pose_heavy))
++            "count mismatch (pose=%d ref=%d smiles=%d); no RMSD",
++            len(pose_heavy), len(ref_heavy_atoms), n_heavy)
+         return None
+-
+-    # --- Reference: load from the original PDB if given (preferred,
+-    # keeps CONECT records), else build a minimal PDB snippet from the
+-    # HETATM coordinate list and let RDKit infer bonds by distance.
+-    ref_mol = None
+-    if reference_pdb is not None and reference_resname is not None:
+-        try:
+-            full_mol = Chem.MolFromPDBFile(
+-                str(reference_pdb), sanitize=False, removeHs=True)
+-            if full_mol is not None:
+-                # Extract only atoms of the target residue.
+-                keep = [a.GetIdx() for a in full_mol.GetAtoms()
+-                        if a.GetPDBResidueInfo() and
+-                        a.GetPDBResidueInfo().GetResidueName().strip()
+-                        == reference_resname]
+-                if keep:
+-                    edit = Chem.RWMol(full_mol)
+-                    # Delete atoms not in keep, in reverse order.
+-                    for idx in sorted(
+-                            set(range(full_mol.GetNumAtoms())) - set(keep),
+-                            reverse=True):
+-                        edit.RemoveAtom(idx)
+-                    ref_mol = edit.GetMol()
+-        except Exception as e:
+-            logger.debug("PDB ref extraction failed: %s", e)
+-
+-    if ref_mol is None or ref_mol.GetNumAtoms() != n_heavy:
+-        # Minimal fallback: build ref from the HETATM snippet.
+-        lines = ["HEADER    ref"]
+-        for i, row in enumerate(ref_heavy_atoms, 1):
+-            lines.append(
+-                f"HETATM{i:5d}  {row['elem']:<3s} LIG A   1    "
+-                f"{row['x']:8.3f}{row['y']:8.3f}{row['z']:8.3f}"
+-                f"  1.00  0.00           {row['elem']:>2s}")
+-        lines.append("END")
+-        ref_mol = Chem.MolFromPDBBlock(
+-            "\n".join(lines), sanitize=False, removeHs=True)
+     if ref_mol is None or ref_mol.GetNumAtoms() != n_heavy:
+-        logger.debug("ref build failed; using naive centroid RMSD")
+         import numpy as np
+         pose_arr = np.array([xyz for _, xyz in pose_heavy], dtype=float)
+         ref_arr = np.array([[r["x"], r["y"], r["z"]]
+@@ -168,34 +256,17 @@ def pose_rmsd_symmetry_aware(
+         c1 = pose_arr.mean(axis=0); c2 = ref_arr.mean(axis=0)
+         d = (pose_arr - c1) - (ref_arr - c2)
+         return float(np.sqrt((d * d).sum(axis=1).mean()))
+-
+-    # Assign correct bond orders from the template so the
+-    # substructure match inside GetBestRMS can find an atom map.
+-    try:
+-        ref_mol = AllChem.AssignBondOrdersFromTemplate(template, ref_mol)
+-    except Exception as e:
+-        logger.debug("AssignBondOrdersFromTemplate failed: %s", e)
+-
+-    # Probe: template + pose coords assigned in SMILES order.
+     probe = Chem.Mol(template)
+     conf = Chem.Conformer(n_heavy)
+     for i, (_, xyz) in enumerate(pose_heavy):
+         conf.SetAtomPosition(i, (float(xyz[0]), float(xyz[1]),
+                                  float(xyz[2])))
+     probe.AddConformer(conf, assignId=True)
+-
+     try:
+-        rmsd = rdMolAlign.GetBestRMS(probe, ref_mol)
++        return float(rdMolAlign.GetBestRMS(probe, ref_mol))
+     except Exception as e:
+-        logger.debug("GetBestRMS failed: %s; naive fallback", e)
+-        import numpy as np
+-        pose_arr = np.array([xyz for _, xyz in pose_heavy], dtype=float)
+-        ref_arr = np.array([[r["x"], r["y"], r["z"]]
+-                            for r in ref_heavy_atoms], dtype=float)
+-        c1 = pose_arr.mean(axis=0); c2 = ref_arr.mean(axis=0)
+-        d = (pose_arr - c1) - (ref_arr - c2)
+-        return float(np.sqrt((d * d).sum(axis=1).mean()))
+-    return float(rmsd)
++        logger.debug("legacy GetBestRMS failed: %s", e)
++        return None
+ 
+ 
+ def attach_crystal_rmsd(
+@@ -206,7 +277,8 @@ def attach_crystal_rmsd(
+     cocrystal ligand. Sets `best_rmsd_vs_reference_A` to the top
+     pose's RMSD (conventional metric).
+     """
+-    ref_heavy = extract_hetatm_ligand(crystal_pdb, ligand_resname)
++    ref_heavy = extract_hetatm_ligand(
++        crystal_pdb, ligand_resname, first_copy_only=True)
+     if not ref_heavy:
+         raise RuntimeError(
+             f"no HETATM rows for resname {ligand_resname} in {crystal_pdb}")
+diff --git a/src/dock/validity.py b/src/dock/validity.py
+index 5cdee92..b2c91d8 100644
+--- a/src/dock/validity.py
++++ b/src/dock/validity.py
+@@ -38,18 +38,33 @@
+ 
+ 
+ def _build_pose_mol(pose: DockingPose, smiles: str):
+-    """Build a 3D RDKit mol for a pose (heavy atoms only).
+-
+-    Keeps bond orders from the SMILES template and assigns heavy-atom
+-    coordinates from Vina's parsed pose (in SMILES order, preserved
+-    by Meeko). Hydrogens are then added in geometry by RDKit so all
+-    atoms have real positions — PoseBusters' steric-clash tests need
+-    that, otherwise the hydrogens sit on top of each other at the
+-    origin and every pose fails.
++    """Build a chemically-correct 3D RDKit mol for a pose.
++
++    Preferred path: the pose's `rdkit_molblock`, reconstructed via
++    Meeko's reverse conversion, which carries the TRUE atom mapping +
++    hydrogens. This is required for correctness — Meeko reorders atoms
++    during prep, so the legacy template path below (which assumes the
++    pose coords are in SMILES order) builds a topologically scrambled
++    molecule and every geometry test fails. The template path is kept
++    only as a degraded fallback for poses lacking a molblock.
+     """
+     from rdkit import Chem
+     from rdkit.Chem import AllChem
+ 
++    molblock = getattr(pose, "rdkit_molblock", None)
++    if molblock:
++        m = Chem.MolFromMolBlock(molblock, removeHs=False, sanitize=True)
++        if m is not None and m.GetNumConformers() > 0:
++            # Meeko's reconstruction already includes hydrogens with
++            # geometry; only add them if somehow absent.
++            if not any(a.GetAtomicNum() == 1 for a in m.GetAtoms()):
++                try:
++                    m = Chem.AddHs(m, addCoords=True)
++                except Exception:
++                    pass
++            return m
++        logger.debug("MolFromMolBlock failed; falling back to template")
++
+     tpl = Chem.MolFromSmiles(smiles)
+     if tpl is None:
+         return None
+diff --git a/src/dock/vina.py b/src/dock/vina.py
+index 546eac6..3a8365c 100644
+--- a/src/dock/vina.py
++++ b/src/dock/vina.py
+@@ -100,9 +100,18 @@ class DockingPose:
+     posebusters_geometry_ok: Optional[bool] = None
+     posebusters_flags: Optional[dict] = None
+     # Coordinates (Å) — per-atom positions in the same atom ordering
+-    # as the prep step produced.
++    # as the prep step produced (Meeko/PDBQT order, NOT SMILES order —
++    # see rdkit_molblock).
+     positions_A: list = field(default_factory=list)
+     elements: list = field(default_factory=list)
++    # Correct RDKit molecule for this pose, as a MOL block, reconstructed
++    # via Meeko's reverse conversion (PDBQTMolecule + RDKitMolCreate).
++    # Meeko reorders atoms during prep, so mapping positions_A onto a
++    # SMILES template by index scrambles the molecule; consumers that
++    # need a chemically-correct 3D mol (PoseBusters, symmetry-aware RMSD)
++    # must use THIS, not positions_A + a template. None if reconstruction
++    # was unavailable.
++    rdkit_molblock: Optional[str] = None
+ 
+     def biologist_summary(self) -> str:
+         """One-line human summary in biologist units."""
+@@ -291,11 +300,48 @@ def _prep_ligand_pdbqt(smiles: str, workdir: Path, seed: int = 1) -> Path:
+     return out
+ 
+ 
++def _reconstruct_pose_molblocks(pdbqt_text: str) -> list:
++    """Correct per-pose RDKit MOL blocks via Meeko's reverse conversion.
++
++    Meeko REORDERS atoms during ligand prep (e.g. biotin SMILES order
++    OCOCCCCC… becomes PDBQT order CCCOOCCC…). Downstream code that maps
++    the pose's PDBQT-order coordinates onto a `MolFromSmiles` template
++    by atom index therefore builds a topologically SCRAMBLED molecule —
++    with physically impossible 3–5 Å "bonds" — which fails PoseBusters
++    and corrupts symmetry-aware RMSD. `PDBQTMolecule` + `RDKitMolCreate.
++    from_pdbqt_mol` reconstruct the true bonding + atom correspondence
++    (Meeko stored the mapping in the PDBQT remarks Vina preserves).
++
++    Returns [molblock | None] in Vina pose order (best first). Empty
++    list on any failure — callers fall back to the (buggy) template path
++    but should treat that as degraded.
++    """
++    try:
++        from meeko import PDBQTMolecule, RDKitMolCreate
++        from rdkit import Chem
++    except Exception:
++        return []
++    try:
++        pmol = PDBQTMolecule(pdbqt_text, is_dlg=False, skip_typing=True)
++        mols = RDKitMolCreate.from_pdbqt_mol(pmol)
++        if not mols or mols[0] is None:
++            return []
++        mol = mols[0]
++        return [Chem.MolToMolBlock(mol, confId=c.GetId())
++                for c in mol.GetConformers()]
++    except Exception as e:  # noqa: BLE001
++        logging.getLogger(__name__).debug(
++            "Meeko pose reconstruction failed: %s", str(e)[:150])
++        return []
++
++
+ def _parse_vina_output(pdbqt_out: Path) -> list[DockingPose]:
+     """Parse Vina's output PDBQT into DockingPose objects.
+ 
+     Vina writes MODEL/ENDMDL blocks; the `REMARK VINA RESULT:` line
+-    of each model carries `affinity rmsd_lb rmsd_ub`.
++    of each model carries `affinity rmsd_lb rmsd_ub`. Each pose also
++    gets a chemically-correct `rdkit_molblock` reconstructed via Meeko
++    (see `_reconstruct_pose_molblocks`).
+     """
+     poses: list[DockingPose] = []
+     current_mode = 0
+@@ -305,7 +351,8 @@ def _parse_vina_output(pdbqt_out: Path) -> list[DockingPose]:
+     positions: list = []
+     elements: list = []
+ 
+-    for line in pdbqt_out.read_text().splitlines():
++    pdbqt_text = pdbqt_out.read_text()
++    for line in pdbqt_text.splitlines():
+         if line.startswith("MODEL"):
+             current_mode = int(line.split()[-1])
+             positions = []
+@@ -355,6 +402,14 @@ def _parse_vina_output(pdbqt_out: Path) -> list[DockingPose]:
+                     positions_A=positions,
+                     elements=elements,
+                 ))
++
++    # Attach chemically-correct RDKit mol blocks (Meeko reverse). Poses
++    # are in Vina rank order in both the text and the reconstruction, so
++    # they align by index.
++    molblocks = _reconstruct_pose_molblocks(pdbqt_text)
++    for i, pose in enumerate(poses):
++        if i < len(molblocks):
++            pose.rdkit_molblock = molblocks[i]
+     return poses
+ 
+ 
+diff --git a/tests/dock/test_pose_reconstruction.py b/tests/dock/test_pose_reconstruction.py
+new file mode 100644
+index 0000000..77f9778
+--- /dev/null
++++ b/tests/dock/test_pose_reconstruction.py
+@@ -0,0 +1,74 @@
++"""Guard the docked-pose reconstruction (Meeko atom-order fix).
++
++Meeko REORDERS atoms during ligand prep, so mapping a pose's PDBQT-order
++coordinates onto a `MolFromSmiles` template by atom index builds a
++topologically SCRAMBLED molecule — physically impossible 3-5 Å "bonds"
++— which silently corrupted both PoseBusters validity and symmetry-aware
++RMSD (they read a scrambled mol). The fix reconstructs each pose via
++Meeko's reverse conversion and stores it on `pose.rdkit_molblock`.
++
++This test docks a ligand KNOWN to be reordered by Meeko (biotin) and
++asserts the reconstructed molecule is chemically sane. Without the fix,
++~12/17 heavy-atom bonds are impossible and this fails loudly.
++"""
++from __future__ import annotations
++
++import sys
++from pathlib import Path
++
++REPO_ROOT = Path(__file__).resolve().parents[2]
++sys.path.insert(0, str(REPO_ROOT))
++
++PDB = REPO_ROOT / "benchmarks" / "dock" / "1stp.pdb"
++BIOTIN = "OC(=O)CCCC[C@@H]1SC[C@@H]2NC(=O)N[C@H]12"
++# fpocket/crystal biotin pocket centre for 1stp (from mini_bench.yaml).
++CENTER = (11.12, 1.68, -10.75)
++BOX = (20.0, 20.0, 20.0)
++
++
++def _dock_top_pose():
++    from src.dock import dock_ligand
++    r = dock_ligand(PDB, BIOTIN, center_A=CENTER, box_size_A=BOX,
++                    exhaustiveness=8, num_modes=5, seed=1, cpu=2)
++    assert r.ok, r.reason
++    return r.poses[0]
++
++
++def test_pose_carries_reconstructed_molblock():
++    pose = _dock_top_pose()
++    assert pose.rdkit_molblock, (
++        "pose has no rdkit_molblock — Meeko reverse reconstruction "
++        "silently failed; PoseBusters + RMSD would fall back to the "
++        "scrambling template path")
++
++
++def test_reconstructed_mol_has_sane_bond_geometry():
++    """The molecule PoseBusters/RMSD actually see must have physically
++    plausible heavy-atom bond lengths (no atom-order scramble)."""
++    import numpy as np
++    from rdkit import Chem
++    from src.dock.validity import _build_pose_mol
++
++    pose = _dock_top_pose()
++    mol = _build_pose_mol(pose, BIOTIN)
++    assert mol is not None and mol.GetNumConformers() > 0
++    conf = mol.GetConformer()
++    bad = []
++    for b in mol.GetBonds():
++        a1, a2 = b.GetBeginAtom(), b.GetEndAtom()
++        if a1.GetAtomicNum() == 1 or a2.GetAtomicNum() == 1:
++            continue
++        d = float(np.linalg.norm(
++            np.array(conf.GetAtomPosition(b.GetBeginAtomIdx()))
++            - np.array(conf.GetAtomPosition(b.GetEndAtomIdx()))))
++        # Real covalent heavy-atom bonds are ~1.2-1.9 Å (C-S ~1.81).
++        if not (1.1 <= d <= 1.95):
++            bad.append((round(d, 2), a1.GetSymbol(), a2.GetSymbol()))
++    assert not bad, (
++        f"{len(bad)} physically impossible heavy-atom bond(s) — the "
++        f"pose→mol atom mapping is scrambled: {bad}")
++
++
++if __name__ == "__main__":
++    import pytest
++    sys.exit(pytest.main([__file__, "-q"]))

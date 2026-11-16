@@ -1,0 +1,65 @@
+version = "1.0"
+
+[task]
+name = "default/DrugClaw__DrugClaw-1"
+description = "2 Skill Updates for Science branch "
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "DrugClaw",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "DrugClaw/DrugClaw"
+ref = "837a7211692f3c2736a62f77635af697ac998a1e"
+reference = "https://github.com/DrugClaw/DrugClaw/pull/1"
+source_access = "auto"
+built_at = "2026-11-16T11:26:21.030484+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:ea4e75e83cb3bbd1ed01d46f50fbabe8c3cb9e6312c2cd5eb542f0c08f2e477b"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2026-03-23T05:34:51Z"
+diff_format = "unified"
+context_files = [
+    "skills/science/knowledge-graph-tools/SKILL.md",
+    "skills/science/knowledge-graph-tools/template/knowledge_graph.py",
+    "skills/science/patent(US)-landscape-tools/SKILL.md",
+    "skills/science/patent(US)-landscape-tools/template/patent(us)_landscape.py",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 1275
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

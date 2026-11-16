@@ -1,0 +1,990 @@
+diff --git a/.gitignore b/.gitignore
+index 7dc6960..3250bba 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -143,6 +143,7 @@ exampledata/finetune/*.npz
+ 
+ # Local-only datasets and trained models (not intended for upstream)
+ model/
++models/
+ tests/data/Biogen_for_grover/
+ tests/data/ChEMBL_MT/
+ tests/data/ZINC15_ChEMBL/
+diff --git a/Pipfile b/Pipfile
+index a7a26bb..de243f1 100644
+--- a/Pipfile
++++ b/Pipfile
+@@ -5,6 +5,7 @@ name = "pypi"
+ 
+ [packages]
+ descriptastorus = "==2.7.0"
++huggingface-hub = "==0.36.2"
+ optuna = "==4.9.0"
+ pip = "==26.1.2"
+ protobuf = "==6.33.5"
+diff --git a/agent/config/released_model.json b/agent/config/released_model.json
+new file mode 100644
+index 0000000..1e19fc1
+--- /dev/null
++++ b/agent/config/released_model.json
+@@ -0,0 +1,13 @@
++{
++  "repo_id": "nvidia/NV-KERMT-70M-v2",
++  "revision": "7df5eb3179235fdea1e8124db73215da33d77dce",
++  "ckpt_name": "kermt_contrastive_v2.0.pt",
++  "vocab_files": [
++    "pretrain_atom_vocab.json",
++    "pretrain_bond_vocab.json",
++    "pretrain_smiles_vocab.pkl"
++  ],
++  "model_type": "hybrid",
++  "license": "NVIDIA Open Model License",
++  "license_url": "https://huggingface.co/nvidia/NV-KERMT-70M-v2"
++}
+diff --git a/agent/scripts/fetch_released_model.py b/agent/scripts/fetch_released_model.py
+new file mode 100644
+index 0000000..84850df
+--- /dev/null
++++ b/agent/scripts/fetch_released_model.py
+@@ -0,0 +1,234 @@
++#!/usr/bin/env python3
++# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++# SPDX-License-Identifier: Apache-2.0
++
++"""Download a released KERMT model bundle from Hugging Face.
++
++Runs INSIDE the kermt container (huggingface_hub is part of the image env).
++Writes the released-model directory bundle — the checkpoint plus its vocab
++files — into the directory mounted at `--out` (the skills mount the user's
++chosen save location there via `kermt_container.sh --model-dir <host>`), then
++emits a single JSON object to stdout that the calling skill parses.
++
++The downloaded directory is exactly the repo's "released model bundle" layout
++(see agent/README.md "Released models"): `<ckpt>.pt` + the three
++`pretrain_*_vocab.*` files in one flat directory. The downstream skill then
++feeds it through the existing `--ckpt <out>/<ckpt_name>` flow; for
++continue-pretrain the bundled vocab files are auto-detected in the ckpt's
++parent directory. No runner changes are needed.
++
++Defaults (repo id, pinned revision, ckpt + vocab filenames) come from
++`agent/config/released_model.json` so the pin lives in one place; every value
++is overridable on the CLI.
++
++Idempotent: if the bundle is already complete in `--out` (ckpt + all vocab
++files present), nothing is downloaded and `reused: true` is reported — so a
++re-invocation never re-fetches the 282 MB checkpoint.
++
++Authentication: the repo is public (no token needed). If `HF_TOKEN` is set in
++the environment (forwarded into the container by `kermt_container.sh`),
++huggingface_hub picks it up automatically — useful against shared-IP rate
++limits or if the repo is ever gated.
++
++Output (stdout)
++---------------
++{
++  "ok": true | false,
++  "repo_id": str,
++  "revision": str,
++  "out": str,                 // container path of the bundle dir (e.g. /model)
++  "ckpt": str | null,         // container path of the checkpoint file
++  "vocab_dir": str | null,    // == out (where the vocab files live)
++  "ckpt_name": str,
++  "vocab_files": [str, ...],
++  "files_present": [str, ...],
++  "ckpt_bytes": int | null,
++  "reused": bool,             // true if the bundle already existed (no download)
++  "license": str | null,
++  "license_url": str | null,
++  "errors": [str, ...]
++}
++
++Exit code: 0 on `ok: true`, 1 on `ok: false`.
++
++CLI
++---
++    fetch_released_model.py [--out /model]
++                            [--repo-id <id>] [--revision <sha|tag|branch>]
++                            [--ckpt-name <name>] [--config <path>]
++"""
++
++from __future__ import annotations
++
++import argparse
++import json
++import sys
++import traceback
++from pathlib import Path
++from typing import Any
++
++# Default config lives at agent/config/released_model.json (one dir up from
++# agent/scripts/). Resolved relative to this file so the script is
++# location-independent.
++DEFAULT_CONFIG = (
++    Path(__file__).resolve().parent.parent / "config" / "released_model.json"
++)
++
++
++def _load_config(config_path: Path) -> dict[str, Any]:
++    if not config_path.is_file():
++        raise FileNotFoundError(f"released-model config not found at {config_path}")
++    return json.loads(config_path.read_text())
++
++
++def fetch(
++    *,
++    out: Path,
++    repo_id: str,
++    revision: str,
++    ckpt_name: str,
++    vocab_files: list[str],
++    license_name: str | None = None,
++    license_url: str | None = None,
++) -> dict[str, Any]:
++    """Resolve-or-download the released bundle into `out`. Returns the manifest
++    dict (never raises for the expected failure modes — they land in
++    `errors[]` with `ok: false`)."""
++    result: dict[str, Any] = {
++        "ok": False,
++        "repo_id": repo_id,
++        "revision": revision,
++        "out": str(out),
++        "ckpt": None,
++        "vocab_dir": None,
++        "ckpt_name": ckpt_name,
++        "vocab_files": list(vocab_files),
++        "files_present": [],
++        "ckpt_bytes": None,
++        "reused": False,
++        "license": license_name,
++        "license_url": license_url,
++        "errors": [],
++    }
++
++    required = [ckpt_name, *vocab_files]
++
++    def _present() -> list[str]:
++        return [name for name in required if (out / name).is_file()]
++
++    # 1. Idempotent reuse — bundle already complete in `out`.
++    if out.is_dir() and set(_present()) == set(required):
++        result["reused"] = True
++    else:
++        # 2. Download. Import here so a stale image (missing huggingface_hub)
++        #    surfaces a clean, actionable JSON error rather than a traceback.
++        try:
++            from huggingface_hub import snapshot_download
++        except ImportError:
++            result["errors"].append(
++                "huggingface_hub is not available in the container image. The "
++                "released-model download needs it; rebuild the image with "
++                "`kermt-setup` (it now ships huggingface_hub) and retry."
++            )
++            return result
++
++        out.mkdir(parents=True, exist_ok=True)
++        try:
++            # local_dir gives a flat copy (the bundle layout) rather than the
++            # opaque blob/snapshot cache. HF_TOKEN, if set, is read by the lib.
++            snapshot_download(repo_id=repo_id, revision=revision, local_dir=str(out))
++        except Exception as exc:  # noqa: BLE001
++            result["errors"].append(
++                f"download failed for {repo_id}@{revision}: {type(exc).__name__}: {exc}"
++            )
++            return result
++
++    # 3. Verify the bundle is complete regardless of download/reuse path.
++    present = _present()
++    result["files_present"] = present
++    missing = [name for name in required if name not in present]
++    if missing:
++        result["errors"].append(
++            f"bundle at {out} is missing expected file(s): {missing}. "
++            f"Present: {present}."
++        )
++        return result
++
++    ckpt_path = out / ckpt_name
++    result["ckpt"] = str(ckpt_path)
++    result["vocab_dir"] = str(out)
++    try:
++        result["ckpt_bytes"] = ckpt_path.stat().st_size
++    except OSError:
++        result["ckpt_bytes"] = None
++
++    result["ok"] = True
++    return result
++
++
++def main(argv: list[str] | None = None) -> int:
++    parser = argparse.ArgumentParser(
++        description="Download a released KERMT model bundle from Hugging Face (runs in-container)."
++    )
++    parser.add_argument(
++        "--out",
++        default="/model",
++        help="Directory to write the bundle into (default: /model, the --model-dir mount).",
++    )
++    parser.add_argument(
++        "--config",
++        default=str(DEFAULT_CONFIG),
++        help="Path to released_model.json (default: agent/config/released_model.json).",
++    )
++    parser.add_argument(
++        "--repo-id", default=None, help="Override the HF repo id from the config."
++    )
++    parser.add_argument(
++        "--revision",
++        default=None,
++        help="Override the pinned revision (sha/tag/branch).",
++    )
++    parser.add_argument(
++        "--ckpt-name",
++        default=None,
++        help="Override the checkpoint filename from the config.",
++    )
++    args = parser.parse_args(argv)
++
++    try:
++        cfg = _load_config(Path(args.config))
++        repo_id = args.repo_id or cfg["repo_id"]
++        revision = args.revision or cfg["revision"]
++        ckpt_name = args.ckpt_name or cfg["ckpt_name"]
++        vocab_files = list(cfg.get("vocab_files", []))
++        result = fetch(
++            out=Path(args.out),
++            repo_id=repo_id,
++            revision=revision,
++            ckpt_name=ckpt_name,
++            vocab_files=vocab_files,
++            license_name=cfg.get("license"),
++            license_url=cfg.get("license_url"),
++        )
++    except Exception as exc:  # noqa: BLE001
++        print(traceback.format_exc(), file=sys.stderr)
++        print(
++            json.dumps(
++                {
++                    "ok": False,
++                    "out": args.out,
++                    "errors": [
++                        f"unhandled exception in fetch_released_model: {type(exc).__name__}: {exc}"
++                    ],
++                },
++                indent=2,
++            )
++        )
++        return 1
++
++    print(json.dumps(result, indent=2))
++    return 0 if result["ok"] else 1
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+diff --git a/agent/scripts/kermt_container.sh b/agent/scripts/kermt_container.sh
+index bbb6abe..fb65dc9 100755
+--- a/agent/scripts/kermt_container.sh
++++ b/agent/scripts/kermt_container.sh
+@@ -31,6 +31,8 @@
+ #   --ckpt <path>       bind to /ckpt    (read-only; the path is mounted as-is)
+ #   --vocab-dir <dir>   bind to /vocab   (read-only)
+ #   --run-dir <dir>     bind to /runs    (read-write; created on host if missing)
++#   --model-dir <dir>   bind to /model   (read-write; created on host if missing).
++#                       Target for released-model downloads (fetch_released_model.py).
+ #
+ # Additional flags for kermt_run_detached:
+ #   --name <name>       docker container name (default: kermt-<UTC-timestamp>-<pid>)
+@@ -273,6 +275,11 @@ _kermt_parse_mounts() {
+         _out+=("-v" "$(realpath "$2"):/runs")
+         shift 2; _kermt_consumed=$((_kermt_consumed + 2))
+         ;;
++      --model-dir)
++        mkdir -p "$2" || { echo "[kermt] failed to create --model-dir: $2" >&2; return 1; }
++        _out+=("-v" "$(realpath "$2"):/model")
++        shift 2; _kermt_consumed=$((_kermt_consumed + 2))
++        ;;
+       *)
+         return 0
+         ;;
+@@ -305,6 +312,16 @@ _kermt_git_env_flags() {
+   printf '%s\n%s\n%s\n%s\n' "-e" "KERMT_REPO_COMMIT=$commit" "-e" "KERMT_REPO_DIRTY=$dirty"
+ }
+ 
++# Forward HF_TOKEN into the container when it is set, so fetch_released_model.py
++# can authenticate to Hugging Face. The current release is public (no token
++# needed); this only guards against shared-IP rate limits or a future gated
++# repo. Emits nothing when HF_TOKEN is unset.
++_kermt_hf_env_flags() {
++  if [[ -n "${HF_TOKEN:-}" ]]; then
++    printf '%s\n%s\n' "-e" "HF_TOKEN=$HF_TOKEN"
++  fi
++}
++
+ kermt_run() {
+   kermt_ensure_image || return $?
+   local mount_args=()
+@@ -321,6 +338,8 @@ kermt_run() {
+   fi
+   local git_args=()
+   while IFS= read -r line; do git_args+=("$line"); done < <(_kermt_git_env_flags)
++  local hf_args=()
++  while IFS= read -r line; do hf_args+=("$line"); done < <(_kermt_hf_env_flags)
+   docker run --rm --gpus "$KERMT_GPUS" \
+     --user "$(id -u):$(id -g)" \
+     -v "$KERMT_REPO:/workspace" \
+@@ -329,6 +348,7 @@ kermt_run() {
+     -e PYTHONPATH=/workspace \
+     -e HOME=/tmp/kermt-home \
+     "${git_args[@]}" \
++    "${hf_args[@]}" \
+     "$KERMT_IMAGE" \
+     conda run -n kermt --no-capture-output bash -c "$*"
+ }
+@@ -342,7 +362,7 @@ kermt_run_detached() {
+     case "$1" in
+       --name) name="$2"; shift 2 ;;
+       --) break ;;
+-      --data|--ckpt|--vocab-dir|--run-dir) break ;;
++      --data|--ckpt|--vocab-dir|--run-dir|--model-dir) break ;;
+       *) break ;;
+     esac
+   done
+@@ -363,6 +383,8 @@ kermt_run_detached() {
+   local cid
+   local git_args=()
+   while IFS= read -r line; do git_args+=("$line"); done < <(_kermt_git_env_flags)
++  local hf_args=()
++  while IFS= read -r line; do hf_args+=("$line"); done < <(_kermt_hf_env_flags)
+   cid=$(docker run -d --gpus "$KERMT_GPUS" \
+     --user "$(id -u):$(id -g)" \
+     --name "$name" \
+@@ -372,6 +394,7 @@ kermt_run_detached() {
+     -e PYTHONPATH=/workspace \
+     -e HOME=/tmp/kermt-home \
+     "${git_args[@]}" \
++    "${hf_args[@]}" \
+     "$KERMT_IMAGE" \
+     conda run -n kermt --no-capture-output bash -c "$*") || return $?
+   echo "[kermt] container started: name=$name id=$cid"
+@@ -415,6 +438,7 @@ Mount flags (for run / run_detached):
+   --ckpt <path>       bind to /ckpt    (read-only)
+   --vocab-dir <dir>   bind to /vocab   (read-only)
+   --run-dir <dir>     bind to /runs    (read-write; created on host if missing)
++  --model-dir <dir>   bind to /model   (read-write; released-model download target)
+ 
+ Additional flags for run_detached:
+   --name <name>       container name (default: kermt-<timestamp>-<pid>)
+diff --git a/agent/skills/kermt-continue-pretrain/SKILL.md b/agent/skills/kermt-continue-pretrain/SKILL.md
+index 3280413..7355076 100644
+--- a/agent/skills/kermt-continue-pretrain/SKILL.md
++++ b/agent/skills/kermt-continue-pretrain/SKILL.md
+@@ -49,12 +49,26 @@ prepares the corpus, launches the runner, and returns a run directory.
+ 
+ Required:
+ 
+-- `--ckpt <path>` — the input pretrain checkpoint to continue from. Must be
+-  a grover_base (with vocab heads), cmim, or hybrid ckpt; the validator
+-  rejects everything else with a redirect to the correct workflow.
+ - `--csv <path>` — the pretrain CSV (single column `smiles`). If you have
+   separate train/val CSVs, pass `--val-csv <path>` too.
+ 
++Checkpoint (optional — defaults to the released model if omitted):
++
++- `--ckpt <path>` — the input pretrain checkpoint to continue from. Must be
++  a grover_base (with vocab heads), cmim, or hybrid ckpt; the validator
++  rejects everything else with a redirect to the correct workflow. **If
++  omitted**, the skill offers to download the released pretrained hybrid model
++  **nvidia/NV-KERMT-70M-v2** and continue-pretrain from it — see "Resolve &
++  validate the checkpoint" (workflow step 3). The released bundle ships its
++  three vocab files alongside the ckpt, so the authoritative-vocab pass-through
++  (step 5) works automatically.
++- `--pretrained-release` — explicit opt-in to use the released model without
++  the interactive prompt (for non-interactive / agent runs). Mutually
++  exclusive with `--ckpt`.
++- `--model-dir <dir>` — where to save the downloaded bundle (default
++  `$KERMT_REPO/models/NV-KERMT-70M-v2/`). An already-complete bundle there is
++  reused, not re-downloaded.
++
+ Optional:
+ 
+ - `--val-csv <path>` — separate validation CSV. Without it, the prep step
+@@ -154,7 +168,30 @@ host; the helper bind-mounts them at known container paths.
+    RUN_DIR=$KERMT_REPO/runs/continue-pretrain_$(date -u +%Y-%m-%dT%H-%M-%SZ)
+    ```
+ 
+-3. **Validate the checkpoint.**
++3. **Resolve & validate the checkpoint.**
++
++   **Resolve — only if `--ckpt` was omitted.** Default to the released
++   pretrained hybrid model **nvidia/NV-KERMT-70M-v2**:
++   - **Consent gate.** Unless `--pretrained-release` was passed, ask the user:
++     "No checkpoint given — download the released model nvidia/NV-KERMT-70M-v2
++     (NVIDIA Open Model License, https://huggingface.co/nvidia/NV-KERMT-70M-v2)
++     and continue-pretrain from it? [y/N]". **Never download without an
++     explicit yes** (or `--pretrained-release`). If both `--ckpt` and
++     `--pretrained-release` are given, abort — they conflict.
++   - **Save location.** Default `$KERMT_REPO/models/NV-KERMT-70M-v2/`; honor
++     `--model-dir <dir>` if given. An already-complete bundle is reused.
++   - **Download** (foreground; ~282 MB on first fetch):
++     ```
++     $KERMT_REPO/agent/scripts/kermt_container.sh run --model-dir <save-dir> -- \
++         "python agent/scripts/fetch_released_model.py --out /model"
++     ```
++     Parse the JSON; abort on `ok: false` (surface `errors`). On success set
++     `<user-ckpt> = <save-dir>/kermt_contrastive_v2.0.pt`. The bundle's three
++     vocab files land in `<save-dir>` too, so step 5's `--vocab-dir`
++     auto-detection (which looks in the ckpt's parent directory) finds them
++     with no extra work.
++
++   **Validate** the resolved (or user-provided) ckpt:
+    ```
+    $KERMT_REPO/agent/scripts/kermt_container.sh run --ckpt <user-ckpt> -- \
+        "python agent/scripts/check_checkpoint.py --mode continue_pretrain --ckpt /ckpt"
+@@ -233,6 +270,10 @@ host; the helper bind-mounts them at known container paths.
+ 
+ ## Hard rules
+ 
++- **Never download the released model without consent.** When `--ckpt` is
++  omitted, download `nvidia/NV-KERMT-70M-v2` only after an explicit user "yes"
++  or an explicit `--pretrained-release` flag. `--ckpt` and
++  `--pretrained-release` are mutually exclusive.
+ - **Never modify the user's input ckpt.** The runner symlinks it into the
+   save_dir; the symlink is what pretrain_ddp.py auto-resumes from. The
+   source file stays untouched.
+diff --git a/agent/skills/kermt-embed/SKILL.md b/agent/skills/kermt-embed/SKILL.md
+index 5945ace..61027b8 100644
+--- a/agent/skills/kermt-embed/SKILL.md
++++ b/agent/skills/kermt-embed/SKILL.md
+@@ -30,12 +30,23 @@ SMILES, launch the runner blocking, return the per-readout `.npy` files.
+ 
+ Required:
+ 
+-- `--ckpt <path>` — any encoder-bearing checkpoint. Grover_base, cmim,
+-  hybrid, and finetuned ckpts are all accepted. The validator only refuses
+-  ckpts with no encoder.
+ - `--csv <path>` — SMILES CSV. First column is `smiles`; other columns
+   are ignored (no targets needed).
+ 
++Checkpoint (optional — defaults to the released model if omitted):
++
++- `--ckpt <path>` — any encoder-bearing checkpoint. Grover_base, cmim,
++  hybrid, and finetuned ckpts are all accepted. The validator only refuses
++  ckpts with no encoder. **If omitted**, the skill offers to download the
++  released pretrained hybrid model **nvidia/NV-KERMT-70M-v2** and embed with
++  it — see "Resolve & validate the checkpoint" (workflow step 3).
++- `--pretrained-release` — explicit opt-in to use the released model without
++  the interactive prompt (for non-interactive / agent runs). Mutually
++  exclusive with `--ckpt`.
++- `--model-dir <dir>` — where to save the downloaded bundle (default
++  `$KERMT_REPO/models/NV-KERMT-70M-v2/`). An already-complete bundle there is
++  reused, not re-downloaded.
++
+ Optional:
+ 
+ - `--batch-size N` — override the configured default (64).
+@@ -57,7 +68,27 @@ Let `$KERMT_REPO` be the path to your kermt repo checkout.
+    RUN_DIR=$KERMT_REPO/runs/embed_$(date -u +%Y-%m-%dT%H-%M-%SZ)
+    ```
+ 
+-3. **Validate the checkpoint.**
++3. **Resolve & validate the checkpoint.**
++
++   **Resolve — only if `--ckpt` was omitted.** Default to the released
++   pretrained hybrid model **nvidia/NV-KERMT-70M-v2**:
++   - **Consent gate.** Unless `--pretrained-release` was passed, ask the user:
++     "No checkpoint given — download the released model nvidia/NV-KERMT-70M-v2
++     (NVIDIA Open Model License, https://huggingface.co/nvidia/NV-KERMT-70M-v2)
++     and embed with it? [y/N]". **Never download without an explicit yes** (or
++     `--pretrained-release`). If both `--ckpt` and `--pretrained-release` are
++     given, abort — they conflict.
++   - **Save location.** Default `$KERMT_REPO/models/NV-KERMT-70M-v2/`; honor
++     `--model-dir <dir>` if given. An already-complete bundle is reused.
++   - **Download** (foreground; ~282 MB on first fetch):
++     ```
++     $KERMT_REPO/agent/scripts/kermt_container.sh run --model-dir <save-dir> -- \
++         "python agent/scripts/fetch_released_model.py --out /model"
++     ```
++     Parse the JSON; abort on `ok: false` (surface `errors`). On success set
++     `<user-ckpt> = <save-dir>/kermt_contrastive_v2.0.pt`.
++
++   **Validate** the resolved (or user-provided) ckpt:
+    ```
+    $KERMT_REPO/agent/scripts/kermt_container.sh run --ckpt <user-ckpt> -- \
+        "python agent/scripts/check_checkpoint.py --mode embed --ckpt /ckpt"
+@@ -104,6 +135,10 @@ Let `$KERMT_REPO` be the path to your kermt repo checkout.
+ 
+ ## Hard rules
+ 
++- **Never download the released model without consent.** When `--ckpt` is
++  omitted, download `nvidia/NV-KERMT-70M-v2` only after an explicit user "yes"
++  or an explicit `--pretrained-release` flag. `--ckpt` and
++  `--pretrained-release` are mutually exclusive.
+ - **Never modify the user's ckpt.** The runner reads-only via
+   `task/extract_embeddings.py`'s `--checkpoint <path>` flag.
+ - **Arch comes from the ckpt.** No `--hidden-size` flag etc. on this runner;
+diff --git a/agent/skills/kermt-finetune/SKILL.md b/agent/skills/kermt-finetune/SKILL.md
+index 595d14c..ae2aaa0 100644
+--- a/agent/skills/kermt-finetune/SKILL.md
++++ b/agent/skills/kermt-finetune/SKILL.md
+@@ -32,12 +32,23 @@ launch the runner detached, return a run directory + container name.
+ 
+ Required:
+ 
+-- `--ckpt <path>` — input pretrain checkpoint (grover_base / cmim / hybrid).
+-  The validator refuses already-finetuned ckpts with a redirect to
+-  `kermt-infer`.
+ - `--csv <path>` — labeled CSV. First column is `smiles`; every other column
+   is a target.
+ 
++Checkpoint (optional — defaults to the released model if omitted):
++
++- `--ckpt <path>` — input pretrain checkpoint (grover_base / cmim / hybrid).
++  The validator refuses already-finetuned ckpts with a redirect to
++  `kermt-infer`. **If omitted**, the skill offers to download the released
++  pretrained hybrid model **nvidia/NV-KERMT-70M-v2** and finetune from it —
++  see "Resolve & validate the checkpoint" (workflow step 3).
++- `--pretrained-release` — explicit opt-in to use the released model without
++  the interactive prompt (for non-interactive / agent runs). Mutually
++  exclusive with `--ckpt`.
++- `--model-dir <dir>` — where to save the downloaded bundle (default
++  `$KERMT_REPO/models/NV-KERMT-70M-v2/`). An already-complete bundle there is
++  reused, not re-downloaded.
++
+ Optional:
+ 
+ - `--dataset-type {regression | classification | multiclass}` — default
+@@ -99,7 +110,27 @@ helper bind-mounts them at known container paths.
+    RUN_DIR=$KERMT_REPO/runs/finetune_$(date -u +%Y-%m-%dT%H-%M-%SZ)
+    ```
+ 
+-3. **Validate the checkpoint.**
++3. **Resolve & validate the checkpoint.**
++
++   **Resolve — only if `--ckpt` was omitted.** Default to the released
++   pretrained hybrid model **nvidia/NV-KERMT-70M-v2**:
++   - **Consent gate.** Unless `--pretrained-release` was passed, ask the user:
++     "No checkpoint given — download the released model nvidia/NV-KERMT-70M-v2
++     (NVIDIA Open Model License, https://huggingface.co/nvidia/NV-KERMT-70M-v2)
++     and finetune from it? [y/N]". **Never download without an explicit yes**
++     (or `--pretrained-release`). If both `--ckpt` and `--pretrained-release`
++     are given, abort — they conflict.
++   - **Save location.** Default `$KERMT_REPO/models/NV-KERMT-70M-v2/`; honor
++     `--model-dir <dir>` if given. An already-complete bundle is reused.
++   - **Download** (foreground; ~282 MB on first fetch):
++     ```
++     $KERMT_REPO/agent/scripts/kermt_container.sh run --model-dir <save-dir> -- \
++         "python agent/scripts/fetch_released_model.py --out /model"
++     ```
++     Parse the JSON; abort on `ok: false` (surface `errors`). On success set
++     `<user-ckpt> = <save-dir>/kermt_contrastive_v2.0.pt`.
++
++   **Validate** the resolved (or user-provided) ckpt:
+    ```
+    $KERMT_REPO/agent/scripts/kermt_container.sh run --ckpt <user-ckpt> -- \
+        "python agent/scripts/check_checkpoint.py --mode finetune_init --ckpt /ckpt"
+@@ -216,6 +247,10 @@ helper bind-mounts them at known container paths.
+ 
+ ## Hard rules
+ 
++- **Never download the released model without consent.** When `--ckpt` is
++  omitted, download `nvidia/NV-KERMT-70M-v2` only after an explicit user "yes"
++  or an explicit `--pretrained-release` flag. `--ckpt` and
++  `--pretrained-release` are mutually exclusive.
+ - **Never modify the user's input ckpt.** The runner passes its path via
+   `--checkpoint_path`; `task/train.py` loads it read-only into the model and
+   attaches a new FFN head. The source file stays untouched.
+diff --git a/agent/tests/test_e2e_released_download.py b/agent/tests/test_e2e_released_download.py
+new file mode 100644
+index 0000000..ac632ad
+--- /dev/null
++++ b/agent/tests/test_e2e_released_download.py
+@@ -0,0 +1,223 @@
++# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++# SPDX-License-Identifier: Apache-2.0
++
++"""Opt-in end-to-end tests for the released-model download path.
++
++These perform a REAL Hugging Face download (~282 MB) of nvidia/NV-KERMT-70M-v2
++and then drive each applicable downstream workflow (embed / finetune /
++continue-pretrain) from the downloaded bundle. They are marked `slow` and are
++SKIPPED by default; opt in with `--run-slow`, and run inside the kermt
++container (which, after a `kermt-setup` rebuild, ships huggingface_hub):
++
++    agent/scripts/kermt_container.sh run --run-dir /tmp/e2e -- \\
++        "python -m pytest agent/tests/test_e2e_released_download.py -v --run-slow"
++
++The bundle is downloaded ONCE per session (module-scoped fixture); the
++idempotent fetch means re-runs don't re-download. If the download can't run
++(no huggingface_hub / no network), the whole module is skipped.
++
++The downstream invocations mirror the existing real-ckpt slow tests in
++test_run_extract_embeddings.py / test_run_pretrain_local.py — the only change
++is that the checkpoint comes from the HF bundle rather than a local model/ dir.
++"""
++
++from __future__ import annotations
++
++import json
++import subprocess
++import sys
++from pathlib import Path
++
++import pytest
++
++REPO_ROOT = Path(__file__).resolve().parents[2]
++SCRIPTS_DIR = REPO_ROOT / "agent" / "scripts"
++CKPT_NAME = "kermt_contrastive_v2.0.pt"
++
++FINETUNE_CSV = REPO_ROOT / "tests" / "data" / "finetune" / "train.csv"
++EMBED_CSV = REPO_ROOT / "tests" / "data" / "finetune" / "test.csv"
++PRETRAIN_TRAIN = REPO_ROOT / "tests" / "data" / "pretrain" / "train.csv"
++PRETRAIN_VAL = REPO_ROOT / "tests" / "data" / "pretrain" / "val.csv"
++
++pytestmark = pytest.mark.slow
++
++
++def _run_script(name: str, *args: str) -> tuple[int, dict]:
++    proc = subprocess.run(
++        [sys.executable, str(SCRIPTS_DIR / name), *args],
++        capture_output=True,
++        text=True,
++    )
++    try:
++        out = json.loads(proc.stdout)
++    except json.JSONDecodeError:
++        out = {"_no_json": True, "_stdout": proc.stdout, "_stderr": proc.stderr}
++    return proc.returncode, out
++
++
++@pytest.fixture(scope="module")
++def released_bundle(tmp_path_factory) -> dict:
++    """Download the released bundle once. Skips the module if the download
++    can't run (huggingface_hub missing -> stale image, or no network)."""
++    out = tmp_path_factory.mktemp("released_model")
++    code, manifest = _run_script("fetch_released_model.py", "--out", str(out))
++    if not manifest.get("ok"):
++        pytest.skip(
++            f"released-model download unavailable (exit {code}): "
++            f"{manifest.get('errors') or manifest}"
++        )
++    return manifest
++
++
++def test_download_bundle_is_hybrid(released_bundle):
++    """The downloaded bundle is complete and classifies as a hybrid pretrain
++    checkpoint (the contract every downstream skill relies on)."""
++    bundle_dir = Path(released_bundle["vocab_dir"])
++    ckpt = Path(released_bundle["ckpt"])
++    assert ckpt.is_file()
++    for vocab in (
++        "pretrain_atom_vocab.json",
++        "pretrain_bond_vocab.json",
++        "pretrain_smiles_vocab.pkl",
++    ):
++        assert (bundle_dir / vocab).is_file(), f"missing bundled vocab: {vocab}"
++
++    code, info = _run_script(
++        "check_checkpoint.py", "--mode", "embed", "--ckpt", str(ckpt)
++    )
++    assert code == 0, info
++    assert info["model_type"] == "hybrid", info
++    assert info["has_task_ffn"] is False  # pretrain ckpt, not finetuned
++
++
++def test_download_then_embed(released_bundle, tmp_path):
++    """Bundle -> embed: extract the 4 readouts (mirrors the grover_base embed
++    slow test, swapping in the downloaded hybrid ckpt)."""
++    if not EMBED_CSV.is_file():
++        pytest.skip(f"embed fixture CSV not found at {EMBED_CSV}")
++    out_dir = tmp_path / "run"
++    data_dir = out_dir / "data"
++    code, _ = _run_script(
++        "prepare_data.py",
++        "--mode",
++        "embed",
++        "--csv",
++        str(EMBED_CSV),
++        "--out",
++        str(data_dir),
++    )
++    assert code == 0
++    code, m = _run_script(
++        "run_extract_embeddings.py",
++        "--ckpt",
++        released_bundle["ckpt"],
++        "--prepare-manifest",
++        str(data_dir / "prepare_data.json"),
++        "--out",
++        str(out_dir),
++        "--batch-size",
++        "16",
++    )
++    assert code == 0, m
++    assert m["manifest"]["status"] == "ok"
++    assert m["manifest"]["model_type"] == "hybrid"
++    output_dir = Path(m["manifest"]["output_dir"])
++    expected = {
++        "atom_from_atom.npy",
++        "bond_from_atom.npy",
++        "atom_from_bond.npy",
++        "bond_from_bond.npy",
++    }
++    assert expected.issubset({p.name for p in output_dir.glob("*.npy")})
++
++
++def test_download_then_finetune(released_bundle, tmp_path):
++    """Bundle -> finetune (1 epoch, single regression target y_mean) -> a
++    held-out test_result.csv lands."""
++    if not FINETUNE_CSV.is_file():
++        pytest.skip(f"finetune fixture CSV not found at {FINETUNE_CSV}")
++    out_dir = tmp_path / "run"
++    data_dir = out_dir / "data"
++    code, prep = _run_script(
++        "prepare_data.py",
++        "--mode",
++        "finetune",
++        "--csv",
++        str(FINETUNE_CSV),
++        "--out",
++        str(data_dir),
++        "--split-type",
++        "random",
++        "--targets",
++        "y_mean",
++    )
++    assert code == 0, prep
++    code, m = _run_script(
++        "run_finetune_local.py",
++        "--ckpt",
++        released_bundle["ckpt"],
++        "--prepare-manifest",
++        str(data_dir / "prepare_data.json"),
++        "--dataset-type",
++        "regression",
++        "--out",
++        str(out_dir),
++        "--gpus",
++        "0",
++        "--epochs",
++        "1",
++    )
++    assert code == 0, m
++    assert m["manifest"]["status"] == "ok", m["manifest"]
++    test_result = out_dir / "ckpt" / "fold_0" / "test_result.csv"
++    assert test_result.is_file(), f"expected held-out predictions at {test_result}"
++
++
++def test_download_then_continue_pretrain(released_bundle, tmp_path):
++    """Bundle -> continue-pretrain (1 epoch) using the bundle's own vocab files
++    as the authoritative vocab (the released-bundle pass-through path)."""
++    if not PRETRAIN_TRAIN.is_file():
++        pytest.skip(f"pretrain fixture not found at {PRETRAIN_TRAIN}")
++    bundle_dir = released_bundle["vocab_dir"]
++    out_dir = tmp_path / "run"
++    data_dir = out_dir / "data"
++    prep_args = [
++        "prepare_data.py",
++        "--mode",
++        "pretrain",
++        "--csv",
++        str(PRETRAIN_TRAIN),
++        "--out",
++        str(data_dir),
++        "--vocab-dir",
++        bundle_dir,
++    ]
++    if PRETRAIN_VAL.is_file():
++        prep_args += ["--val-csv", str(PRETRAIN_VAL)]
++    code, prep = _run_script(*prep_args)
++    assert code == 0, prep
++    assert prep.get("vocab_source") == "user_provided", prep
++
++    code, m = _run_script(
++        "run_pretrain_local.py",
++        "--ckpt",
++        released_bundle["ckpt"],
++        "--prepare-manifest",
++        str(data_dir / "prepare_data.json"),
++        "--out",
++        str(out_dir),
++        "--gpus",
++        "0",
++        "--epochs",
++        "1",
++        "--warmup-epochs",
++        "0",
++        "--save-interval",
++        "100",
++        "--batch-size",
++        "32",
++    )
++    assert code == 0, m
++    assert m["manifest"]["status"] == "ok", m["manifest"]
++    final_ckpt = out_dir / "ckpt" / "last_checkpoint.pt"
++    assert final_ckpt.is_file()
+diff --git a/agent/tests/test_fetch_released_model.py b/agent/tests/test_fetch_released_model.py
+new file mode 100644
+index 0000000..665c56f
+--- /dev/null
++++ b/agent/tests/test_fetch_released_model.py
+@@ -0,0 +1,148 @@
++# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++# SPDX-License-Identifier: Apache-2.0
++
++"""Unit tests for agent/scripts/fetch_released_model.py.
++
++These mock `huggingface_hub.snapshot_download` (or simulate its absence), so
++they need no network and run every time — they are NOT marked `slow`. The real
++download is exercised separately by the opt-in `slow` e2e tests.
++
++Covers: idempotent reuse, successful download, incomplete-bundle error,
++stale-image (huggingface_hub missing) error, and the CLI + config-load path.
++"""
++
++from __future__ import annotations
++
++import importlib
++import json
++import sys
++from pathlib import Path
++
++SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "scripts"
++sys.path.insert(0, str(SCRIPTS_DIR))
++frm = importlib.import_module("fetch_released_model")
++
++CKPT = "kermt_contrastive_v2.0.pt"
++VOCAB = [
++    "pretrain_atom_vocab.json",
++    "pretrain_bond_vocab.json",
++    "pretrain_smiles_vocab.pkl",
++]
++
++
++def _make_bundle(d: Path, names: list[str]) -> None:
++    d.mkdir(parents=True, exist_ok=True)
++    for n in names:
++        (d / n).write_bytes(b"x")
++
++
++def test_reuse_complete_bundle_no_download(tmp_path, monkeypatch):
++    """A complete bundle is reused — snapshot_download must NOT be called."""
++    _make_bundle(tmp_path, [CKPT, *VOCAB])
++
++    def _boom(**kwargs):  # pragma: no cover - must not be reached
++        raise AssertionError("snapshot_download should not be called on reuse")
++
++    monkeypatch.setattr("huggingface_hub.snapshot_download", _boom, raising=False)
++
++    res = frm.fetch(
++        out=tmp_path,
++        repo_id="nvidia/NV-KERMT-70M-v2",
++        revision="abc",
++        ckpt_name=CKPT,
++        vocab_files=VOCAB,
++    )
++    assert res["ok"] is True
++    assert res["reused"] is True
++    assert res["ckpt"] == str(tmp_path / CKPT)
++    assert res["vocab_dir"] == str(tmp_path)
++    assert set(res["files_present"]) == {CKPT, *VOCAB}
++
++
++def test_download_populates_bundle(tmp_path, monkeypatch):
++    """When the bundle is absent, snapshot_download is called and its output
++    is validated and reported (reused: false)."""
++    out = tmp_path / "NV-KERMT-70M-v2"
++    called = {}
++
++    def _fake(repo_id, revision, local_dir):
++        called["repo_id"] = repo_id
++        called["revision"] = revision
++        _make_bundle(Path(local_dir), [CKPT, *VOCAB])
++
++    monkeypatch.setattr("huggingface_hub.snapshot_download", _fake, raising=False)
++
++    res = frm.fetch(
++        out=out,
++        repo_id="nvidia/NV-KERMT-70M-v2",
++        revision="deadbeef",
++        ckpt_name=CKPT,
++        vocab_files=VOCAB,
++    )
++    assert res["ok"] is True
++    assert res["reused"] is False
++    assert called == {"repo_id": "nvidia/NV-KERMT-70M-v2", "revision": "deadbeef"}
++    assert res["ckpt_bytes"] == 1  # the fake wrote 1 byte
++
++
++def test_incomplete_download_errors(tmp_path, monkeypatch):
++    """If the download leaves a vocab file missing, fetch reports ok: false
++    naming the missing file — it does not silently succeed."""
++
++    def _fake(repo_id, revision, local_dir):
++        _make_bundle(
++            Path(local_dir), [CKPT, VOCAB[0], VOCAB[1]]
++        )  # smiles vocab missing
++
++    monkeypatch.setattr("huggingface_hub.snapshot_download", _fake, raising=False)
++
++    res = frm.fetch(
++        out=tmp_path,
++        repo_id="r",
++        revision="v",
++        ckpt_name=CKPT,
++        vocab_files=VOCAB,
++    )
++    assert res["ok"] is False
++    assert any(VOCAB[2] in e for e in res["errors"])
++
++
++def test_missing_huggingface_hub_gives_rebuild_hint(tmp_path, monkeypatch):
++    """A stale image without huggingface_hub yields a clean, actionable error
++    pointing at kermt-setup — not a traceback."""
++    monkeypatch.setitem(sys.modules, "huggingface_hub", None)  # forces ImportError
++
++    res = frm.fetch(
++        out=tmp_path,
++        repo_id="r",
++        revision="v",
++        ckpt_name=CKPT,
++        vocab_files=VOCAB,
++    )
++    assert res["ok"] is False
++    assert any("kermt-setup" in e for e in res["errors"])
++    assert any("huggingface_hub" in e for e in res["errors"])
++
++
++def test_cli_reuse_path_via_subprocess(tmp_path, run_agent_script):
++    """End-to-end through the CLI + config load: a pre-populated bundle is
++    reused and the script exits 0 with valid JSON."""
++    _make_bundle(tmp_path, [CKPT, *VOCAB])
++    code, payload = run_agent_script("fetch_released_model.py", "--out", str(tmp_path))
++    assert code == 0, payload
++    assert payload["ok"] is True
++    assert payload["reused"] is True
++    # config-derived defaults flowed through
++    assert payload["repo_id"] == "nvidia/NV-KERMT-70M-v2"
++    assert payload["ckpt_name"] == CKPT
++
++
++def test_config_pin_matches_expected():
++    """The shipped config pins the released repo + revision + bundle filenames."""
++    cfg = json.loads(
++        (SCRIPTS_DIR.parent / "config" / "released_model.json").read_text()
++    )
++    assert cfg["repo_id"] == "nvidia/NV-KERMT-70M-v2"
++    assert cfg["ckpt_name"] == CKPT
++    assert set(cfg["vocab_files"]) == set(VOCAB)
++    assert len(cfg["revision"]) == 40  # pinned to a full commit sha
+diff --git a/environment.yml b/environment.yml
+index 16fbf6f..01abdc7 100644
+--- a/environment.yml
++++ b/environment.yml
+@@ -16,6 +16,7 @@ dependencies:
+   - scikit-learn
+   - tensorboard
+   - wandb
++  - huggingface_hub
+   - setuptools>=80.0.0,<82.0.0
+   - protobuf>=5.29.6
+   - pytest

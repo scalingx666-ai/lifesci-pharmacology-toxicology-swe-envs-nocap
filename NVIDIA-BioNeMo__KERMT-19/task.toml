@@ -1,0 +1,64 @@
+version = "1.0"
+
+[task]
+name = "default/NVIDIA-BioNeMo__KERMT-19"
+description = "Fix five pipeline-correctness bugs"
+
+[metadata]
+difficulty = "medium"
+category = "bugfix"
+keywords = [
+    "KERMT",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "NVIDIA-BioNeMo/KERMT"
+ref = "85f255fd00b270997f5eead1755d6c606bbd8edd"
+reference = "https://github.com/NVIDIA-BioNeMo/KERMT/pull/19"
+source_access = "auto"
+built_at = "2026-11-16T11:12:48.618284+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:22b67f59810491ccd9bf730947fbea2ea40d0818b0d3528ed13f9316e78d76b4"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2026-07-07T20:11:53Z"
+diff_format = "unified"
+context_files = [
+    "task/kermttrainer.py",
+    "task/predict.py",
+    "task/train.py",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 55
+difficulty = "medium"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

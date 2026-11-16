@@ -1,0 +1,196 @@
+diff --git a/global_chem_extensions/global_chem_extensions/cheminformatics/applications/node_pca_analysis.py b/global_chem_extensions/global_chem_extensions/cheminformatics/applications/node_pca_analysis.py
+index 0b8c6bba..a342de3e 100644
+--- a/global_chem_extensions/global_chem_extensions/cheminformatics/applications/node_pca_analysis.py
++++ b/global_chem_extensions/global_chem_extensions/cheminformatics/applications/node_pca_analysis.py
+@@ -8,6 +8,7 @@
+ 
+ # Scientific Imports
+ # ------------------
++import pandas as pd
+ import numpy as np
+ from sklearn.cluster import KMeans
+ from sklearn.decomposition import PCA
+@@ -33,7 +34,14 @@
+ # --------------
+ 
+ TOOLTIPS = """<div>\nMolID: @ids<br>\n@img{safe}\n</div>\n"""
+-colormaps = { 0: '#e6194b', 1: '#3cb44b',  2: '#ffe119', 3: '#4363d8', 4: '#f58231',  5: '#911eb4'}
++colormaps = {
++    0: '#e6194b',
++    1: '#3cb44b',
++    2: '#ffe119',
++    3: '#4363d8',
++    4: '#f58231',
++    5: '#911eb4'
++}
+ 
+ class PCAAnalysis(object):
+ 
+@@ -47,8 +55,16 @@ def __init__(self,
+                  number_of_components,
+                  random_state,
+                  file_name,
++                 principal_component_x,
++                 principal_component_y,
++                 x_axis_label,
++                 y_axis_label,
++                 plot_width ,
++                 plot_height,
++                 title,
+                  save_file = False,
+                  return_mol_ids = False,
++                 save_principal_components = False,
+         ):
+ 
+         self.smiles_list = smiles_list
+@@ -59,7 +75,15 @@ def __init__(self,
+         self.random_state = random_state
+         self.file_name = file_name
+         self.save_file = save_file
++        self.save_principal_components = save_principal_components
+         self.return_mol_ids = return_mol_ids
++        self.principal_component_x = principal_component_x
++        self.principal_component_y = principal_component_y
++        self.x_axis_label = x_axis_label
++        self.y_axis_label = y_axis_label
++        self.plot_width = plot_width
++        self.plot_height = plot_height
++        self.title = title
+ 
+         self.plot_mappings = {}
+ 
+@@ -124,18 +148,37 @@ def conduct_analysis(self):
+ 
+             self.plot_mappings[str(i)] = self.smiles_list[i]
+ 
+-
+         kmean_data = dict(
+-            x=chemicalspace[:,0],
+-            y=chemicalspace[:,2],
++
++            PCX = chemicalspace[:,self.principal_component_x],
++            PCY = chemicalspace[:,self.principal_component_y],
++
+             img=[PCAAnalysis.mol2svg(m) for m in molecules_list],
+             ids=[str(i) for i in range(0, len(self.smiles_list))],
+             fill_color=kmeanc,
+         )
+ 
++        ds= {
++            'cols': [
++                'ids','PCX','PCY','fill_color'
++            ]
++        }
++
++        principal_component_df =pd.DataFrame(kmean_data)
++        principal_component_df = principal_component_df[ds['cols']]
++        principal_component_df['smiles'] = self.smiles_list
++
+         source = ColumnDataSource(kmean_data)
+-        plot = figure(plot_width=1000, plot_height=1000, tooltips=TOOLTIPS, title='Compounds')
+-        plot.circle('x', 'y',color='fill_color', size=10, fill_alpha=0.2,source=source)
++
++        plot = figure(
++            plot_width = self.plot_width,
++            plot_height = self.plot_height,
++            tooltips = TOOLTIPS,
++            title = self.title,
++            x_axis_label = self.x_axis_label,
++            y_axis_label = self.y_axis_label,
++        )
++        plot.circle('PCX','PCY', color='fill_color', size=10, fill_alpha=0.2, source=source)
+ 
+         plot = gridplot([
+             [plot]
+@@ -143,12 +186,15 @@ def conduct_analysis(self):
+ 
+         if self.save_file:
+ 
+-            output_file(filename=self.file_name, title="Static HTML file")
++            output_file(filename=(self.file_name + ".html"), title="Static HTML file")
+             save(plot)
+ 
+         else:
+             output_notebook()
+             show(plot)
++            
++        if self.save_principal_components:
++            principal_component_df.to_csv((self.file_name + ".tsv"), sep="\t", index=False)
+ 
+         if self.return_mol_ids:
+             return self.plot_mappings
+diff --git a/global_chem_extensions/global_chem_extensions/cheminformatics/cheminformatics.py b/global_chem_extensions/global_chem_extensions/cheminformatics/cheminformatics.py
+index a21125b2..ab35716f 100644
+--- a/global_chem_extensions/global_chem_extensions/cheminformatics/cheminformatics.py
++++ b/global_chem_extensions/global_chem_extensions/cheminformatics/cheminformatics.py
+@@ -57,8 +57,16 @@ def node_pca_analysis(
+             number_of_components = 0.95,
+             random_state = 0,
+             file_name = 'pca_analysis.html',
++            principal_component_x = 0,
++            principal_component_y = 1,
++            x_axis_label = 'PC1',
++            y_axis_label = 'PC2',
++            plot_width = 1000,
++            plot_height = 1000,
++            title = 'Principal Component Analysis on SMILES',
+             save_file = False,
+             return_mol_ids = False,
++            save_principal_components = False,
+     ):
+ 
+         '''
+@@ -66,6 +74,7 @@ def node_pca_analysis(
+         Perform a pca analysis on a node within globalchem, can be extended to lists outside of the dedicated SMILES.
+ 
+         Arguments:
++
+             smiles_list (List): list of SMILES that the user wants to cluster
+             morgan_radius (Int): Morgan Radius of the chemical environment
+             bit_representation (Int): Length of the bit representation
+@@ -75,6 +84,14 @@ def node_pca_analysis(
+             file_name (String): file name the user would like to input
+             save_file (Bool): Whether the user wants to display the plot or save it.
+             return_mol_ids (Bool): Return the molecule IDS for the user to mine.
++            principal_component_x (Int): Principal Component X on the x-axis that could be PC1 or PC2 or another vector
++            principal_component_y (Int): Principal Component Y on the y-axis that could be PC1 or PC2 or another vector.
++            x_axis_label (String): X Axis Label of the Plot
++            y_axis_label (String): Y Axis Label of the Plot
++            plot_width (Int): Width of the plot with default being 1000
++            plot_height (Int): height of the plot
++            title (String): Title of the plot
++            save_principal_components (Bool): save the principal components into a TSV.
+ 
+         '''
+ 
+@@ -88,8 +105,16 @@ def node_pca_analysis(
+             number_of_components,
+             random_state,
+             file_name,
++            principal_component_x,
++            principal_component_y,
++            x_axis_label,
++            y_axis_label,
++            plot_width,
++            plot_height,
++            title,
+             save_file=save_file,
+-            return_mol_ids = return_mol_ids
++            return_mol_ids = return_mol_ids,
++            save_principal_components = save_principal_components
+         )
+ 
+         return_mol_ids = pca_analysis.conduct_analysis()
+diff --git a/global_chem_extensions/setup.py b/global_chem_extensions/setup.py
+index bd63cb06..115a0104 100644
+--- a/global_chem_extensions/setup.py
++++ b/global_chem_extensions/setup.py
+@@ -37,7 +37,7 @@
+ # ----
+ setup(
+     name="global_chem_extensions",
+-    version="1.0",
++    version="1.0.2",
+     packages=find_packages(),
+     license='MPL 2.0',
+     author="Suliman Sharif",

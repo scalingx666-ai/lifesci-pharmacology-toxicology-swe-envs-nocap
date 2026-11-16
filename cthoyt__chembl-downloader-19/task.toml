@@ -1,0 +1,72 @@
+version = "1.0"
+
+[task]
+name = "default/cthoyt__chembl-downloader-19"
+description = "Add paper and update notebooks"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "chembl-downloader",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "cthoyt/chembl-downloader"
+ref = "4bde9dea0c344f5a0107eb18c6de78d5a16352f0"
+reference = "https://github.com/cthoyt/chembl-downloader/pull/19"
+source_access = "auto"
+built_at = "2026-11-16T11:23:18.166387+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:30bdd729e72b030bcfeb89d92cb8f5f0108f4127bcb318cf6dd5357a2e515671"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2025-06-27T23:21:03Z"
+diff_format = "unified"
+context_files = [
+    ".gitignore",
+    "notebooks/chebi-mappings.ipynb",
+    "notebooks/cortes-ciriano-refresh.ipynb",
+    "notebooks/refresh-static-data.ipynb",
+    "paper/README.md",
+    "paper/build.sh",
+    "paper/extras.md",
+    "paper/paper.bib",
+    "paper/paper.md",
+    "pyproject.toml",
+    "tox.ini",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 25518
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

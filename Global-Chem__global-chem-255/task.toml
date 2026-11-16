@@ -1,0 +1,70 @@
+version = "1.0"
+
+[task]
+name = "default/Global-Chem__global-chem-255"
+description = "Added mango phytochemicals to the Node"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "global-chem",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "Global-Chem/global-chem"
+ref = "6a767e8b08c5e0181f3a84c345435cff2c45bbee"
+reference = "https://github.com/Global-Chem/global-chem/pull/255"
+source_access = "auto"
+built_at = "2026-11-16T09:53:17.462292+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:6119f3cc58c9b52bec3ab44affe5d925f304b460979836fce1a12154b78a2df2"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2023-06-27T14:09:51Z"
+diff_format = "unified"
+context_files = [
+    "global_chem/global_chem/food/fruits/__init__.py",
+    "global_chem/global_chem/food/fruits/mango/__init__.py",
+    "global_chem/global_chem/food/fruits/mango/constituents_of_mango.py",
+    "global_chem/global_chem/food/fruits/mango/fattyacids.py",
+    "global_chem/global_chem/food/fruits/mango/flavonoids.py",
+    "global_chem/global_chem/food/fruits/mango/mango_amino_acids.py",
+    "global_chem/global_chem/food/fruits/mango/phenolicacids.py",
+    "global_chem/global_chem/food/fruits/mango/vitamins.py",
+    "global_chem/global_chem/global_chem.py",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 233
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

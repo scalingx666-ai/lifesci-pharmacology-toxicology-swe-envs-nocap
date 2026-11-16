@@ -1,0 +1,30 @@
+diff --git a/web/index.html b/web/index.html
+index a8dc499..653ffe0 100644
+--- a/web/index.html
++++ b/web/index.html
+@@ -51,7 +51,8 @@ <h2>Run an experiment in your browser</h2>
+       <b>Open the Lab →</b>
+       <span>Pick cells and a drug, knock out a gene, change the schedule, press Run.
+       The real engine runs on your own machine — nothing to install, nothing uploaded.
+-      About 20 seconds to start, half a minute per experiment.</span></a></p>
++      The first visit downloads about 40 MB and takes a minute or two to start;
++      after that, about half a minute per experiment.</span></a></p>
+ 
+     <h2>Open a run in the viewer</h2>
+     <div class="demos" id="demos">
+diff --git a/web/lab/index.html b/web/lab/index.html
+index 7436e9d..4e2dc89 100644
+--- a/web/lab/index.html
++++ b/web/lab/index.html
+@@ -101,7 +101,10 @@
+         <h2>Nothing run yet</h2>
+         <div>Pick cells and a drug on the left, then press
+           <b style="color:var(--accent)">Run experiment</b>.<br>
+-          Everything happens in your browser — nothing is uploaded.</div>
++          Everything happens in your browser — nothing is uploaded.<br>
++          <span style="font-size:12px">The first visit downloads about 40 MB (Python,
++          NumPy, SciPy and the engine) and can take a minute or two to start.
++          Later visits are faster.</span></div>
+       </div>
+       <div class="overlay" id="overlay" hidden></div>
+     </div>

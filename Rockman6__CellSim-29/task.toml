@@ -1,0 +1,67 @@
+version = "1.0"
+
+[task]
+name = "default/Rockman6__CellSim-29"
+description = "Glucose acts through respiration, not starvation — now validated"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "CellSim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "Rockman6/CellSim"
+ref = "79b4d88629c9b1032a9e8b2b1d65e24223094354"
+reference = "https://github.com/Rockman6/CellSim/pull/29"
+source_access = "auto"
+built_at = "2026-11-16T11:04:23.130718+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:882e830590d64a73de825ed24c10250f3ed61fb77ffa35f9f2f0be3121a43c3f"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2026-10-07T09:54:11Z"
+diff_format = "unified"
+context_files = [
+    "README.md",
+    "benchmarks/cell/glucose_validation.json",
+    "cellsim/cell/dish.py",
+    "docs/VALIDATION.md",
+    "scripts/validate_glucose.py",
+    "tests/cell/test_tissue_env_smoke.py",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 253
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

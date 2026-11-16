@@ -1,0 +1,67 @@
+version = "1.0"
+
+[task]
+name = "default/Global-Chem__global-chem-218"
+description = "Move the Notification System into the Github Actions"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "global-chem",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "Global-Chem/global-chem"
+ref = "e8177cb07a10856b8d24ebb51cb77b0045a3a0c2"
+reference = "https://github.com/Global-Chem/global-chem/pull/218"
+source_access = "auto"
+built_at = "2026-11-16T09:53:24.318490+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:9acc567c600c271238bf5e957bd15cf7ea9411d050ab1bf469a654f2d7655d88"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2022-09-05T14:49:50Z"
+diff_format = "unified"
+context_files = [
+    ".github/workflows/public_notifications.yml",
+    "bot_services/__init__.py",
+    "bot_services/public_notifications/__init__.py",
+    "bot_services/public_notifications/colour_additive_list.py",
+    "global_chem/global_chem/food/color_additives/fda_list_three.py",
+    "global_chem/global_chem_outputs/global_chem.tsv",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 315
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

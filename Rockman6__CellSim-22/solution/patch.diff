@@ -1,0 +1,429 @@
+diff --git a/cellsim/cell/dish.py b/cellsim/cell/dish.py
+index a8ff6bd..dd5a3ae 100644
+--- a/cellsim/cell/dish.py
++++ b/cellsim/cell/dish.py
+@@ -261,7 +261,8 @@ def __init__(self, line: CellLine, drug=None, *, n_seed: int = 100,
+ 
+         # Initial cells: the engine's own asynchronous population.
+         pop = make_population(n_seed, 0.0, self.rng, het_sigma=p.het_sigma,
+-                              n_drugs=self.n_drugs, cycle_cv=p.cycle_cv)
++                              n_drugs=self.n_drugs, cycle_cv=p.cycle_cv,
++                              quiescent_fraction=p.quiescent_fraction)
+         self.cells = pop
+         self.lineage = np.arange(n_seed)
+         # Birth time of each cell; -inf for the founders, whose cycle began
+@@ -415,6 +416,8 @@ def _aux(self) -> dict:
+                "het_bcl2": c.het_bcl2, "het_uptake": c.het_uptake, "gs": self.gs}
+         if c.cycle_rate is not None:
+             aux["cycle_rate"] = c.cycle_rate
++        if c.quiescent is not None:
++            aux["quiescent"] = c.quiescent
+         return aux
+ 
+     # ── division, death, clearance ──
+@@ -515,6 +518,12 @@ def _divide(self, divide: np.ndarray) -> None:
+         c.het_uptake = np.concatenate([c.het_uptake, new_uptake])
+         if c.cycle_rate is not None:
+             c.cycle_rate = np.concatenate([c.cycle_rate, c.cycle_rate[idx]])
++        if c.quiescent is not None:
++            # Each daughter decides independently, so the sister of a
++            # quiescent cell is not automatically quiescent — which is the
++            # observation the bifurcation was described from.
++            draw = self.rng.random(len(idx)) < self.p.quiescent_fraction
++            c.quiescent = np.concatenate([c.quiescent, draw])
+         self.lineage = np.concatenate([self.lineage, self.lineage[idx]])
+         self.birth_t = np.concatenate([self.birth_t, np.full(len(idx), self.t_h)])
+         self.pos = np.vstack([self.pos, np.array(sites)])
+@@ -537,6 +546,8 @@ def _compact(self) -> None:
+             setattr(c, name, getattr(c, name)[keep])
+         if c.cycle_rate is not None:
+             c.cycle_rate = c.cycle_rate[keep]
++        if c.quiescent is not None:
++            c.quiescent = c.quiescent[keep]
+         self.lineage, self.pos = self.lineage[keep], self.pos[keep]
+         self.birth_t = self.birth_t[keep]
+         self.o2, self.gs = self.o2[keep], self.gs[keep]
+@@ -570,7 +581,8 @@ def advance(self, dose_fn: Optional[DoseFn]) -> None:
+         for _ in range(n_sub):
+             _rk4(self.cells.Y, self._aux(), self.line, self.drugs or None, self.p, self.k_cyc, dp.dt_h)
+             self.t_h += dp.dt_h
+-            divide, die = _cell_events(self.cells, self.drugs or None, self.p, dp.dt_h)
++            divide, die = _cell_events(self.cells, self.drugs or None, self.p, dp.dt_h,
++                                       rng=self.rng)
+             if die.any():
+                 self._bury(die, APOPTOTIC)
+             if divide.any():
+diff --git a/cellsim/cell/engine.py b/cellsim/cell/engine.py
+index fef2724..4ba120a 100644
+--- a/cellsim/cell/engine.py
++++ b/cellsim/cell/engine.py
+@@ -190,6 +190,21 @@ class Params:
+     # (scripts/ctc_reference.py). 0 keeps every cell on the same clock and
+     # every earlier result unchanged.
+     cycle_cv: float = 0.0
++    # Proliferation / quiescence at mitotic exit. A daughter does not
++    # always start the next cycle: CDK2 activity bifurcates as the mother
++    # divides, and the low branch sits in G0 until it is recruited back
++    # (Spencer et al. 2013 Cell 155:369). In the Cell Tracking Challenge
++    # HeLa movie this is plainly visible — 40-60 % of tracked cells never
++    # divide inside 46 h and the Kaplan-Meier curve PLATEAUS, where an
++    # engine in which everything cycles keeps falling
++    # (docs/VALIDATION.md).
++    #
++    # `quiescent_fraction` is the chance a cell leaving mitosis enters G0;
++    # `quiescence_exit_per_h` is the rate it leaves again (0 = it does not
++    # within the run). Both default to 0, which is a population where
++    # every cell cycles and leaves every earlier result unchanged.
++    quiescent_fraction: float = 0.0
++    quiescence_exit_per_h: float = 0.0
+ 
+ 
+ # ── small helpers ─────────────────────────────────────────────────────
+@@ -292,6 +307,12 @@ def rhs(Y: np.ndarray, aux: dict, line: CellLine, drug: Optional[Drug],
+     cycle_rate = aux.get("cycle_rate")
+     if cycle_rate is not None:
+         dY[:, :7] *= cycle_rate[:, None]
++    # A cell in G0 holds its cycle state until it is recruited back. It is
++    # not arrested by damage and not dying: it is simply not cycling, which
++    # is why this multiplies the cycle block and nothing else.
++    quiescent = aux.get("quiescent")
++    if quiescent is not None:
++        dY[:, :7] *= (~quiescent)[:, None]
+     # p53 -> p21 (El-Deiry 1993) + p53-independent CHK1/2 S/G2 term
+     dY[:, 6] += p.p21_k_max * _hill8(p53, p.p21_K_hill) * f53
+     chk = (D > p.chk_damage_threshold) & ((phase == 1) | (phase == 2))
+@@ -385,6 +406,7 @@ class Population:
+     het_uptake: np.ndarray           # per-cell drug-accumulation multiplier (mean 1)
+     t_h: float = 0.0
+     cycle_rate: Optional[np.ndarray] = None   # per-cell cycle speed (None = all 1)
++    quiescent: Optional[np.ndarray] = None    # in G0 after mitosis (None = none are)
+ 
+ 
+ @dataclass
+@@ -443,7 +465,8 @@ def _lognormal_mean_one(rng: np.random.Generator, sigma: float, n: int) -> np.nd
+ 
+ def make_population(n_cells: int, C_out: Union[float, np.ndarray], rng: np.random.Generator,
+                     forced_D: Optional[float] = None, het_sigma: float = 0.0,
+-                    n_drugs: int = 1, cycle_cv: float = 0.0) -> Population:
++                    n_drugs: int = 1, cycle_cv: float = 0.0,
++                    quiescent_fraction: float = 0.0) -> Population:
+     # C_out is (n_cells,) for one drug, or (n_cells, n_drugs) for several.
+     C = np.asarray(C_out, dtype=float)
+     C = (np.broadcast_to(C, (n_cells,)).copy() if n_drugs <= 1
+@@ -467,14 +490,18 @@ def make_population(n_cells: int, C_out: Union[float, np.ndarray], rng: np.rando
+     if cycle_cv > 0:
+         s = np.sqrt(np.log(1.0 + cycle_cv ** 2))
+         cycle_rate = 1.0 / np.exp(rng.normal(-0.5 * s * s, s, n_cells))
++    # Allocated only when quiescence is in use, so the default population
++    # is byte-for-byte what it was.
++    quiescent = np.zeros(n_cells, bool) if quiescent_fraction > 0 else None
+     return Population(Y=Y, weight=np.ones(n_cells), alive=np.ones(n_cells, bool),
+                       in_M=np.zeros(n_cells, bool), t_in_M=np.zeros(n_cells),
+                       arrest_h=np.zeros(n_cells), generation=np.zeros(n_cells, int),
+                       C_out=C, forced_D=fD, het_bcl2=het_bcl2, het_uptake=het_uptake,
+-                      cycle_rate=cycle_rate)
++                      cycle_rate=cycle_rate, quiescent=quiescent)
+ 
+ 
+-def _cell_events(pop: "Population", drug, p: Params, dt_h: float) -> tuple[np.ndarray, np.ndarray]:
++def _cell_events(pop: "Population", drug, p: Params, dt_h: float,
++                 rng: Optional[np.random.Generator] = None) -> tuple[np.ndarray, np.ndarray]:
+     """Mitosis, mitotic arrest, slippage and death after one integration
+     step, for any set of cells.
+ 
+@@ -482,7 +509,11 @@ def _cell_events(pop: "Population", drug, p: Params, dt_h: float) -> tuple[np.nd
+     and returned in `divide`; what a division means for the population is
+     the caller's business — `simulate` doubles a representative cell's
+     weight, the spatial dish places a daughter on the lattice. Dying cells
+-    are marked dead and returned in `die`."""
++    are marked dead and returned in `die`.
++
++    `rng` is needed only when `Params.quiescent_fraction` is non-zero, so
++    that leaving mitosis can be a coin flip; without it the caller gets
++    the old deterministic behaviour."""
+     Y = pop.Y
+     ready = (Y[:, IX["CycB"]] > 0.25) & (Y[:, IX["p21"]] < 0.35) & (Y[:, IX["CycA"]] > 0.30)
+     enter = pop.alive & ~pop.in_M & ready & (Y[:, IX["D"]] < p.g2m_damage_block)
+@@ -498,6 +529,12 @@ def _cell_events(pop: "Population", drug, p: Params, dt_h: float) -> tuple[np.nd
+         arrested = arrested | (pop.in_M & (theta > dg.theta_arrest))
+     pop.arrest_h[arrested] += dt_h
+     pop.arrest_h[~pop.in_M] = 0.0
++    # Recruitment out of G0, before this step's divisions, so a cell that
++    # has just entered it cannot leave in the same step.
++    if pop.quiescent is not None and p.quiescence_exit_per_h > 0 and rng is not None:
++        leaving = pop.quiescent & pop.alive & (
++            rng.random(len(Y)) < 1.0 - np.exp(-p.quiescence_exit_per_h * dt_h))
++        pop.quiescent[leaving] = False
+     divide = pop.alive & pop.in_M & ~arrested & (pop.t_in_M >= p.m_duration_h)
+     if divide.any():
+         Y[divide, :7] = fresh_cycle_state()
+@@ -505,6 +542,11 @@ def _cell_events(pop: "Population", drug, p: Params, dt_h: float) -> tuple[np.nd
+         pop.generation[divide] += 1
+         pop.in_M[divide] = False
+         pop.t_in_M[divide] = 0.0
++        # The bifurcation at mitotic exit: some of what leaves mitosis
++        # does not start the next cycle.
++        if pop.quiescent is not None and p.quiescent_fraction > 0 and rng is not None:
++            idx = np.flatnonzero(divide)
++            pop.quiescent[idx] = rng.random(len(idx)) < p.quiescent_fraction
+     slip = pop.alive & arrested & (pop.t_in_M >= p.slippage_h)
+     if slip.any():
+         Y[slip, :7] = fresh_cycle_state()
+@@ -544,7 +586,8 @@ def simulate(line: CellLine, drug: Optional[Drug], C_out_uM: Union[float, np.nda
+     drugs = _as_drug_tuple(drug)
+     n_drugs = max(1, len(drugs))
+     pop = make_population(n_cells, C_out_uM, rng, forced_D, het_sigma=p.het_sigma,
+-                          n_drugs=n_drugs, cycle_cv=p.cycle_cv)
++                          n_drugs=n_drugs, cycle_cv=p.cycle_cv,
++                          quiescent_fraction=p.quiescent_fraction)
+     if traits is not None:
+         pop.het_bcl2[:] = np.asarray(traits["bcl2"], float)
+         pop.het_uptake[:] = np.asarray(traits["uptake"], float)
+@@ -560,6 +603,8 @@ def simulate(line: CellLine, drug: Optional[Drug], C_out_uM: Union[float, np.nda
+            "het_bcl2": pop.het_bcl2, "het_uptake": pop.het_uptake}
+     if pop.cycle_rate is not None:
+         aux["cycle_rate"] = pop.cycle_rate
++    if pop.quiescent is not None:
++        aux["quiescent"] = pop.quiescent        # the same array the events update
+     n_steps = int(round(t_end_h / dt_h))
+     rec_stride = max(1, int(round(record_every_h / dt_h)))
+     T = n_steps // rec_stride + 1
+@@ -599,7 +644,7 @@ def _apply_dose(t_h: float) -> None:
+             _apply_dose(pop.t_h)               # aux["C_out"] is this same array
+         _rk4(pop.Y, aux, line, drug, p, k_cyc, dt_h)
+         pop.t_h += dt_h
+-        divide, die = _cell_events(pop, drug, p, dt_h)
++        divide, die = _cell_events(pop, drug, p, dt_h, rng=rng)
+         if divide.any():
+             pop.weight[divide] *= 2.0          # a representative cell stands for both daughters
+         if die.any():
+diff --git a/cellsim/cell/library.py b/cellsim/cell/library.py
+index 0528109..fa0ba50 100644
+--- a/cellsim/cell/library.py
++++ b/cellsim/cell/library.py
+@@ -10,9 +10,28 @@
+ script reproduces these values to within 1 %.
+ 
+ Doubling times are lab-dependent (±30 % between reports is common);
+-the values below are the ATCC / Cellosaurus figures and are used only
+-to scale the cycle ODE so that an untreated population doubles at the
+-quoted rate. TP53 status follows the IARC TP53 database as summarised
++the values below are the ATCC / Cellosaurus figures.
++
++WHAT `doubling_time_h` ACTUALLY SETS, which is not quite what these
++figures measure. `engine.calibrate_cycle_scale` uses it as the time ONE
++CELL takes from early G1 to mitosis, while ATCC and Cellosaurus quote
++the time a POPULATION takes to double. Those are the same number only
++when every cell in the culture is cycling, and they come apart when some
++fraction sits in G0: a culture that is half quiescent doubles at half
++the rate its cycling cells divide.
++
++For most of these lines, measured in exponential-phase culture where
++quiescence is low, the gap is small and the field is used as intended.
++For HeLa it is not: the Cell Tracking Challenge movie's cells complete a
++cycle in about 19 h while its counts double every 27-31 h, because
++roughly half of each generation does not divide again inside the window
++(docs/VALIDATION.md). The 31 h below is therefore the population figure
++and makes population growth right while making every single-cell cycle
++too slow — which is exactly the miss recorded against that movie.
++
++Changing it is held back deliberately: splitting the parameter means
++re-validating the GDSC predictions that rest on it, since quiescent
++cells do not respond to an S-phase agent the way cycling ones do. TP53 status follows the IARC TP53 database as summarised
+ in Cellosaurus.
+ """
+ from __future__ import annotations
+diff --git a/docs/VALIDATION.md b/docs/VALIDATION.md
+index 546beb3..ef55d78 100644
+--- a/docs/VALIDATION.md
++++ b/docs/VALIDATION.md
+@@ -692,8 +692,67 @@ the curated tracks by `scripts/ctc_reference.py`):
+ The colony grows right; the single-cell picture does not. The movie's
+ cells are a mix of fast cyclers (complete cycles ~19 h) and a large
+ fraction that does not divide within the window — the proliferation /
+-quiescence decision at mitotic exit (Spencer et al. 2013 Cell 155:369),
+-which the engine does not model. Open. With every cell on one clock
++quiescence decision at mitotic exit (Spencer et al. 2013 Cell 155:369).
++
++**Now modelled, and it closes the gap** (`Params.quiescent_fraction`,
++off by default). The fix needed two changes together, which is what made
++the miss informative:
++
++| | 20 h | 30 h | cells at 46 h |
++|---|:-:|:-:|:-:|
++| measured, sequence 01 | 0.77 | 0.51 | 137 |
++| engine, 31 h cycle, no quiescence | 1.00 | 0.52 | 126 |
++| engine, 19 h cycle + 50 % quiescent | **0.74** | **0.51** | **140** |
++| measured, sequence 02 | 0.80 | 0.71 | 363 |
++| engine, 31 h cycle, no quiescence | 0.94 | 0.38 | 385 |
++| engine, 19 h cycle + 50 % quiescent | **0.72** | **0.63** | **364** |
++
++Quiescence alone was not enough: it fixed the plateau at 30 h and left
++the engine far too slow at 20 h. The cycling cells also had to cycle
++faster — and that exposed a conflation in the library worth stating
++plainly.
++
++**`doubling_time_h` is a single-cell cycle time, and the library fills
++it with population doubling times.** `calibrate_cycle_scale` uses the
++field as the time one cell takes from early G1 to mitosis; ATCC and
++Cellosaurus quote the time a culture takes to double. They agree only
++when every cell cycles. HeLa's cells complete a cycle in ~19 h while its
++counts double every 27–31 h, because about half of each generation stops
++— so the 31 h in the library makes population growth right and every
++single-cell cycle 1.6× too slow, which is precisely the miss above.
++
++For the other lines the gap is small, because ATCC measures
++exponential-phase culture where quiescence is low. The entry is left
++unchanged for now rather than quietly corrected: splitting it means
++re-validating the GDSC predictions that rest on it, and the size of that
++re-validation is measurable rather than hypothetical.
++
++**What quiescence does to each drug class** (A549, 72 h IC50, half of
++each generation quiescent):
++
++| Drug | Mechanism | IC50 shift |
++|---|---|:-:|
++| gemcitabine | S-phase | **1.50×** |
++| sn-38 | TOP1, S-phase | **1.26×** |
++| cisplatin | DNA adduct | 1.06× |
++| doxorubicin | TopII | 1.03× |
++| paclitaxel | tubulin | 0.95× |
++
++So changing HeLa's entry would move its antimetabolite predictions by
++about a third and leave the rest alone — a bounded, checkable impact
++rather than an unknown one.
++
++The S-phase result is the clinical intuition that antimetabolites spare
++non-cycling cells, falling out of the mechanism rather than put in. The
++tubulin result was **predicted wrongly before it was measured**: a
++quiescent cell never reaches mitosis, so a taxane should have lost
++potency too. Looking at the arms shows why it does not. Under
++gemcitabine the treated colony shrinks less than the control (×0.57
++against ×0.46) because quiescent cells escape a drug that kills and are
++enriched by it. Under paclitaxel both shrink together (×0.44 against
++×0.46): a cell that was not going to divide loses nothing when division
++is blocked. Protection comes from escaping killing, not from escaping
++cytostasis. With every cell on one clock
+ (cycle CV 0) no cell divides within 30 h of birth at all, so measured
+ variability is clearly needed.
+ 
+diff --git a/tests/cell/test_quiescence_smoke.py b/tests/cell/test_quiescence_smoke.py
+new file mode 100644
+index 0000000..7a4ad4c
+--- /dev/null
++++ b/tests/cell/test_quiescence_smoke.py
+@@ -0,0 +1,114 @@
++#!/usr/bin/env python3
++"""Phase-5 gates: the proliferation / quiescence split at mitotic exit.
++
++A daughter does not always start the next cycle. CDK2 activity bifurcates
++as the mother divides and the low branch sits in G0 until it is recruited
++back (Spencer et al. 2013 Cell 155:369). The engine had no such state:
++every cell cycled, which is the documented miss against the Cell Tracking
++Challenge HeLa movie, where 40–60 % of tracked cells never divide inside
++46 h and the Kaplan-Meier curve plateaus while the engine's keeps falling.
++
++The gates below are about the mechanism being what it claims to be —
++off by default, a genuine hold rather than a slow-down, reversible when
++recruitment is switched on, and correctly halving population growth when
++half of each generation stops. What it buys against the real movie is
++measured in `scripts/validate_dish.py`, not asserted here.
++"""
++from __future__ import annotations
++
++import math
++import sys
++from pathlib import Path
++
++import numpy as np
++
++REPO_ROOT = Path(__file__).resolve().parents[2]
++sys.path.insert(0, str(REPO_ROOT))
++
++from cellsim.cell.engine import Params, simulate  # noqa: E402
++from cellsim.cell.library import get_line  # noqa: E402
++
++LINE = get_line("A549")
++HOURS = 72.0
++
++
++def _growth(p: Params, seed: int = 1, n: int = 64) -> float:
++    res = simulate(LINE, None, 0.0, t_end_h=HOURS, n_cells=n, p=p, seed=seed,
++                   record_every_h=HOURS)
++    return float(res.alive_weight[-1, 0] / res.alive_weight[0, 0])
++
++
++def test_quiescence_is_off_by_default():
++    """The population must carry no G0 state at all unless asked, so that
++    every result predating this mechanism is untouched."""
++    res = simulate(LINE, None, 0.0, t_end_h=12.0, n_cells=8, record_every_h=12.0)
++    assert res.final.quiescent is None
++    withq = simulate(LINE, None, 0.0, t_end_h=12.0, n_cells=8, record_every_h=12.0,
++                     p=Params(quiescent_fraction=0.5))
++    assert withq.final.quiescent is not None
++
++
++def test_a_quiescent_population_grows_more_slowly():
++    """Half of each generation dropping out must show up as slower
++    growth, and all of it dropping out must stop growth after the cells
++    already in cycle have finished."""
++    full = _growth(Params())
++    half = _growth(Params(quiescent_fraction=0.5))
++    none_ = _growth(Params(quiescent_fraction=1.0))
++    assert half < full * 0.75, f"half quiescent: x{half:.1f} vs x{full:.1f}"
++    assert none_ < half, f"fully quiescent: x{none_:.1f} vs half x{half:.1f}"
++    # with nothing re-entering, growth stops once the cells that were
++    # already cycling have divided once
++    assert none_ < 4.0, f"a fully quiescent population should stall, got x{none_:.1f}"
++
++
++def test_recruitment_out_of_g0_restores_growth():
++    """Quiescence must be a reversible hold, not a death sentence: with a
++    recruitment rate, the same population grows again."""
++    stuck = _growth(Params(quiescent_fraction=0.8))
++    recruited = _growth(Params(quiescent_fraction=0.8, quiescence_exit_per_h=0.1))
++    assert recruited > stuck * 1.3, (
++        f"recruitment should restore growth: x{recruited:.1f} vs stuck x{stuck:.1f}")
++
++
++def test_g0_holds_the_cycle_rather_than_slowing_it():
++    """A quiescent cell keeps its cycle state; it is not merely running
++    slowly. With everything in G0 and no recruitment, the cyclins of the
++    cells that have arrived there must stop moving."""
++    p = Params(quiescent_fraction=1.0)
++    a = simulate(LINE, None, 0.0, t_end_h=48.0, n_cells=48, p=p, seed=1,
++                 record_every_h=48.0)
++    pop = a.final
++    q = pop.quiescent & pop.alive
++    assert q.sum() >= 10, f"expected a G0 pool, got {int(q.sum())}"
++    # those cells sit in early G1, where fresh_cycle_state leaves them
++    from cellsim.cell.engine import IX
++    cyc_b = pop.Y[q, IX["CycB"]]
++    assert float(cyc_b.max()) < 0.25, (
++        f"a held cell must not accumulate cyclin B toward mitosis: {cyc_b.max():.3f}")
++
++
++def test_quiescence_does_not_kill():
++    """Specificity: cells in G0 are not dying, they are waiting."""
++    res = simulate(LINE, None, 0.0, t_end_h=72.0, n_cells=48,
++                   p=Params(quiescent_fraction=1.0), record_every_h=72.0)
++    pop = res.final
++    assert pop.alive.all(), f"{int((~pop.alive).sum())} cells died in G0 with no drug"
++    assert float(res.deaths[-1, 0]) == 0.0
++
++
++if __name__ == "__main__":
++    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
++    failed = 0
++    for fn in fns:
++        try:
++            fn()
++            print(f"  ok   {fn.__name__}")
++        except AssertionError as e:
++            failed += 1
++            print(f"  FAIL {fn.__name__}: {e}")
++        except Exception as e:                      # noqa: BLE001
++            failed += 1
++            print(f"  ERROR {fn.__name__}: {type(e).__name__}: {e}")
++    print(f"{len(fns) - failed}/{len(fns)} quiescence gates pass")
++    raise SystemExit(1 if failed else 0)

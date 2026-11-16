@@ -1,0 +1,947 @@
+diff --git a/cellsim/cell/trace.py b/cellsim/cell/trace.py
+new file mode 100644
+index 0000000..cee2309
+--- /dev/null
++++ b/cellsim/cell/trace.py
+@@ -0,0 +1,151 @@
++"""cellsim.cell.trace — record everything a cell does, for watching.
++
++`simulate` keeps only colony-level summaries: how many cells are alive,
++mean p53, the fraction in each phase. Underneath, every simulated cell
++carries about twenty molecular species that change every few minutes,
++and divisions and deaths are discrete events. This records all of it
++for a handful of cells so it can be shown — the drug arriving, DNA
++damage building, p53 rising, the cyclins cycling, and the death cascade
++firing or not.
++
++Nothing here is computed differently from `simulate`; it uses the
++engine's own `on_record` hook to copy the state out, so what is shown
++is exactly what the engine does.
++
++What the engine does NOT model is worth saying beside any picture of
++it: individual molecules (each species is a lumped, normalised level),
++the great majority of the proteome, and intracellular metabolism. The
++species below are the ones the engine tracks, and only those.
++"""
++from __future__ import annotations
++
++from dataclasses import dataclass, field
++from typing import Optional, Sequence, Union
++
++import numpy as np
++
++from cellsim.cell.engine import IX, NAMES, N_BASE, Params, calibrate_cycle_scale, simulate
++from cellsim.cell.library import CellLine, Drug, get_drug, get_line
++
++__all__ = ["trace_cells", "Trace", "SPECIES", "PHASES"]
++
++PHASES = ("G1", "S", "G2", "M")
++
++# What each tracked species is, in words a non-specialist can follow.
++# The keys are the engine's own names, so nothing is renamed on the way.
++SPECIES = {
++    "Cin":       "drug inside the cell",
++    "D":         "DNA damage",
++    "ATM":       "ATM — the damage sensor",
++    "p53":       "p53 — the alarm",
++    "MDM2_mRNA": "MDM2 message",
++    "MDM2":      "MDM2 — switches p53 off",
++    "p21":       "p21 — the brake on division",
++    "CycD":      "cyclin D — start the cycle",
++    "Rb":        "Rb — the restriction gate",
++    "E2F":       "E2F — opens the gate",
++    "CycE":      "cyclin E — enter S phase",
++    "CycA":      "cyclin A — copy DNA",
++    "CycB":      "cyclin B — divide",
++    "Puma":      "PUMA — the death signal",
++    "Bax":       "BAX — punches the mitochondria",
++    "MOMP":      "mitochondria opened",
++    "CytC":      "cytochrome c released",
++    "Smac":      "Smac released",
++    "C9":        "caspase-9",
++    "C3":        "caspase-3 — the executioner",
++    "Exec":      "dismantling the cell",
++}
++
++
++@dataclass
++class Trace:
++    """Per-cell histories, ready to send to a page as JSON."""
++    t_h: list
++    line: str
++    drug: Optional[str]
++    conc_uM: float
++    species: dict                       # name -> description
++    cells: list = field(default_factory=list)   # one dict per traced cell
++
++    def to_dict(self) -> dict:
++        return {"t_h": self.t_h, "line": self.line, "drug": self.drug,
++                "conc_uM": self.conc_uM, "species": self.species, "cells": self.cells,
++                "schema": "cellsim.cell.trace/v1"}
++
++
++def _phase(row: np.ndarray, in_m: bool) -> str:
++    """The engine's own phase rule, read off a cell's cyclins."""
++    if in_m:
++        return "M"
++    if row[IX["CycA"]] > 0.3 and row[IX["CycB"]] < 0.25:
++        return "S"
++    if row[IX["CycB"]] >= 0.25:
++        return "G2"
++    return "G1"
++
++
++def trace_cells(line: Union[str, CellLine], drug: Optional[Union[str, Drug]] = None,
++                conc_uM: float = 0.0, *, hours: float = 72.0, n_cells: int = 6,
++                every_h: float = 0.25, exposure_h: Optional[float] = None,
++                seed: int = 1, params: Params = Params()) -> Trace:
++    """Simulate `n_cells` and record every species of each, every `every_h`.
++
++    Divisions and deaths are events between records, so each is detected
++    from what changed: a division as the cell's generation counter going
++    up (its cyclins reset to G1 at the same moment), a death as it ceasing
++    to be alive. A cell held in mitosis by a spindle poison is flagged
++    from the engine's own arrest clock.
++    """
++    ln = line if isinstance(line, CellLine) else get_line(line)
++    dg = None if drug is None else (drug if isinstance(drug, Drug) else get_drug(drug))
++    k = calibrate_cycle_scale(ln, params)
++    names = list(NAMES)
++    times: list = []
++    hist = {i: {"state": [], "phase": [], "alive": [], "arrested": []} for i in range(n_cells)}
++    events = {i: [] for i in range(n_cells)}
++    prev = {"gen": None, "alive": None, "arrest": None}
++
++    def on_record(pop, t_h):
++        times.append(round(float(t_h), 4))
++        gen = pop.generation[:n_cells].copy()
++        alive = pop.alive[:n_cells].copy()
++        arrest = (pop.arrest_h[:n_cells] > 0)
++        for i in range(n_cells):
++            row = pop.Y[i]
++            st = {n: float(row[IX[n]]) for n in names if n in IX}
++            if pop.Y.shape[1] > N_BASE:
++                st["Cin"] = float(row[N_BASE])
++            hist[i]["state"].append(st)
++            hist[i]["phase"].append(_phase(row, bool(pop.in_M[i])) if alive[i] else "dead")
++            hist[i]["alive"].append(bool(alive[i]))
++            hist[i]["arrested"].append(bool(arrest[i]) and bool(alive[i]))
++            if prev["gen"] is not None:
++                if gen[i] > prev["gen"][i]:
++                    events[i].append({"t_h": times[-1], "kind": "divided",
++                                      "text": f"divided (generation {int(gen[i])})"})
++                if prev["alive"][i] and not alive[i]:
++                    events[i].append({"t_h": times[-1], "kind": "died",
++                                      "text": "died by apoptosis"})
++                if arrest[i] and not prev["arrest"][i] and alive[i]:
++                    events[i].append({"t_h": times[-1], "kind": "arrested",
++                                      "text": "stuck in mitosis"})
++        prev["gen"], prev["alive"], prev["arrest"] = gen, alive, arrest
++
++    def dose(t):
++        if exposure_h is not None and t >= exposure_h:
++            return 0.0
++        return conc_uM
++
++    simulate(ln, dg, conc_uM if dg is not None else 0.0, t_end_h=hours, n_cells=n_cells,
++             k_cyc=k, p=params, seed=seed, record_every_h=every_h,
++             dose_fn=dose if dg is not None else None, on_record=on_record)
++
++    cells = []
++    for i in range(n_cells):
++        series = {n: [s.get(n, 0.0) for s in hist[i]["state"]] for n in SPECIES}
++        cells.append({"index": i, "series": series, "phase": hist[i]["phase"],
++                      "alive": hist[i]["alive"], "arrested": hist[i]["arrested"],
++                      "events": events[i]})
++    return Trace(t_h=times, line=ln.name, drug=None if dg is None else dg.name,
++                 conc_uM=float(conc_uM), species=dict(SPECIES), cells=cells)
+diff --git a/docs/VALIDATION.md b/docs/VALIDATION.md
+index 99d952a..4530b0c 100644
+--- a/docs/VALIDATION.md
++++ b/docs/VALIDATION.md
+@@ -1506,6 +1506,42 @@ digitised here, so the hit rate and walk speed remain literature values
+ and the magnitudes are unchecked. The mechanism is validated; the
+ numbers are not.
+ 
++## What watching a single cell revealed (October 2026)
++
++Every check before this looked at one moment: viability, or an IC50, at
++72 hours. The "Inside a cell" view (`cellsim/cell/trace.py`, `web/lab/`)
++shows what each simulated cell does minute by minute, and the first
++thing it showed was two time courses that are wrong although the 72-hour
++endpoints they lead to are calibrated.
++
++Median time to each step, A549, six cells:
++
++| | p53 doubles | PUMA rises | death |
++|---|:-:|:-:|:-:|
++| cisplatin 20 µM | **never** | 7 h | 30.6 h |
++| nutlin-3a 10 µM | **0.2 h** | 0.5 h | **5.4 h** |
++| nutlin-3a 2 µM | 0.2 h | 0.5 h | 5.5 h |
++
++**Nutlin is roughly five to ten times too fast.** p53 doubles in twelve
++minutes and cells die in five hours. In real cells p53 accumulates over
++several hours after nutlin, and the apoptosis it drives takes one to two
++days — in A549 it is mostly arrest. The identical timing at 2 and 10 µM is
++not itself a fault: nutlin binds MDM2 with a constant near 90 nM, so both
++doses saturate it fully. The speed is the fault, not the dose response.
++
++**Cisplatin barely moves p53.** It never reaches twice its resting level,
++where DNA damage normally raises p53 several-fold. Cells still die on a
++plausible schedule, but much of the killing runs through the
++p53-independent route the engine models.
++
++Neither is patched here. Both need measured time courses — p53
++accumulation after nutlin and after cisplatin, and the timing of
++apoptosis — and a constant changed without data to constrain it is how
++the paclitaxel death rate was wrong for a month. Until then the Lab shows
++a *Known limitation* note on both drugs, beside the explanation the viewer
++is already reading, rather than letting a wrong timeline pass as a true
++one.
++
+ ## GDSC reference data (the Phase-1 validation target)
+ 
+ Extracted by `scripts/gdsc_reference.py` into
+diff --git a/tests/cell/test_trace_smoke.py b/tests/cell/test_trace_smoke.py
+new file mode 100644
+index 0000000..4806571
+--- /dev/null
++++ b/tests/cell/test_trace_smoke.py
+@@ -0,0 +1,74 @@
++#!/usr/bin/env python3
++"""Gates for cellsim.cell.trace, which records what each cell does so the
++"Inside a cell" page can show it.
++
++The recorder adds nothing to the engine — it copies state out through
++simulate's own on_record hook — so these check that what it reports is
++the engine's behaviour and not an artefact of reading it: untreated cells
++divide and live, a lethal dose kills, events come in time order, and the
++species the page draws are all present.
++"""
++from __future__ import annotations
++
++import sys
++from pathlib import Path
++
++REPO_ROOT = Path(__file__).resolve().parents[2]
++sys.path.insert(0, str(REPO_ROOT))
++sys.path.insert(0, str(Path(__file__).resolve().parent))
++
++from _tiers import run  # noqa: E402
++from cellsim.cell.trace import SPECIES, trace_cells  # noqa: E402
++
++
++def test_untreated_cells_divide_and_none_die():
++    tr = trace_cells("A549", None, 0.0, hours=72, n_cells=4)
++    for c in tr.cells:
++        kinds = [e["kind"] for e in c["events"]]
++        assert "died" not in kinds, f"cell {c['index']} died with no drug: {kinds}"
++        assert kinds.count("divided") >= 2, (
++            f"A549 divides about every 22 h, so 72 h should hold two or more: {kinds}")
++        assert all(c["alive"]), "an untreated cell went dead"
++
++
++def test_a_lethal_dose_kills_and_the_death_cascade_fires():
++    tr = trace_cells("A549", "cisplatin", 40.0, hours=72, n_cells=4)
++    for c in tr.cells:
++        died = [e for e in c["events"] if e["kind"] == "died"]
++        assert died, f"cell {c['index']} survived 40 uM cisplatin for 72 h"
++        assert max(c["series"]["C3"]) > 0.5, "death should come with caspase-3 active"
++        assert not c["alive"][-1]
++
++
++def test_a_spindle_poison_traps_cells_in_mitosis():
++    tr = trace_cells("A549", "paclitaxel", 0.1, hours=48, n_cells=4)
++    assert any(any(c["arrested"]) for c in tr.cells), "paclitaxel should arrest some cells"
++    assert any(e["kind"] == "arrested" for c in tr.cells for e in c["events"])
++
++
++def test_events_come_in_time_order_and_inside_the_run():
++    tr = trace_cells("A549", "cisplatin", 20.0, hours=72, n_cells=4)
++    end = tr.t_h[-1]
++    for c in tr.cells:
++        ts = [e["t_h"] for e in c["events"]]
++        assert ts == sorted(ts), ts
++        assert all(0 <= t <= end + 1e-9 for t in ts), ts
++        deaths = [e for e in c["events"] if e["kind"] == "died"]
++        assert len(deaths) <= 1, "a cell can die only once"
++        if deaths:
++            assert all(e["t_h"] <= deaths[0]["t_h"] for e in c["events"]), (
++                "nothing can happen to a cell after it has died")
++
++
++def test_every_species_the_page_draws_is_recorded():
++    tr = trace_cells("A549", "cisplatin", 10.0, hours=12, n_cells=2)
++    n = len(tr.t_h)
++    for c in tr.cells:
++        for name in SPECIES:
++            assert name in c["series"], f"{name} missing"
++            assert len(c["series"][name]) == n, f"{name} has the wrong length"
++        assert len(c["phase"]) == n and len(c["alive"]) == n
++
++
++if __name__ == "__main__":
++    raise SystemExit(run(globals(), "trace"))
+diff --git a/web/lab/cell.css b/web/lab/cell.css
+new file mode 100644
+index 0000000..9bbeb53
+--- /dev/null
++++ b/web/lab/cell.css
+@@ -0,0 +1,78 @@
++/* "Inside a cell" — the signalling map, the cell drawing, the timeline.
++   Shares style.css's tokens; only what this view adds lives here. */
++
++.tabs { display: flex; gap: 4px; margin-left: 12px; }
++.tabs a {
++  color: var(--muted); text-decoration: none; font-size: 13px;
++  padding: 6px 12px; border-radius: var(--radius); border: 1px solid transparent;
++}
++.tabs a:hover { color: var(--text); background: var(--panel-2); }
++.tabs a.on { color: var(--text); background: var(--panel-2); border-color: var(--line); }
++
++main.cellmain { grid-template-columns: 290px 1fr 300px; }
++
++.cellstage {
++  display: grid; grid-template-rows: 3px 1fr auto auto; min-height: 0;
++  background: #090d10;
++}
++.mapwrap { position: relative; min-height: 0; }
++#map { width: 100%; height: 100%; display: block; }
++
++/* map nodes */
++.node circle.halo { transition: opacity .15s; }
++.node circle.core { stroke-width: 1.5; transition: fill .15s; }
++.node text { font: 600 11.5px var(--sans); fill: var(--text); pointer-events: none; }
++.node text.sub { font: 10.5px var(--sans); fill: var(--muted); }
++.node text.val { font: 11px var(--mono); fill: var(--muted); }
++.edge { fill: none; stroke: #3a4856; stroke-width: 1.6; }
++.edge.on { stroke: #6fd3c4; }
++.edge.inhib { stroke-dasharray: 4 3; }
++.zone { fill: none; stroke: #1f2a33; stroke-width: 1; }
++.zone-label { font: 600 10.5px var(--sans); fill: #556574; letter-spacing: .8px; text-transform: uppercase; }
++
++/* timeline */
++.timeline {
++  display: flex; align-items: center; gap: 10px;
++  padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel);
++}
++.timeline input[type=range] { flex: 1; }
++.timeline button { width: 38px; padding: 6px 0; }
++.timeline select { width: auto; padding: 5px 8px; }
++.clock { font: 600 13px var(--mono); min-width: 64px; text-align: right; }
++
++/* small multiples under the timeline: a few species over the whole run */
++.tracks {
++  display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
++  background: var(--line); border-top: 1px solid var(--line);
++}
++.track { background: var(--panel); padding: 6px 10px 4px; position: relative; }
++.track .tl { font: 600 10.5px var(--sans); color: var(--muted); }
++.track svg { width: 100%; height: 34px; display: block; }
++.track .cursor { stroke: var(--accent); stroke-width: 1; }
++
++/* the right-hand panel */
++#cellview { width: 100%; max-width: 220px; display: block; margin: 0 auto 6px; }
++.phase { text-align: center; font: 600 15px var(--sans); margin-bottom: 8px; }
++.results h4 { margin: 18px 0 6px; font-size: 12px; color: var(--muted); font-weight: 600; }
++.log { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.6; }
++.log li.past { color: var(--text); }
++.log li.future { color: #4a5866; }
++.log .t { font-family: var(--mono); color: var(--muted); margin-right: 6px; }
++
++.cellpick { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
++.cellpick button { padding: 5px 10px; font-size: 12px; }
++.cellpick button.on { border-color: var(--accent); color: var(--accent); }
++.cellpick button .fate { font-size: 10.5px; color: var(--muted); margin-left: 4px; }
++
++@media (max-width: 1100px) {
++  main.cellmain { grid-template-columns: 250px 1fr; }
++  .tracks { grid-template-columns: repeat(2, 1fr); }
++}
++
++/* a known engine limitation, shown where the viewer is already reading */
++.known {
++  margin-top: 10px; padding: 8px 10px; border-radius: var(--radius);
++  background: #2a2113; border: 1px solid #6b5520; color: #e6c98a;
++  font-size: 11.5px; line-height: 1.5;
++}
++.known b { color: var(--warn); }
+diff --git a/web/lab/cell.html b/web/lab/cell.html
+new file mode 100644
+index 0000000..8e9419a
+--- /dev/null
++++ b/web/lab/cell.html
+@@ -0,0 +1,117 @@
++<!doctype html>
++<html lang="en">
++<head>
++<meta charset="utf-8">
++<meta name="viewport" content="width=device-width, initial-scale=1">
++<title>Inside a Cell</title>
++<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Ccircle cx=%228%22 cy=%228%22 r=%226%22 fill=%22%2335b3a2%22/%3E%3Ccircle cx=%228%22 cy=%228%22 r=%222.5%22 fill=%22%230e1317%22/%3E%3C/svg%3E">
++<link rel="stylesheet" href="style.css">
++<link rel="stylesheet" href="cell.css">
++</head>
++<body>
++
++<header>
++  <div class="brand">Cell<span>Sim</span> Lab</div>
++  <nav class="tabs">
++    <a href="./">Dose–response</a>
++    <a href="cell.html" class="on">Inside a cell</a>
++  </nav>
++  <div class="spacer"></div>
++  <span id="engine-state" class="subtitle">starting the engine…</span>
++  <button id="run" class="primary" disabled>Simulate</button>
++</header>
++
++<main class="cellmain">
++  <aside>
++    <details class="step" open>
++      <summary><span class="num">1</span> Cells and treatment</summary>
++      <div class="step-body">
++        <label for="line">Cell line</label>
++        <select id="line"></select>
++        <label for="drug">Drug</label>
++        <select id="drug"><option value="">— no drug —</option></select>
++        <label for="conc">Concentration (µM)</label>
++        <input type="number" id="conc" value="20" min="0" step="any">
++        <label for="exposure">How long the drug is present</label>
++        <select id="exposure">
++          <option value="">the whole time</option>
++          <option value="6">6 h, then washed off</option>
++          <option value="24">24 h, then washed off</option>
++        </select>
++      </div>
++    </details>
++
++    <details class="step" open>
++      <summary><span class="num">2</span> Try one of these</summary>
++      <div class="step-body">
++        <button class="preset" data-preset="none"><b>A healthy cell, dividing</b>
++          <small>No drug: watch the cyclins cycle and the cell split</small></button>
++        <button class="preset" data-preset="cis"><b>DNA damage, then death</b>
++          <small>Cisplatin: damage builds, p53 rises, caspase-3 fires</small></button>
++        <button class="preset" data-preset="pac"><b>Trapped in mitosis</b>
++          <small>Paclitaxel: the spindle freezes; some cells die, some slip out</small></button>
++        <button class="preset" data-preset="nut"><b>Waking p53 directly</b>
++          <small>Nutlin-3a blocks MDM2, so p53 rises without any damage</small></button>
++      </div>
++    </details>
++
++    <details class="step" open>
++      <summary><span class="num">3</span> Which cell to watch</summary>
++      <div class="step-body">
++        <div id="cellpick" class="cellpick"><span class="hint">Simulate first.</span></div>
++        <div class="hint">Each simulated cell starts at a different point in its
++          cycle and carries its own small differences, which is why the same
++          drug does not do the same thing to all of them.</div>
++      </div>
++    </details>
++
++    <details class="step">
++      <summary><span class="num">4</span> What this does not show</summary>
++      <div class="step-body hint">
++        Each circle is one molecular species as the engine tracks it — a single
++        normalised level, not individual molecules. The engine follows about
++        twenty of them; a real cell has thousands of proteins and its own
++        metabolism, none of which appear here. The arrows are the interactions
++        the engine models, not every one that exists.
++      </div>
++    </details>
++  </aside>
++
++  <section class="cellstage">
++    <div class="bar" id="bar"><i></i></div>
++    <div class="mapwrap">
++      <svg id="map" viewBox="0 0 980 590" preserveAspectRatio="xMidYMid meet"></svg>
++      <div class="placeholder" id="placeholder">
++        <h2>Watch what happens inside one cell</h2>
++        <div>Pick a scenario on the left. Every circle lights up with the real level
++          of that molecule as the engine computes it, minute by minute.</div>
++      </div>
++    </div>
++    <div class="timeline">
++      <button id="play" disabled>▶</button>
++      <input type="range" id="scrub" min="0" max="0" value="0" disabled>
++      <span class="clock" id="clock">0.0 h</span>
++      <select id="speed">
++        <option value="1">1×</option><option value="3" selected>3×</option>
++        <option value="8">8×</option>
++      </select>
++    </div>
++    <div class="tracks" id="tracks"></div>
++  </section>
++
++  <div class="results">
++    <h3>This cell, right now</h3>
++    <div class="result-body">
++      <svg id="cellview" viewBox="0 0 220 220"></svg>
++      <div class="phase" id="phase">—</div>
++      <div class="note" id="explain">Nothing simulated yet.</div>
++      <h4>What happened</h4>
++      <ol class="log" id="log"><li class="hint">Events appear here as they happen.</li></ol>
++    </div>
++  </div>
++</main>
++
++<script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
++<script src="cell.js"></script>
++</body>
++</html>
+diff --git a/web/lab/cell.js b/web/lab/cell.js
+new file mode 100644
+index 0000000..a6bf419
+--- /dev/null
++++ b/web/lab/cell.js
+@@ -0,0 +1,428 @@
++/* Inside a cell — every molecule the engine tracks, animated from the
++ * engine's own values.
++ *
++ * The page runs cellsim.cell.trace in the browser (Pyodide, same wheel as
++ * the dose-response page), which records about twenty species for a few
++ * cells every 15 minutes. Each circle's brightness is that species' level
++ * at the current frame, scaled to the largest level it reaches in this
++ * run so that a change is visible whatever its absolute size. Nothing is
++ * drawn that the engine did not compute.
++ */
++const $ = (id) => document.getElementById(id);
++const S = { py: null, trace: null, cell: 0, frame: 0, playing: false, timer: null, scale: {}, rest: {} };
++const NS = "http://www.w3.org/2000/svg";
++
++/* ── the map: where each species sits, which zone it belongs to ───── */
++const ZONES = {
++  drug:   { colour: "#a78bfa", label: "drug" },
++  stress: { colour: "#e0a640", label: "damage response" },
++  cycle:  { colour: "#4ea8de", label: "cell cycle" },
++  death:  { colour: "#e0675a", label: "death" },
++};
++// `lab` places the label: below by default, or left/right where vertical
++// arrows would otherwise run through it (the whole death column) and
++// where a zone label sits underneath (the drug in the medium).
++const NODES = {
++  Cout: { x: 95,  y: 58,  z: "drug",   name: "Drug",         sub: "in the medium", lab: "right" },
++  Cin:  { x: 95,  y: 195, z: "drug",   name: "Drug",         sub: "inside the cell" },
++  D:    { x: 235, y: 195, z: "stress", name: "DNA damage",   sub: "" },
++  ATM:  { x: 375, y: 195, z: "stress", name: "ATM",          sub: "damage sensor" },
++  p53:  { x: 515, y: 195, z: "stress", name: "p53",          sub: "the alarm" },
++  MDM2: { x: 600, y: 305, z: "stress", name: "MDM2",         sub: "turns p53 off" },
++  p21:  { x: 375, y: 310, z: "stress", name: "p21",          sub: "brake on division", lab: "left" },
++  CycD: { x: 95,  y: 470, z: "cycle",  name: "Cyclin D",     sub: "start" },
++  E2F:  { x: 225, y: 470, z: "cycle",  name: "E2F",          sub: "opens the gate" },
++  CycE: { x: 355, y: 470, z: "cycle",  name: "Cyclin E",     sub: "enter S" },
++  CycA: { x: 485, y: 470, z: "cycle",  name: "Cyclin A",     sub: "copy DNA" },
++  CycB: { x: 615, y: 470, z: "cycle",  name: "Cyclin B",     sub: "divide" },
++  Puma: { x: 840, y: 80,  z: "death",  name: "PUMA",         sub: "death signal",        lab: "left" },
++  Bax:  { x: 840, y: 165, z: "death",  name: "BAX",          sub: "pierces mitochondria", lab: "left" },
++  MOMP: { x: 840, y: 250, z: "death",  name: "Mitochondria", sub: "opened",              lab: "left" },
++  CytC: { x: 775, y: 345, z: "death",  name: "Cytochrome c", sub: "released" },
++  Smac: { x: 905, y: 345, z: "death",  name: "Smac",         sub: "released" },
++  C9:   { x: 840, y: 435, z: "death",  name: "Caspase-9",    sub: "",                    lab: "left" },
++  C3:   { x: 840, y: 520, z: "death",  name: "Caspase-3",    sub: "the executioner",     lab: "left" },
++};
++// [from, to, kind] — "act" pushes the target up, "inh" holds it down
++const EDGES = [
++  ["Cout", "Cin", "act"], ["Cin", "D", "act"], ["D", "ATM", "act"], ["ATM", "p53", "act"],
++  ["p53", "MDM2", "act"], ["MDM2", "p53", "inh"], ["p53", "p21", "act"], ["p21", "CycE", "inh"],
++  ["CycD", "E2F", "act"], ["E2F", "CycE", "act"], ["CycE", "CycA", "act"], ["CycA", "CycB", "act"],
++  ["p53", "Puma", "act"], ["Puma", "Bax", "act"], ["Bax", "MOMP", "act"],
++  ["MOMP", "CytC", "act"], ["MOMP", "Smac", "act"], ["CytC", "C9", "act"],
++  ["C9", "C3", "act"], ["Smac", "C3", "act"],
++];
++const R = 24;
++
++function el(tag, attrs = {}, parent) {
++  const e = document.createElementNS(NS, tag);
++  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
++  if (parent) parent.appendChild(e);
++  return e;
++}
++
++function drawMap() {
++  const svg = $("map");
++  svg.innerHTML = "";
++  const defs = el("defs", {}, svg);
++  for (const [id, colour] of [["a", "#3a4856"], ["aon", "#6fd3c4"]]) {
++    const m = el("marker", { id, viewBox: "0 0 10 10", refX: 9, refY: 5,
++      markerWidth: 6, markerHeight: 6, orient: "auto-start-reverse" }, defs);
++    el("path", { d: "M0,0 L10,5 L0,10 z", fill: colour }, m);
++  }
++  for (const [id, colour] of [["i", "#3a4856"], ["ion", "#e0675a"]]) {
++    const m = el("marker", { id, viewBox: "0 0 10 10", refX: 5, refY: 5,
++      markerWidth: 7, markerHeight: 7, orient: "auto" }, defs);
++    el("path", { d: "M5,0 L5,10", stroke: colour, "stroke-width": 3 }, m);
++  }
++  // zone frames, so the three programmes read as three programmes
++  const frames = [["damage response", 30, 125, 625, 245], ["cell cycle", 30, 405, 640, 125],
++                  ["death", 690, 30, 270, 545]];
++  for (const [lab, x, y, w, h] of frames) {
++    el("rect", { class: "zone", x, y, width: w, height: h, rx: 10 }, svg);
++    el("text", { class: "zone-label", x: x + w - 12, y: y + 18, "text-anchor": "end" },
++       svg).textContent = lab;
++  }
++  const edgeLayer = el("g", {}, svg);
++  for (const [a, b, kind] of EDGES) {
++    const A = NODES[a], B = NODES[b];
++    const dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy);
++    const ux = dx / L, uy = dy / L;
++    // two curved strokes between p53 and MDM2 so the loop reads as a loop
++    const bend = (a === "p53" && b === "MDM2") ? 16 : (a === "MDM2" && b === "p53") ? 16 : 0;
++    const x1 = A.x + ux * R, y1 = A.y + uy * R, x2 = B.x - ux * (R + 3), y2 = B.y - uy * (R + 3);
++    const mx = (x1 + x2) / 2 - uy * bend, my = (y1 + y2) / 2 + ux * bend;
++    const p = el("path", { class: `edge ${kind === "inh" ? "inhib" : ""}`,
++      d: `M${x1},${y1} Q${mx},${my} ${x2},${y2}`,
++      "marker-end": `url(#${kind === "inh" ? "i" : "a"})` }, edgeLayer);
++    p.dataset.from = a; p.dataset.kind = kind;
++  }
++  for (const [key, n] of Object.entries(NODES)) {
++    const g = el("g", { class: "node", transform: `translate(${n.x},${n.y})` }, svg);
++    g.dataset.key = key;
++    el("circle", { class: "halo", r: R + 10, fill: ZONES[n.z].colour, opacity: 0 }, g);
++    el("circle", { class: "core", r: R, fill: "#1d262e", stroke: ZONES[n.z].colour }, g);
++    const side = n.lab || "below";
++    const [lx, ly, anchor] = side === "left" ? [-R - 9, -1, "end"]
++                           : side === "right" ? [R + 9, -1, "start"] : [0, R + 15, "middle"];
++    el("text", { x: lx, y: ly, "text-anchor": anchor }, g).textContent = n.name;
++    if (n.sub) el("text", { class: "sub", x: lx, y: ly + 13, "text-anchor": anchor }, g).textContent = n.sub;
++    el("text", { class: "val", y: 4, "text-anchor": "middle" }, g);
++  }
++}
++
++/* ── colour by level ───────────────────────────────────────────── */
++function mix(hex, t) {
++  const c = parseInt(hex.slice(1), 16), base = [0x1d, 0x26, 0x2e];
++  const rgb = [(c >> 16) & 255, (c >> 8) & 255, c & 255];
++  return `rgb(${rgb.map((v, i) => Math.round(base[i] + (v - base[i]) * t)).join(",")})`;
++}
++// How bright each species is drawn. FIXED, so that "lit" means the same
++// thing in every scenario: the first version scaled each species to its own
++// maximum in the run, which made a healthy cell's flat, resting p53 (0.096)
++// glow exactly as brightly as nutlin's (2.0) — and told the viewer "p53 has
++// risen" about a cell with no damage at all.
++//
++// Scales come from the engine's measured ranges across untreated,
++// cisplatin, paclitaxel, nutlin and doxorubicin runs. Signalling proteins
++// that sit at a non-zero resting level are drawn as their RISE above that
++// level (taken from the run's first frame, before any drug has acted), so a
++// resting cell is dark and a responding one lights up.
++const DISPLAY = {
++  // signalling: [scale, measured from rest]
++  ATM: [1.0, true], p53: [0.30, true], MDM2: [0.60, true], MDM2_mRNA: [0.60, true],
++  p21: [0.50, true],
++  // the cycle oscillates in every healthy cell; show its natural swing
++  CycD: [1.5], Rb: [0.9], E2F: [1.0], CycE: [0.75], CycA: [0.6], CycB: [0.9],
++  // damage and the death cascade start at zero
++  D: [0.30], Puma: [0.50], Bax: [0.30], MOMP: [0.15], CytC: [0.50], Smac: [0.50],
++  C9: [0.40], C3: [0.40], Exec: [0.70],
++};
++function level(key, f) {
++  const cell = S.trace.cells[S.cell];
++  if (key === "Cout") {
++    const t = S.trace.t_h[f], ex = S.trace.exposure_h;
++    return S.trace.conc_uM > 0 && (ex == null || t < ex) ? 1 : 0;
++  }
++  const v = cell.series[key][f];
++  // the drug's own level depends on the dose, so it alone is scaled per run
++  if (key === "Cin") return Math.max(0, Math.min(1, v / (S.scale.Cin || 1)));
++  const [scale, fromRest] = DISPLAY[key] || [1.0];
++  const rest = fromRest ? (S.rest[key] || 0) : 0;
++  return Math.max(0, Math.min(1, (v - rest) / Math.max(scale - rest, 1e-6)));
++}
++
++function render() {
++  if (!S.trace) return;
++  const f = S.frame, cell = S.trace.cells[S.cell], t = S.trace.t_h[f];
++  const alive = cell.alive[f];
++  for (const g of $("map").querySelectorAll(".node")) {
++    const key = g.dataset.key, lv = level(key, f), z = ZONES[NODES[key].z].colour;
++    g.querySelector(".core").setAttribute("fill", mix(z, alive || key === "Cout" ? lv : lv * 0.35));
++    g.querySelector(".halo").setAttribute("opacity", (alive ? lv : 0) * 0.32);
++    const raw = key === "Cout" ? S.trace.conc_uM * lv : cell.series[key][f];
++    g.querySelector(".val").textContent =
++      key === "Cout" ? (lv ? `${S.trace.conc_uM}` : "0")
++      // two significant figures, so nanomolar paclitaxel (~0.02) is not
++      // rounded to "0.0" and read as no drug at all
++      : key === "Cin" ? (raw >= 10 ? raw.toFixed(0) : raw === 0 ? "0" : raw.toPrecision(2))
++      : raw.toFixed(2);
++  }
++  for (const p of $("map").querySelectorAll(".edge")) {
++    const on = alive && level(p.dataset.from, f) > 0.45;
++    p.classList.toggle("on", on);
++    const inh = p.dataset.kind === "inh";
++    p.setAttribute("marker-end", `url(#${inh ? (on ? "ion" : "i") : (on ? "aon" : "a")})`);
++    if (inh && on) p.style.stroke = "#e0675a"; else p.style.stroke = "";
++  }
++  $("clock").textContent = `${t.toFixed(1)} h`;
++  $("scrub").value = f;
++  drawCell(f);
++  explain(f);
++  drawLog(t);
++  for (const c of document.querySelectorAll(".track .cursor")) {
++    const x = (f / (S.trace.t_h.length - 1)) * 100;
++    c.setAttribute("x1", `${x}%`); c.setAttribute("x2", `${x}%`);
++  }
++}
++
++/* ── the cell itself ───────────────────────────────────────────── */
++const PHASE = { G1: ["#4ea8de", "G1 — growing, getting ready"],
++                S:  ["#35b3a2", "S — copying its DNA"],
++                G2: ["#7c9cf0", "G2 — checking the copy"],
++                M:  ["#f0c050", "M — dividing"],
++                dead: ["#596572", "dead"] };
++function drawCell(f) {
++  const cell = S.trace.cells[S.cell], ph = cell.phase[f], svg = $("cellview");
++  svg.innerHTML = "";
++  const [col, words] = PHASE[ph] || PHASE.G1;
++  const arrested = cell.arrested[f];
++  const justDivided = cell.events.some(e => e.kind === "divided" &&
++    Math.abs(e.t_h - S.trace.t_h[f]) < 0.6);
++  if (ph === "dead") {
++    // apoptotic bodies: the cell breaks into small blebs
++    const pts = [[90, 100, 22], [125, 92, 16], [108, 128, 18], [140, 125, 12], [80, 132, 11]];
++    for (const [x, y, r] of pts) el("circle", { cx: x, cy: y, r, fill: col, opacity: 0.55 }, svg);
++  } else if (ph === "M" || justDivided) {
++    const gap = justDivided ? 34 : arrested ? 10 : 18;
++    for (const dx of [-gap, gap])
++      el("circle", { cx: 110 + dx, cy: 110, r: 50, fill: col, opacity: 0.22,
++                     stroke: col, "stroke-width": 2 }, svg);
++    if (!justDivided) {   // chromosomes on the spindle
++      el("line", { x1: 110, y1: 70, x2: 110, y2: 150, stroke: "#fff", "stroke-opacity": 0.5,
++                   "stroke-width": arrested ? 4 : 2, "stroke-dasharray": "3 4" }, svg);
++    }
++  } else {
++    el("circle", { cx: 110, cy: 110, r: 68, fill: col, opacity: 0.18, stroke: col, "stroke-width": 2 }, svg);
++    const nr = ph === "G2" ? 32 : ph === "S" ? 28 : 24;    // nucleus grows as DNA is copied
++    el("circle", { cx: 110, cy: 110, r: nr, fill: col, opacity: 0.45 }, svg);
++    // damage shown as specks in the nucleus
++    const dmg = level("D", f);
++    for (let i = 0; i < Math.round(dmg * 9); i++) {
++      const a = i * 2.4, rr = nr * 0.6;
++      el("circle", { cx: 110 + Math.cos(a) * rr * (0.4 + (i % 3) * 0.25),
++                     cy: 110 + Math.sin(a) * rr * (0.4 + (i % 3) * 0.25),
++                     r: 2.6, fill: "#e0a640" }, svg);
++    }
++  }
++  if (arrested && ph !== "dead")
++    el("circle", { cx: 110, cy: 110, r: 92, fill: "none", stroke: "#e0675a",
++                   "stroke-width": 2, "stroke-dasharray": "6 5" }, svg);
++  $("phase").textContent = arrested && ph !== "dead" ? "stuck in mitosis" : words;
++  $("phase").style.color = arrested && ph !== "dead" ? "#e0675a" : col;
++}
++
++/* ── plain words for what is happening ─────────────────────────── */
++// Known to be wrong, measured, and shown to the viewer rather than hidden.
++// Watching single cells is how these were found: every earlier check looked
++// only at 72 h, where the endpoints are calibrated but the speeds never were.
++const KNOWN = {
++  "nutlin-3a": "Too fast. Here p53 doubles in about 12 minutes and cells die in about " +
++    "5 hours; in real cells p53 builds over several hours and nutlin works over one " +
++    "to two days. The engine's 72-hour outcome is calibrated — its speed is not.",
++  "cisplatin": "p53 rises less than it should. DNA damage normally raises p53 several-fold; " +
++    "here it stays under two-fold, and much of the killing runs through a route that " +
++    "bypasses p53. The timing of death is plausible; the p53 signal is weak.",
++};
++
++function explain(f) {
++  const cell = S.trace.cells[S.cell], lv = (k) => level(k, f), ph = cell.phase[f];
++  let msg;
++  if (ph === "dead") msg = "This cell has died. Caspase-3 dismantled it from the inside — " +
++    "apoptosis, the orderly kind of cell death — and it broke into small fragments.";
++  else if (lv("C3") > 0.5) msg = "Caspase-3 is active. Once it switches on there is no way back: " +
++    "it is cutting up the cell's own proteins.";
++  else if (lv("MOMP") > 0.5) msg = "The mitochondria have been pierced and are leaking cytochrome c " +
++    "and Smac. Those switch on the caspases.";
++  else if (cell.arrested[f]) msg = "Stuck in mitosis. The drug has frozen the spindle, so the " +
++    "chromosomes cannot be pulled apart. The longer it waits, the more likely it is to die — " +
++    "or to give up and slip back out without dividing.";
++  else if (lv("Puma") > 0.5) msg = "p53 has switched on PUMA, the signal that starts the death " +
++    "programme. Whether the cell dies now depends on how much protection it has.";
++  else if (lv("p53") > 0.6) msg = "p53 has risen — the cell's alarm. It turns on p21 to stop " +
++    "division and, if the damage is bad enough, PUMA to start the death programme.";
++  else if (lv("D") > 0.4) msg = "The drug is damaging DNA. ATM senses the breaks and starts " +
++    "raising p53.";
++  else if (lv("Cin") > 0.4) msg = "The drug has crossed into the cell and is building up.";
++  else msg = { G1: "Growing and preparing. Cyclin D is pushing the cell toward the gate " +
++                   "(Rb/E2F) where it commits to dividing.",
++               S: "Past the gate and copying its DNA. Cyclin A is driving replication.",
++               G2: "DNA copied. Cyclin B is building up for the division itself.",
++               M: "Dividing — the chromosomes are being pulled into two new cells." }[ph] || "";
++  const warn = KNOWN[S.trace.drug];
++  $("explain").innerHTML = "";
++  $("explain").append(msg);
++  if (warn) {
++    const w = document.createElement("div");
++    w.className = "known";
++    w.innerHTML = `<b>Known limitation.</b> ${warn}`;
++    $("explain").append(w);
++  }
++}
++
++function drawLog(t) {
++  const evs = S.trace.cells[S.cell].events;
++  $("log").innerHTML = evs.length
++    ? evs.map(e => `<li class="${e.t_h <= t + 1e-6 ? "past" : "future"}"><span class="t">${e.t_h.toFixed(1)} h</span>${e.text}</li>`).join("")
++    : `<li class="hint">No division, arrest or death in ${S.trace.t_h.at(-1).toFixed(0)} h.</li>`;
++}
++
++/* ── small multiples ───────────────────────────────────────────── */
++const TRACKS = [["Cin", "drug inside", "#a78bfa"], ["D", "DNA damage", "#e0a640"],
++                ["p53", "p53", "#e0a640"], ["C3", "caspase-3", "#e0675a"]];
++function drawTracks() {
++  const cell = S.trace.cells[S.cell], n = S.trace.t_h.length;
++  $("tracks").innerHTML = TRACKS.map(([k, lab]) =>
++    `<div class="track"><div class="tl">${lab}</div><svg viewBox="0 0 100 34" preserveAspectRatio="none" data-k="${k}"></svg></div>`).join("");
++  for (const [k, , colour] of TRACKS) {
++    const svg = $("tracks").querySelector(`svg[data-k="${k}"]`);
++    // the same rule as the map's brightness, so the chart and the glow
++    // never disagree about how large a change was
++    const pts = cell.series[k].map((_, i) =>
++      `${(i / (n - 1)) * 100},${32 - level(k, i) * 30}`).join(" ");
++    el("polyline", { points: pts, fill: "none", stroke: colour, "stroke-width": 1.4,
++                     "vector-effect": "non-scaling-stroke" }, svg);
++    el("line", { class: "cursor", x1: "0%", x2: "0%", y1: 0, y2: 34,
++                 "vector-effect": "non-scaling-stroke" }, svg);
++  }
++}
++
++/* ── cell picker ───────────────────────────────────────────────── */
++function fateOf(cell) {
++  const d = cell.events.find(e => e.kind === "died");
++  if (d) return `died ${d.t_h.toFixed(0)} h`;
++  const n = cell.events.filter(e => e.kind === "divided").length;
++  if (cell.arrested.some(Boolean)) return "arrested";
++  return n ? `${n} division${n > 1 ? "s" : ""}` : "no change";
++}
++function drawPicker() {
++  $("cellpick").innerHTML = S.trace.cells.map((c, i) =>
++    `<button data-i="${i}" class="${i === S.cell ? "on" : ""}">Cell ${i + 1}<span class="fate">${fateOf(c)}</span></button>`).join("");
++  for (const b of $("cellpick").querySelectorAll("button")) b.onclick = () => {
++    S.cell = Number(b.dataset.i); drawPicker(); drawTracks(); render();
++  };
++}
++
++/* ── playback ──────────────────────────────────────────────────── */
++function play(on) {
++  S.playing = on;
++  $("play").textContent = on ? "❚❚" : "▶";
++  clearInterval(S.timer);
++  if (!on) return;
++  S.timer = setInterval(() => {
++    const step = Number($("speed").value);
++    if (S.frame >= S.trace.t_h.length - 1) { play(false); return; }
++    S.frame = Math.min(S.frame + step, S.trace.t_h.length - 1);
++    render();
++  }, 80);
++}
++
++/* ── engine ────────────────────────────────────────────────────── */
++async function boot() {
++  $("engine-state").textContent = "downloading Python…";
++  S.py = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.2/full/" });
++  $("engine-state").textContent = "loading numpy and scipy…";
++  await S.py.loadPackage(["numpy", "scipy", "micropip"]);
++  $("engine-state").textContent = "installing cellsim…";
++  // Same wheel as the dose-response page: built from the deployed commit.
++  const wheel = (await (await fetch("wheel/LATEST")).text()).trim();
++  if (!wheel.endsWith(".whl")) throw new Error(`no wheel found (LATEST = "${wheel}")`);
++  const url = new URL(`wheel/${wheel}`, location.href).href;
++  await S.py.runPythonAsync(`import micropip\nawait micropip.install(${JSON.stringify(url)})`);
++  const meta = JSON.parse(await S.py.runPythonAsync(`
++import json
++from cellsim.cell.library import CELL_LINES, DRUGS
++json.dumps({"lines": list(CELL_LINES), "drugs": list(DRUGS)})`));
++  for (const n of meta.lines) $("line").add(new Option(n, n));
++  for (const n of meta.drugs) $("drug").add(new Option(n, n));
++  $("line").value = "A549"; $("drug").value = "cisplatin";
++  $("engine-state").textContent = "engine ready";
++  $("run").disabled = false;
++}
++
++async function simulate() {
++  $("run").disabled = true; play(false);
++  $("engine-state").textContent = "simulating…";
++  $("bar").classList.add("indet");
++  const cfg = { line: $("line").value, drug: $("drug").value || null,
++                conc: Number($("conc").value) || 0,
++                exposure: $("exposure").value ? Number($("exposure").value) : null };
++  try {
++    const out = JSON.parse(await S.py.runPythonAsync(`
++import json
++from cellsim.cell.trace import trace_cells
++cfg = json.loads(${JSON.stringify(JSON.stringify(cfg))})
++tr = trace_cells(cfg["line"], cfg["drug"], cfg["conc"] if cfg["drug"] else 0.0,
++                 hours=72.0, n_cells=6, every_h=0.25, exposure_h=cfg["exposure"])
++d = tr.to_dict(); d["exposure_h"] = cfg["exposure"]
++json.dumps(d)`));
++    S.trace = out;
++    // scale each species to the largest level it reaches in this run, with
++    // a floor, so a flat-zero species is not inflated into noise
++    // the drug inside is dose-dependent, so it alone is scaled to this run
++    let m = 0;
++    for (const c of out.cells) for (const v of c.series.Cin) if (v > m) m = v;
++    S.scale.Cin = Math.max(m, 1e-6);
++    // resting levels: the median across cells of the first frame, before
++    // any drug has had time to act
++    S.rest = {};
++    for (const k of Object.keys(out.species)) {
++      const first = out.cells.map(c => c.series[k][0]).sort((a, b) => a - b);
++      S.rest[k] = first[Math.floor(first.length / 2)];
++    }
++    S.cell = 0; S.frame = 0;
++    $("placeholder").hidden = true;
++    $("scrub").max = out.t_h.length - 1;
++    for (const id of ["scrub", "play"]) $(id).disabled = false;
++    drawPicker(); drawTracks(); render(); play(true);
++  } catch (e) {
++    $("explain").textContent = `The simulation did not complete: ${String(e).slice(0, 300)}`;
++  } finally {
++    $("run").disabled = false; $("bar").classList.remove("indet");
++    $("engine-state").textContent = "engine ready";
++  }
++}
++
++const PRESETS = {
++  none: { drug: "", conc: 0, exposure: "" },
++  cis:  { drug: "cisplatin", conc: 20, exposure: "" },
++  pac:  { drug: "paclitaxel", conc: 0.1, exposure: "" },
++  nut:  { drug: "nutlin-3a", conc: 10, exposure: "" },
++};
++
++document.addEventListener("DOMContentLoaded", () => {
++  drawMap();
++  $("run").onclick = simulate;
++  $("play").onclick = () => play(!S.playing);
++  $("scrub").oninput = () => { play(false); S.frame = Number($("scrub").value); render(); };
++  for (const b of document.querySelectorAll(".preset")) b.onclick = () => {
++    const p = PRESETS[b.dataset.preset];
++    $("line").value = "A549"; $("drug").value = p.drug; $("conc").value = p.conc;
++    $("exposure").value = p.exposure;
++    if (!$("run").disabled) simulate();
++  };
++  boot().catch(e => {
++    $("engine-state").textContent = "engine failed to start";
++    $("explain").textContent = String(e).slice(0, 300);
++  });
++});
+diff --git a/web/lab/index.html b/web/lab/index.html
+index 7436e9d..22bfa37 100644
+--- a/web/lab/index.html
++++ b/web/lab/index.html
+@@ -6,12 +6,16 @@
+ <title>CellSim Lab</title>
+ <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Ccircle cx=%228%22 cy=%228%22 r=%226%22 fill=%22%2335b3a2%22/%3E%3Ccircle cx=%228%22 cy=%228%22 r=%222.5%22 fill=%22%230e1317%22/%3E%3C/svg%3E">
+ <link rel="stylesheet" href="style.css">
++<link rel="stylesheet" href="cell.css">
+ </head>
+ <body>
+ 
+ <header>
+   <div class="brand">Cell<span>Sim</span> Lab</div>
+-  <div class="subtitle">run a cell experiment in your browser</div>
++  <nav class="tabs">
++    <a href="./" class="on">Dose–response</a>
++    <a href="cell.html">Inside a cell</a>
++  </nav>
+   <div class="spacer"></div>
+   <span id="engine-state" class="subtitle">starting the engine…</span>
+   <button id="run" class="primary" disabled>Run experiment</button>

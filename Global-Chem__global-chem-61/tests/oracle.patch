@@ -1,0 +1,12 @@
+diff --git a/.pre-commit-config.yaml b/.pre-commit-config.yaml
+index de4d9abb..21d9c8f0 100644
+--- a/.pre-commit-config.yaml
++++ b/.pre-commit-config.yaml
+@@ -1,6 +1,6 @@
+ repos:
+ - repo: https://github.com/pre-commit/pre-commit-hooks
+-  rev: v4.1.0
++  rev: v4.2.0
+   hooks:
+   - id: check-builtin-literals
+   - id: check-added-large-files

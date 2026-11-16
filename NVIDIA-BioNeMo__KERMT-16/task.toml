@@ -1,0 +1,72 @@
+version = "1.0"
+
+[task]
+name = "default/NVIDIA-BioNeMo__KERMT-16"
+description = "Fix four KERMT v2 skill / workflow issues (HPO crash, skill discovery docs, clean_smiles re-runs, W&B forwarding)"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "KERMT",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "NVIDIA-BioNeMo/KERMT"
+ref = "e402473376ace30fa0092dad0578a88bf7f67287"
+reference = "https://github.com/NVIDIA-BioNeMo/KERMT/pull/16"
+source_access = "auto"
+built_at = "2026-11-16T11:12:52.987420+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:203503319dde5294f5a28094f68b9b495e646aad6bc21b37e29daa913401cb27"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2026-06-23T05:50:18Z"
+diff_format = "unified"
+context_files = [
+    ".claude/skills",
+    ".gitignore",
+    "CLAUDE.md",
+    "agent/README.md",
+    "agent/scripts/run_pretrain_local.py",
+    "agent/skills/kermt-add-cmim-pretrain/SKILL.md",
+    "agent/skills/kermt-continue-pretrain/SKILL.md",
+    "agent/skills/kermt-pretrain-scratch/SKILL.md",
+    "agent/tests/test_run_pretrain_local.py",
+    "main_hpo.py",
+    "scripts/clean_smiles.py",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 98
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

@@ -1,0 +1,144 @@
+diff --git a/README.md b/README.md
+index ae65b6b..5d6669a 100644
+--- a/README.md
++++ b/README.md
+@@ -257,38 +257,38 @@ See [who's using `chembl-downloader`](https://github.com/search?q=chembl_downloa
+ not available for all versions. For example, the SQLite version of the database was first
+ added in release 21 (2015-02-12).
+ 
+-|   ChEMBL Version | Release Date   |
+-|------------------|----------------|
+-|               31 | 2022-07-12     |
+-|               30 | 2022-02-22     |
+-|               29 | 2021-07-01     |
+-|               28 | 2021-01-15     |
+-|               27 | 2020-05-18     |
+-|               26 | 2020-02-14     |
+-|               25 | 2019-02-01     |
+-|             24_1 | 2018-05-01     |
+-|               24 |                |
+-|               23 | 2017-05-18     |
+-|             22_1 | 2016-11-17     |
+-|               22 |                |
+-|               21 | 2015-02-12     |
+-|               20 | 2015-02-03     |
+-|               19 | 2014-07-2333   |
+-|               18 | 2014-04-02     |
+-|               17 | 2013-09-16     |
+-|               16 | 2013-055555-15 |
+-|               15 | 2013-01-30     |
+-|               14 | 2012 -07-18    |
+-|               13 | 2012-02-29     |
+-|               12 | 2011-11-30     |
+-|               11 | 2011-06-07     |
+-|               10 | 2011-06-07     |
+-|               09 | 2011-01-04     |
+-|               08 | 2010-11-05     |
+-|               07 | 2010-09-03     |
+-|               06 | 2010-09-03     |
+-|               05 | 2010-06-07     |
+-|               04 | 2010-05-26     |
+-|               03 | 2010-04-30     |
+-|               02 | 2009-12-07     |
+-|               01 | 2009-10-28     |
++|   ChEMBL Version | Release Date   | Total Named Compounds *from SQLite* |
++|------------------|----------------|------------------------------------:|
++|               31 | 2022-07-12     |                              41,585 |
++|               30 | 2022-02-22     |                              41,549 |
++|               29 | 2021-07-01     |                              41,383 |
++|               28 | 2021-01-15     |                              41,049 |
++|               27 | 2020-05-18     |                              40,834 |
++|               26 | 2020-02-14     |                              40,822 |
++|               25 | 2019-02-01     |                              39,885 |
++|             24_1 | 2018-05-01     |                              39,877 |
++|               24 |                |                                     |
++|               23 | 2017-05-18     |                              39,584 |
++|             22_1 | 2016-11-17     |                                     |
++|               22 |                |                              39,422 |
++|               21 | 2015-02-12     |                              39,347 |
++|               20 | 2015-02-03     |                                   - |
++|               19 | 2014-07-2333   |                                   - |
++|               18 | 2014-04-02     |                                   - |
++|               17 | 2013-09-16     |                                   - |
++|               16 | 2013-055555-15 |                                   - |
++|               15 | 2013-01-30     |                                   - |
++|               14 | 2012 -07-18    |                                   - |
++|               13 | 2012-02-29     |                                   - |
++|               12 | 2011-11-30     |                                   - |
++|               11 | 2011-06-07     |                                   - |
++|               10 | 2011-06-07     |                                   - |
++|               09 | 2011-01-04     |                                   - |
++|               08 | 2010-11-05     |                                   - |
++|               07 | 2010-09-03     |                                   - |
++|               06 | 2010-09-03     |                                   - |
++|               05 | 2010-06-07     |                                   - |
++|               04 | 2010-05-26     |                                   - |
++|               03 | 2010-04-30     |                                   - |
++|               02 | 2009-12-07     |                                   - |
++|               01 | 2009-10-28     |                                   - |
+diff --git a/src/chembl_downloader/cli.py b/src/chembl_downloader/cli.py
+index d945d29..7a41d13 100644
+--- a/src/chembl_downloader/cli.py
++++ b/src/chembl_downloader/cli.py
+@@ -68,8 +68,28 @@ def history():
+     except ImportError:
+         click.secho("Could not import `tabulate`. Please run `python -m pip install tabulate`")
+         sys.exit(1)
+-    rows = [(version, get_date(version=version)) for version in tqdm(versions())]
+-    click.echo(tabulate(rows, tablefmt="github", headers=["ChEMBL Version", "Release Date"]))
++    rows = [
++        (version, get_date(version=version), _count_compounds(version=version))
++        for version in tqdm(versions())
++    ]
++    click.echo(
++        tabulate(
++            rows,
++            tablefmt="github",
++            headers=["ChEMBL Version", "Release Date", "Total Named Compounds *from SQLite*"],
++        )
++    )
++
++
++def _count_compounds(version: str) -> str:
++    """Test downloader for specific ChEMBL version."""
++    from .queries import COUNT_QUERY_SQL
++
++    try:
++        total_compounds = query(COUNT_QUERY_SQL, version=version)["count"][0]
++    except Exception:
++        return "-"
++    return f"{total_compounds:,}"
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/src/chembl_downloader/queries.py b/src/chembl_downloader/queries.py
+index bc63069..3a3a6e2 100644
+--- a/src/chembl_downloader/queries.py
++++ b/src/chembl_downloader/queries.py
+@@ -110,8 +110,11 @@ def get_target_sql(
+         f"""\
+         SELECT
+             ASSAYS.chembl_id              AS assay_chembl_id,
++            TARGET_DICTIONARY.target_type,
++            TARGET_DICTIONARY.tax_id,
+             COMPOUND_STRUCTURES.canonical_smiles,
+             MOLECULE_DICTIONARY.chembl_id AS molecule_chembl_id,
++            ACTIVITIES.standard_type,
+             ACTIVITIES.pchembl_value
+         FROM TARGET_DICTIONARY
+              JOIN ASSAYS ON TARGET_DICTIONARY.tid == ASSAYS.tid
+@@ -153,6 +156,14 @@ def get_target_sql(
+     AND pref_name IS NOT NULL
+ """
+ 
++#: Return the count of molecules
++COUNT_QUERY_SQL = """\
++SELECT COUNT(MOLECULE_DICTIONARY.chembl_id) as count
++FROM MOLECULE_DICTIONARY
++JOIN COMPOUND_STRUCTURES ON MOLECULE_DICTIONARY.molregno == COMPOUND_STRUCTURES.molregno
++WHERE molecule_dictionary.pref_name IS NOT NULL
++"""
++
+ 
+ def get_document_molecule_sql(document_chembl_id: str) -> str:
+     """Get all molecules mentioned in a document."""

@@ -1,0 +1,62 @@
+version = "1.0"
+
+[task]
+name = "default/mqcomplab__bitbirch-6"
+description = "Update bitbirch.py"
+
+[metadata]
+difficulty = "easy"
+category = "bugfix"
+keywords = [
+    "bitbirch",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "mqcomplab/bitbirch"
+ref = "f43a6a492f39fef4db8c00b4f638e2bd43408f3f"
+reference = "https://github.com/mqcomplab/bitbirch/pull/6"
+source_access = "auto"
+built_at = "2026-11-16T10:59:53.017686+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:57f03834e62f1a7b67f2e1e0b3d1ffd0d55810f3305ee9840b4ad5063413903e"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2024-10-17T19:46:49Z"
+diff_format = "unified"
+context_files = [
+    "bitbirch.py",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 2
+difficulty = "trivial"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

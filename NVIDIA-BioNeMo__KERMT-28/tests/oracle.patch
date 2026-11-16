@@ -1,0 +1,661 @@
+diff --git a/kermt/data/kermtdataset.py b/kermt/data/kermtdataset.py
+index 948546e..fdd3f1d 100644
+--- a/kermt/data/kermtdataset.py
++++ b/kermt/data/kermtdataset.py
+@@ -103,25 +103,48 @@ def atom_random_mask(smiles_batch, atom_vocab, percent=0.15):
+     return vocab_label
+ 
+ 
+-def bond_random_mask(smiles_batch, bond_vocab, percent=0.15):
++def bond_random_mask(smiles_batch, bond_vocab, percent=0.15, rdkit_bond_idx=None):
+     """
+     Perform random mask operation on bonds for vocabulary prediction.
+     Shared by vocab-based collators.
+-    
++
++    The bond vocab head is supervised per bond, and the labels are matched to the graph
++    by position alone. This function re-parses the SMILES independently of ``MolGraph``,
++    so when ``--bond_drop_rate > 0`` drops bonds from the graph the two disagree: the
++    label vector is too long and every label after the first dropped bond describes a
++    different bond from the one it lands on.
++
++    ``rdkit_bond_idx`` closes that gap. Labels are collected into a table keyed by RDKit
++    bond index, then gathered in the order the surviving bonds actually appear in the
++    packed batch, so dropped bonds simply do not contribute a label.
++
++    The masking loop below is unchanged, including the order it visits bonds in and the
++    single ``np.random.permutation`` draw per molecule, so a run with no bond dropout
++    produces exactly the labels it produced before -- the gather is the identity in that
++    case.
++
+     Args:
+         smiles_batch: List of SMILES strings
+         bond_vocab: MolVocab instance for bond vocabulary
+         percent: Fraction of bonds to mask (default 0.15)
+-        
++        rdkit_bond_idx: ``BatchMolGraph.rdkit_bond_idx`` -- packed directed-bond row to
++            global RDKit bond index, two entries per surviving bond. When None the labels
++            are returned in the legacy sequential order, which is only correct if no bond
++            was dropped.
++
+     Returns:
+-        List of bond vocabulary labels (0 = not masked)
++        List of bond vocabulary labels (0 = not masked), with a leading padding element.
++        One label per surviving undirected bond, matching the rows
++        :class:`BondVocabPrediction` emits.
+     """
+-    vocab_label = [0]  # Zero padding at start
++    label_by_rdkit_idx = []   # global RDKit bond index -> label
++    sequential_label = []     # legacy order: one label per bond as visited
++
+     for smi in smiles_batch:
+         mol = Chem.MolFromSmiles(smi)
+         nm_atoms = mol.GetNumAtoms()
+         nm_bonds = mol.GetNumBonds()
+-        mlabel = []
++        mlabel = [0] * nm_bonds
+         n_mask = math.ceil(nm_bonds * percent)
+         perm = np.random.permutation(nm_bonds)[:n_mask]
+         virtual_bond_id = 0
+@@ -132,12 +155,23 @@ def bond_random_mask(smiles_batch, bond_vocab, percent=0.15):
+                     continue
+                 if virtual_bond_id in perm:
+                     label = bond_vocab.stoi.get(bond_to_vocab(mol, bond), bond_vocab.other_index)
+-                    mlabel.extend([label])
+                 else:
+-                    mlabel.extend([0])
++                    label = 0
++                # Keyed by RDKit index so it can be gathered against the packed batch;
++                # also appended in visit order for the legacy return.
++                mlabel[bond.GetIdx()] = label
++                sequential_label.append(label)
+                 virtual_bond_id += 1
+-        vocab_label.extend(mlabel)
+-    return vocab_label
++        # extend keeps the per-molecule offsets identical to BatchMolGraph's,
++        # which accumulates mol.GetNumBonds() the same way.
++        label_by_rdkit_idx.extend(mlabel)
++
++    if rdkit_bond_idx is None:
++        return [0] + sequential_label
++
++    # Two entries per surviving bond (one per direction); take one per bond, in packed
++    # order, to match BondVocabPrediction's output rows.
++    return [0] + [label_by_rdkit_idx[gidx] for gidx in rdkit_bond_idx[0::2]]
+ 
+ 
+ def tokenize_and_pad_smiles(smiles_batch, smiles_vocab, max_seq_len):
+@@ -248,17 +282,21 @@ def _build_graph_input(smiles_batch, shared_dict, args, cmm_feature_tensors=None
+         cmm_feature_range: Cuik-molmaker feature range (optional)
+         
+     Returns:
+-        BatchMolGraph components
++        (BatchMolGraph components, rdkit_bond_idx). The second element maps each packed
++        directed-bond row to its global RDKit bond index and is what lets the vocab task
++        align its labels to the bonds that survived --bond_drop_rate.
+     """
+     if args.use_cuikmolmaker_featurization and cmm_feature_tensors is not None:
+-        return mol2graph(smiles_batch, shared_dict, args,
+-                        cmm_feature_range=cmm_feature_range,
+-                        cmm_tensors=cmm_feature_tensors).get_components()
++        batch = mol2graph(smiles_batch, shared_dict, args,
++                          cmm_feature_range=cmm_feature_range,
++                          cmm_tensors=cmm_feature_tensors)
+     else:
+-        return mol2graph(smiles_batch, shared_dict, args).get_components()
++        batch = mol2graph(smiles_batch, shared_dict, args)
++    return batch.get_components(), batch.rdkit_bond_idx
+ 
+ 
+-def _generate_vocab_targets(smiles_batch, atom_vocab, bond_vocab, features_list=None, batch=None):
++def _generate_vocab_targets(smiles_batch, atom_vocab, bond_vocab, features_list=None, batch=None,
++                            rdkit_bond_idx=None):
+     """
+     Generate vocabulary prediction targets.
+     Shared by vocab-based collators.
+@@ -274,7 +312,8 @@ def _generate_vocab_targets(smiles_batch, atom_vocab, bond_vocab, features_list=
+         dict with av_task, bv_task, fg_task tensors
+     """
+     atom_vocab_label = torch.Tensor(atom_random_mask(smiles_batch, atom_vocab)).long()
+-    bond_vocab_label = torch.Tensor(bond_random_mask(smiles_batch, bond_vocab)).long()
++    bond_vocab_label = torch.Tensor(
++        bond_random_mask(smiles_batch, bond_vocab, rdkit_bond_idx=rdkit_bond_idx)).long()
+     
+     if features_list is not None:
+         # Memory-mapped mode: features are pre-computed numpy arrays
+@@ -545,9 +584,10 @@ def __call__(self, batch_idx):
+         batch, idx = zip(*batch_idx)
+         smiles_batch = [d.smiles for d in batch]
+         
+-        batchgraph = _build_graph_input(smiles_batch, self.shared_dict, self.args,
+-                                        self.cmm_feature_tensors, self.cmm_feature_range)
+-        targets = _generate_vocab_targets(smiles_batch, self.atom_vocab, self.bond_vocab, batch=batch)
++        batchgraph, rdkit_bond_idx = _build_graph_input(smiles_batch, self.shared_dict, self.args,
++                                                        self.cmm_feature_tensors, self.cmm_feature_range)
++        targets = _generate_vocab_targets(smiles_batch, self.atom_vocab, self.bond_vocab, batch=batch,
++                                          rdkit_bond_idx=rdkit_bond_idx)
+         
+         return {
+             "graph_input": batchgraph,
+@@ -576,8 +616,8 @@ def __call__(self, batch_idx):
+         smiles_batch = [d.smiles for d in batch]
+         
+         # Build graph input
+-        batchgraph = _build_graph_input(smiles_batch, self.shared_dict, self.args,
+-                                        self.cmm_feature_tensors, self.cmm_feature_range)
++        batchgraph, _ = _build_graph_input(smiles_batch, self.shared_dict, self.args,
++                                           self.cmm_feature_tensors, self.cmm_feature_range)
+         
+         # Tokenize and prepare decoder sequences
+         tokens, lengths, padding_mask = tokenize_and_pad_smiles(
+@@ -623,11 +663,12 @@ def __call__(self, batch_idx):
+         smiles_batch = [d.smiles for d in batch]
+         
+         # Build graph input
+-        batchgraph = _build_graph_input(smiles_batch, self.shared_dict, self.args,
+-                                        self.cmm_feature_tensors, self.cmm_feature_range)
++        batchgraph, rdkit_bond_idx = _build_graph_input(smiles_batch, self.shared_dict, self.args,
++                                                        self.cmm_feature_tensors, self.cmm_feature_range)
+         
+         # Vocab targets
+-        targets = _generate_vocab_targets(smiles_batch, self.atom_vocab, self.bond_vocab, batch=batch)
++        targets = _generate_vocab_targets(smiles_batch, self.atom_vocab, self.bond_vocab, batch=batch,
++                                          rdkit_bond_idx=rdkit_bond_idx)
+         
+         # Decoder sequences
+         tokens, lengths, padding_mask = tokenize_and_pad_smiles(
+@@ -833,8 +874,8 @@ def __call__(self, batch_data):
+         )
+         
+         # Build graph input
+-        batchgraph = _build_graph_input(smiles_batch, self.shared_dict, self.args,
+-                                        self.cmm_feature_tensors, self.cmm_feature_range)
++        batchgraph, _ = _build_graph_input(smiles_batch, self.shared_dict, self.args,
++                                           self.cmm_feature_tensors, self.cmm_feature_range)
+         
+         # Prepare decoder sequences
+         decoder_input, decoder_target = prepare_decoder_sequences(tokens_tensor)
+@@ -1074,12 +1115,13 @@ def __call__(self, batch_data):
+         idx = list(idx)
+         
+         # Build graph input
+-        batchgraph = _build_graph_input(smiles_batch, self.shared_dict, self.args,
+-                                        self.cmm_feature_tensors, self.cmm_feature_range)
++        batchgraph, rdkit_bond_idx = _build_graph_input(smiles_batch, self.shared_dict, self.args,
++                                                        self.cmm_feature_tensors, self.cmm_feature_range)
+         
+         # Vocab targets
+         targets = _generate_vocab_targets(smiles_batch, self.atom_vocab, self.bond_vocab,
+-                                          features_list=features_list)
++                                          features_list=features_list,
++                                          rdkit_bond_idx=rdkit_bond_idx)
+         
+         # Pad and prepare decoder sequences
+         tokens_tensor, padding_mask = _pad_pretokenized_sequences(
+@@ -1125,10 +1167,11 @@ def __call__(self, batch_data):
+         smiles_batch = list(smiles_batch)
+         idx = list(idx)
+         
+-        batchgraph = _build_graph_input(smiles_batch, self.shared_dict, self.args,
+-                                        self.cmm_feature_tensors, self.cmm_feature_range)
++        batchgraph, rdkit_bond_idx = _build_graph_input(smiles_batch, self.shared_dict, self.args,
++                                                        self.cmm_feature_tensors, self.cmm_feature_range)
+         targets = _generate_vocab_targets(smiles_batch, self.atom_vocab, self.bond_vocab,
+-                                          features_list=features_list)
++                                          features_list=features_list,
++                                          rdkit_bond_idx=rdkit_bond_idx)
+         
+         return {
+             "graph_input": batchgraph,
+@@ -1331,10 +1374,11 @@ def __call__(self, batch_data):
+         smiles_batch = list(smiles_batch)
+         idx = list(idx)
+         
+-        batchgraph = _build_graph_input(smiles_batch, self.shared_dict, self.args,
+-                                        self.cmm_feature_tensors, self.cmm_feature_range)
++        batchgraph, rdkit_bond_idx = _build_graph_input(smiles_batch, self.shared_dict, self.args,
++                                                        self.cmm_feature_tensors, self.cmm_feature_range)
+         targets = _generate_vocab_targets(smiles_batch, self.atom_vocab, self.bond_vocab,
+-                                          features_list=features_list)
++                                          features_list=features_list,
++                                          rdkit_bond_idx=rdkit_bond_idx)
+         
+         return {
+             "graph_input": batchgraph,
+diff --git a/kermt/data/molgraph.py b/kermt/data/molgraph.py
+index e563c8e..6a5f407 100644
+--- a/kermt/data/molgraph.py
++++ b/kermt/data/molgraph.py
+@@ -355,6 +355,12 @@ def __init__(self, mol_graphs: List[MolGraph], args: Namespace, prepared_atom_fe
+             self.n_bonds += mol_graph.n_bonds
+             self.n_rdkit_bonds += mol_graph.n_rdkit_bonds
+ 
++        # Packed directed-bond row -> global RDKit bond index, two entries per surviving
++        # bond. Already used below to reorder cuik-molmaker features; kept on the batch so
++        # the vocab task can align its per-bond labels to the rows that actually survived
++        # --bond_drop_rate. Note this indexes f_bonds from row 1, since row 0 is padding.
++        self.rdkit_bond_idx = rdkit_bond_idx
++
+         # max with 1 to fix a crash in rare case of all single-heavy-atom mols
+         self.max_num_bonds = max(1, max(len(in_bonds) for in_bonds in a2b))
+ 
+diff --git a/kermt/model/layers.py b/kermt/model/layers.py
+index 0fb1fbe..0277239 100644
+--- a/kermt/model/layers.py
++++ b/kermt/model/layers.py
+@@ -147,6 +147,29 @@ def forward(self, embeddings, scope):
+         return mol_vecs
+ 
+ 
++def dynamic_depth_can_skip_message_passing(depth: int) -> bool:
++    """
++    Whether the dyMPN depth draw can produce a depth that skips message passing entirely.
++
++    ``MPNEncoder.forward`` runs ``for _ in range(ndepth - 1)``, so a drawn ``ndepth <= 1``
++    means the loop body never executes and ``W_h`` -- plus its activation, which is
++    parameterised for PReLU -- receives no gradient for that batch. Under DDP with
++    ``find_unused_parameters=False`` that surfaces as "Expected to have finished reduction
++    in the prior iteration", naming a scattered handful of ``heads.N.mpn_{q,k,v}.W_h``
++    parameters, and which heads are named varies from step to step.
++
++    Both dynamic-depth samplers are bounded below by ``depth - 3``, so the draw can reach 1
++    only when ``depth <= 4``. ``Head`` hardcodes ``dynamic_depth="truncnorm"`` for its
++    q/k/v networks, so this applies to any training run, and the pretrain parser's
++    ``--depth`` default of 3 sits inside that range.
++
++    :param depth: the configured message passing depth (``args.depth``).
++    :return: True when the sampler can skip the loop, i.e. when DDP needs unused-parameter
++    detection to survive it.
++    """
++    return depth - 3 <= 1
++
++
+ class MPNEncoder(nn.Module):
+     """A message passing neural network for encoding a molecule."""
+ 
+diff --git a/kermt/util/parsing.py b/kermt/util/parsing.py
+index f6e5a02..c9b2456 100644
+--- a/kermt/util/parsing.py
++++ b/kermt/util/parsing.py
+@@ -323,8 +323,16 @@ def add_pretrain_args(parser: ArgumentParser):
+     parser.add_argument('--enable_multi_gpu', dest='enable_multi_gpu',
+                         action='store_true', default=False,
+                         help='Enable multi-GPU training')
+-    parser.add_argument("--seed", type=int, default=0, 
+-                        help="Random seed for pretraining.")
++    parser.add_argument("--seed", type=int, default=None,
++                        help="Random seed for pretraining. Unset (the default) leaves every "
++                             "RNG untouched, which is how pretraining has always run -- two "
++                             "runs of the same command give different results. Set it to make "
++                             "a run reproducible: model init, dropout, the dyMPN depth draw, "
++                             "the vocab masking and any bond dropout are all seeded from it. "
++                             "Needed for A/B comparisons, where an unseeded run-to-run spread "
++                             "can otherwise exceed the effect being measured. Checkpoints carry "
++                             "no RNG state, so a run resumed from one is not bit-identical to an "
++                             "uninterrupted seeded run.")
+     
+     # ========== Data Arguments ==========
+     parser.add_argument('--train_data_path', type=str, required=True,
+@@ -388,9 +396,12 @@ def add_pretrain_args(parser: ArgumentParser):
+     parser.add_argument('--embedding_output_type', type=str, default='both', nargs='?',
+                         choices=("atom", "bond", "both"),
+                         help="Type of output embeddings from encoder. Options: atom, bond, both")
+-    parser.add_argument('--hidden_size', type=float, default=3,
+-                        help='Encoder hidden dimension (actual dimension = hidden_size * 100). '
+-                             'Default: 3 (→ 300).')
++    parser.add_argument('--hidden_size', type=float, default=800,
++                        help='Encoder hidden dimension. Must be divisible by --num_attn_head. '
++                             'Default: 800, matching the released checkpoints and the '
++                             'finetune parser. (The previous default of 3 came with help text '
++                             'claiming a x100 scaling that was never implemented, so it built '
++                             'a 3-dimensional encoder.)')
+     parser.add_argument('--depth', type=int, default=3,
+                         help='Number of encoder message passing layers.')
+     parser.add_argument('--num_attn_head', type=int, default=4, 
+diff --git a/pretrain_ddp.py b/pretrain_ddp.py
+index fc99c60..9e9b525 100644
+--- a/pretrain_ddp.py
++++ b/pretrain_ddp.py
+@@ -30,9 +30,12 @@
+ from torch.utils.data.distributed import DistributedSampler
+ from torch.distributed import destroy_process_group
+ import os
++import random
+ import signal
+ import threading
+ 
++import numpy as np
++
+ # ============================================================================
+ # Graceful Shutdown Handling
+ # ============================================================================
+@@ -128,7 +131,7 @@ def __len__(self):
+     KermtHybridPreTokenizedCollator,
+     KermtVocabPreTokenizedCollator
+ )
+-from kermt.util.utils import create_logger
++from kermt.util.utils import create_logger, setup_determinism
+ from kermt.util.ddp_utils import configure_nccl_for_topology, ddp_setup
+ from kermt.model.models import KERMTEmbedding
+ from task.kermttrainer import KERMTTrainer, KERMTCMIMTrainer, KERMTHybridTrainer
+@@ -142,6 +145,24 @@ def pre_load_data_ddp(dataset: BatchMolDataset, dataset_size: int, samples_per_f
+     for i in range(1, dataset_size, samples_per_file):
+         dataset.load_data(i)
+ 
++def seed_dataloader_worker(worker_id: int):
++    """
++    Seed numpy and python RNGs inside a DataLoader worker process.
++
++    torch reseeds its own RNG per worker, but not numpy's or python's. The vocab
++    masking (``atom_random_mask`` / ``bond_random_mask``) and the bond dropout in
++    ``MolGraph`` all draw from ``np.random``, so with ``--num_dataloader_workers > 0``
++    those draws would stay unseeded and the run would not reproduce even though
++    the main process was seeded.
++
++    :param worker_id: supplied by the DataLoader; unused, since torch has already
++    folded it into ``torch.initial_seed()``.
++    """
++    worker_seed = torch.initial_seed() % 2 ** 32
++    np.random.seed(worker_seed)
++    random.seed(worker_seed)
++
++
+ def main(rank: int, world_size: int):
+     ddp_setup(rank, world_size)
+     
+@@ -152,6 +173,20 @@ def main(rank: int, world_size: int):
+     # parse args
+     args = parse_args_ddp()
+ 
++    # Opt-in: unset (the default) leaves every RNG untouched, which is how
++    # pretraining has always run. setup_determinism() is the same helper the
++    # finetune and HPO entry points use, so all three stay in lockstep.
++    #
++    # Two things specific to pretraining's DDP path:
++    #  * Every rank is seeded identically. DDP requires identical initial weights
++    #    anyway, and the ranks see different data because the sampler shards it.
++    #  * setup_determinism() also sets CUBLAS_WORKSPACE_CONFIG, but that must
++    #    happen before the CUDA context exists -- far earlier than this, which is
++    #    why __main__ sets it before mp.spawn. The call here is a harmless no-op
++    #    (os.environ.setdefault) since the parent already set it.
++    if args.seed is not None:
++        setup_determinism(args.seed)
++
+     if rank == 0:
+         print(f"{args=}")
+     logger = create_logger(name='pretrain', save_dir=args.save_dir)
+@@ -533,11 +568,15 @@ def main(rank: int, world_size: int):
+             )
+             val_collator = mol_collator
+ 
++    # Only set when seeding is requested, so the unseeded default path is untouched.
++    worker_init_fn = seed_dataloader_worker if args.seed is not None else None
++
+     train_dataloader = DataLoader(train_data, batch_size=args.batch_size, # batch size per GPU (aka micro batch size)
+                                   shuffle=False, # because train_sampler does the shuffling
+                                   num_workers=args.num_dataloader_workers,
+                                   sampler=train_sampler,
+                                   collate_fn=mol_collator,
++                                  worker_init_fn=worker_init_fn,
+                                   drop_last=True)
+     
+     if args.val_data_path is not None:
+@@ -546,6 +585,7 @@ def main(rank: int, world_size: int):
+                                   num_workers=args.num_dataloader_workers,
+                                   sampler=val_sampler,
+                                   collate_fn=val_collator,
++                                  worker_init_fn=worker_init_fn,
+                                   drop_last=True)
+     else:
+         val_dataloader = None
+@@ -668,6 +708,14 @@ def main(rank: int, world_size: int):
+             print(f"Loading checkpoint from {last_ckpt_path}")
+             epoch, scheduler_step, prev_batch_idx, wandb_run_id = trainer.load(last_ckpt_path)
+             print(f"Loaded checkpoint from epoch={epoch}, scheduler_step={scheduler_step}, prev_batch_idx={prev_batch_idx}")
++            # Resume happens automatically whenever last_checkpoint.pt is present, so a
++            # seeded run can silently stop being reproducible. Checkpoints carry no RNG
++            # state: setup_determinism() has already rewound every RNG to its initial value while
++            # the sampler skips ahead, and the dataloader workers draw from their own.
++            if args.seed is not None and rank == 0:
++                print("[WARNING] Resuming from a checkpoint with --seed set. Checkpoints carry no "
++                      "RNG state, so this run will not be bit-identical to an uninterrupted "
++                      "seeded run.", flush=True)
+         else:
+             epoch = 0
+             scheduler_step = 0
+@@ -737,6 +785,13 @@ def main(rank: int, world_size: int):
+     world_size = os.environ.get("WORLD_SIZE", 1)
+     world_size = int(world_size)
+     print(f"World size: {world_size}")
++
++    # setup_determinism() enables deterministic algorithms, and cuBLAS requires this to be
++    # set before the CUDA context exists -- so it has to happen here, in the parent,
++    # before mp.spawn. Set unconditionally: it is inert unless deterministic
++    # algorithms are actually switched on, and reading --seed this early would mean
++    # parsing args before the DDP ranks do. An existing value is left alone.
++    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+     
+     # Auto-configure NCCL before spawning processes
+     # This detects GPU topology and sets appropriate P2P settings
+diff --git a/task/kermttrainer.py b/task/kermttrainer.py
+index 01b19ba..07dea65 100644
+--- a/task/kermttrainer.py
++++ b/task/kermttrainer.py
+@@ -59,6 +59,8 @@
+ 
+ from torch.nn.parallel import DistributedDataParallel as DDP
+ from torch.utils.tensorboard import SummaryWriter
++
++from kermt.model.layers import dynamic_depth_can_skip_message_passing
+ try:
+     import wandb
+ except ImportError:
+@@ -215,13 +217,19 @@ def __init__(self,
+ 
+         self.model.to(self.gpu_id)
+ 
+-        # find_unused_parameters is required when embedding_output_type != 'both':
+-        # in atom/bond mode the encoder produces only one aggregation level, so the
+-        # opposite branch's FFNs and the bond/atom vocab + FG heads receive no gradient.
+-        # 'both' exercises every branch, so keep the flag off there to avoid DDP overhead.
++        # find_unused_parameters is required in two cases:
++        #  * embedding_output_type != 'both': in atom/bond mode the encoder produces only
++        #    one aggregation level, so the opposite branch's FFNs and the bond/atom vocab +
++        #    FG heads receive no gradient.
++        #  * a small --depth: the dyMPN depth draw can then land low enough to skip message
++        #    passing entirely, leaving W_h without gradient on that batch. See
++        #    dynamic_depth_can_skip_message_passing().
++        # Neither holds for the usual 'both' + --depth 6, so the flag stays off there and
++        # DDP keeps its fast path.
+         # (static_graph is not an option: dynamic-depth sampling varies the graph per step.)
+         self.model = DDP(self.model, device_ids=[gpu_id],
+-                         find_unused_parameters=(self.args.embedding_output_type != 'both'))
++                         find_unused_parameters=(self.args.embedding_output_type != 'both'
++                                                 or dynamic_depth_can_skip_message_passing(self.args.depth)))
+ 
+         if self.args.tensorboard:
+             self.writer = SummaryWriter(self.args.save_dir)
+@@ -570,13 +578,19 @@ def __init__(self,
+         self.n_iter = 0
+ 
+         self.model.to(self.gpu_id)
+-        # find_unused_parameters is required when embedding_output_type != 'both':
+-        # in atom/bond mode the encoder produces only one aggregation level, so the
+-        # opposite branch's FFNs and the bond/atom vocab + FG heads receive no gradient.
+-        # 'both' exercises every branch, so keep the flag off there to avoid DDP overhead.
++        # find_unused_parameters is required in two cases:
++        #  * embedding_output_type != 'both': in atom/bond mode the encoder produces only
++        #    one aggregation level, so the opposite branch's FFNs and the bond/atom vocab +
++        #    FG heads receive no gradient.
++        #  * a small --depth: the dyMPN depth draw can then land low enough to skip message
++        #    passing entirely, leaving W_h without gradient on that batch. See
++        #    dynamic_depth_can_skip_message_passing().
++        # Neither holds for the usual 'both' + --depth 6, so the flag stays off there and
++        # DDP keeps its fast path.
+         # (static_graph is not an option: dynamic-depth sampling varies the graph per step.)
+         self.model = DDP(self.model, device_ids=[gpu_id],
+-                         find_unused_parameters=(self.args.embedding_output_type != 'both'))
++                         find_unused_parameters=(self.args.embedding_output_type != 'both'
++                                                 or dynamic_depth_can_skip_message_passing(self.args.depth)))
+ 
+         if self.args.tensorboard:
+             self.writer = SummaryWriter(self.args.save_dir)
+@@ -784,11 +798,15 @@ def iter(self, epoch, train=True) -> List:
+                     'train/log_p_k1_given_zx': log_p_k1.item(),
+                     'train/log_q_z_given_x': log_q_z.item(),
+                     'train/log_P_z': log_P_z.item(),
+-                    'train/recon_accuracy': recon_accuracy.item(),
+                     'train/lr': self.scheduler.get_lr()[0],
+                     'train/epoch': epoch,
+                     'train/batch_idx': ibatch + self.batch_idx_offset,
+                 }
++                # The loss function returns recon_accuracy=None unless --tensorboard is
++                # set (see where it is unpacked above), so this must be guarded exactly
++                # like the accumulation is. Same guard as KERMTHybridTrainer.
++                if recon_accuracy is not None:
++                    train_metrics['train/recon_accuracy'] = recon_accuracy.item()
+                 if self.args.tensorboard:
+                     for k, v in train_metrics.items():
+                         self.writer.add_scalar(k, v, self.n_steps)
+@@ -883,13 +901,19 @@ def __init__(self,
+         self.n_iter = 0
+ 
+         self.model.to(self.gpu_id)
+-        # find_unused_parameters is required when embedding_output_type != 'both':
+-        # in atom/bond mode the encoder produces only one aggregation level, so the
+-        # opposite branch's FFNs and the bond/atom vocab + FG heads receive no gradient.
+-        # 'both' exercises every branch, so keep the flag off there to avoid DDP overhead.
++        # find_unused_parameters is required in two cases:
++        #  * embedding_output_type != 'both': in atom/bond mode the encoder produces only
++        #    one aggregation level, so the opposite branch's FFNs and the bond/atom vocab +
++        #    FG heads receive no gradient.
++        #  * a small --depth: the dyMPN depth draw can then land low enough to skip message
++        #    passing entirely, leaving W_h without gradient on that batch. See
++        #    dynamic_depth_can_skip_message_passing().
++        # Neither holds for the usual 'both' + --depth 6, so the flag stays off there and
++        # DDP keeps its fast path.
+         # (static_graph is not an option: dynamic-depth sampling varies the graph per step.)
+         self.model = DDP(self.model, device_ids=[gpu_id],
+-                         find_unused_parameters=(self.args.embedding_output_type != 'both'))
++                         find_unused_parameters=(self.args.embedding_output_type != 'both'
++                                                 or dynamic_depth_can_skip_message_passing(self.args.depth)))
+ 
+         if self.args.tensorboard:
+             self.writer = SummaryWriter(self.args.save_dir)
+diff --git a/tests/unit/test_vocab_task_inputs.py b/tests/unit/test_vocab_task_inputs.py
+new file mode 100644
+index 0000000..2c732f3
+--- /dev/null
++++ b/tests/unit/test_vocab_task_inputs.py
+@@ -0,0 +1,111 @@
++# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++# SPDX-License-Identifier: Apache-2.0
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++# http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++"""
++Tests for vocab-label / graph-batch alignment.
++
++`bond_random_mask` re-parses the SMILES independently of `MolGraph`, which *skips* bonds
++dropped by `--bond_drop_rate`. Labels are matched to bonds by position alone, so the two
++have to agree row for row. They are kept in step by gathering the labels through
++`BatchMolGraph.rdkit_bond_idx` -- the same packed-row -> RDKit-bond-index map the
++cuik-molmaker path already uses to reorder bond features.
++
++These tests pin the two properties that matter: the gather is the identity when nothing
++is dropped (so existing runs are unaffected), and it stays aligned when bonds are.
++"""
++from argparse import Namespace
++
++import numpy as np
++
++from kermt.data.kermtdataset import bond_random_mask
++from kermt.data.molgraph import mol2graph
++
++# Includes rings, where the packed bond order is a permutation of the RDKit bond order --
++# the case a naive positional gather would get wrong.
++SMILES = ['CCO', 'c1ccccc1N', 'CC(=O)Oc1ccccc1C(=O)O']
++
++
++class FakeVocab:
++    """Labels every bond with its own vocab id, so a shifted label is visible."""
++    other_index = 1
++
++    def __init__(self):
++        self.stoi = _AlwaysHit()
++
++
++class _AlwaysHit(dict):
++    def get(self, key, default):  # noqa: D102 - mimics MolVocab.stoi.get
++        return abs(hash(key)) % 500 + 2
++
++
++def make_args(**overrides):
++    args = Namespace(bond_drop_rate=0, no_cache=True,
++                     use_cuikmolmaker_featurization=False)
++    for key, value in overrides.items():
++        setattr(args, key, value)
++    return args
++
++
++def n_bond_rows(components):
++    return components[1].shape[0]
++
++
++def test_gather_is_identity_without_bond_dropout():
++    """No dropout: the gathered labels must equal the legacy sequential ones exactly."""
++    args = make_args()
++    batch = mol2graph(list(SMILES), {}, args)
++
++    np.random.seed(0)
++    legacy = bond_random_mask(SMILES, FakeVocab())
++    np.random.seed(0)
++    gathered = bond_random_mask(SMILES, FakeVocab(), rdkit_bond_idx=batch.rdkit_bond_idx)
++
++    assert gathered == legacy
++
++
++def test_labels_match_bond_rows_with_bond_dropout():
++    """With dropout the label vector must shrink to match the surviving bonds."""
++    np.random.seed(0)
++    args = make_args(bond_drop_rate=0.5)
++    batch = mol2graph(list(SMILES), {}, args)
++    components = batch.get_components()
++
++    labels = bond_random_mask(SMILES, FakeVocab(), rdkit_bond_idx=batch.rdkit_bond_idx)
++
++    # BondVocabPrediction emits one row per surviving undirected bond, plus padding.
++    assert len(labels) == (n_bond_rows(components) - 1) // 2 + 1
++    # Dropout must actually have dropped something, or the test proves nothing.
++    assert len(labels) < len(bond_random_mask(SMILES, FakeVocab()))
++
++
++def test_dropped_bonds_do_not_shift_surviving_labels():
++    """Each surviving row keeps the label of the bond it actually holds."""
++    np.random.seed(0)
++    args = make_args(bond_drop_rate=0.5)
++    batch = mol2graph(list(SMILES), {}, args)
++
++    np.random.seed(1)
++    labels = bond_random_mask(SMILES, FakeVocab(), rdkit_bond_idx=batch.rdkit_bond_idx)
++    np.random.seed(1)
++    by_rdkit_idx = bond_random_mask(SMILES, FakeVocab())  # legacy order == RDKit visit order
++
++    # Rebuild the expected label for every surviving bond from the undropped run and
++    # check it landed on the right row.
++    full_batch = mol2graph(list(SMILES), {}, make_args())
++    rdkit_to_label = {}
++    for position, gidx in enumerate(full_batch.rdkit_bond_idx[0::2]):
++        rdkit_to_label[gidx] = by_rdkit_idx[position + 1]
++
++    for row, gidx in enumerate(batch.rdkit_bond_idx[0::2]):
++        assert labels[row + 1] == rdkit_to_label[gidx]

@@ -1,0 +1,61 @@
+diff --git a/src/chembl_downloader/api.py b/src/chembl_downloader/api.py
+index 79ce2ce..ecf8d3d 100644
+--- a/src/chembl_downloader/api.py
++++ b/src/chembl_downloader/api.py
+@@ -2,9 +2,7 @@
+ 
+ from __future__ import annotations
+ 
+-import ftplib
+ import gzip
+-import io
+ import logging
+ import os
+ import pickle
+@@ -17,6 +15,7 @@
+ from xml.etree import ElementTree
+ 
+ import pystow
++import requests
+ from tqdm import tqdm
+ 
+ if TYPE_CHECKING:
+@@ -81,6 +80,9 @@ def _removeprefix(s: str, prefix: str) -> str:
+     return s
+ 
+ 
++LATEST_README_URL = "https://ftp.ebi.ac.uk/pub/databases/chembl/ChEMBLdb/latest/README"
++
++
+ def latest() -> str:
+     """Get the latest version of ChEMBL as a string.
+ 
+@@ -88,12 +90,10 @@ def latest() -> str:
+ 
+     :raises ValueError: If the latest README can not be parsed
+     """
+-    bio = io.BytesIO()
+-    with ftplib.FTP("ftp.ebi.ac.uk") as ftp:  # noqa:S321
+-        ftp.login()
+-        ftp.retrbinary("RETR pub/databases/chembl/ChEMBLdb/latest/README", bio.write)
+-    bio.seek(0)
+-    for line in bio.read().decode("utf-8").split("\n"):
++    res = requests.get(LATEST_README_URL, timeout=5)
++    res.raise_for_status()
++    for line in res.iter_lines(decode_unicode=True):
++        line = line.decode("utf8")
+         if line.startswith(RELEASE_PREFIX):
+             return _removeprefix(_removeprefix(line, RELEASE_PREFIX).strip(), "chembl_")
+     raise ValueError("could not find latest ChEMBL version")
+diff --git a/tox.ini b/tox.ini
+index 0d0ce63..1e44380 100644
+--- a/tox.ini
++++ b/tox.ini
+@@ -128,6 +128,7 @@ description = Run the mypy tool to check static typing on the project. Installs
+ deps =
+     mypy
+     types-tabulate
++    types-requests
+ commands = mypy --ignore-missing-imports --strict src/ tests/
+ 
+ [testenv:doc8]

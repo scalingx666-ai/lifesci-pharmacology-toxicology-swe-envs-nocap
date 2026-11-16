@@ -1,0 +1,64 @@
+version = "1.0"
+
+[task]
+name = "default/Rockman6__CellSim-30"
+description = "Necrotic core: a solver bug in where the medium began"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "CellSim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "Rockman6/CellSim"
+ref = "3ccdfccf19cd3a68cf82be8c5ea58d38c84e928e"
+reference = "https://github.com/Rockman6/CellSim/pull/30"
+source_access = "auto"
+built_at = "2026-11-16T11:04:21.378168+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:462309dfce0f76da75774aefba6b4602a8c14685f24bcd285361a713eedda4e9"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2026-10-07T11:33:56Z"
+diff_format = "unified"
+context_files = [
+    "benchmarks/cell/dish_validation.json",
+    "cellsim/cell/dish.py",
+    "docs/VALIDATION.md",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 409
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

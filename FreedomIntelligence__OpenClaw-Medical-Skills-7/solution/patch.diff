@@ -1,0 +1,248 @@
+diff --git a/.github/workflows/validate_skill.yml b/.github/workflows/validate_skill.yml
+new file mode 100644
+index 00000000..b1dd8a50
+--- /dev/null
++++ b/.github/workflows/validate_skill.yml
+@@ -0,0 +1,103 @@
++name: Validate skill
++
++on:
++  push:
++    paths:
++      - "skills/*/SKILL.md"
++  pull_request:
++    paths:
++      - "skills/*/SKILL.md"
++
++jobs:
++  check:
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v6
++      - uses: actions/setup-python@v6
++      - name: Validate SKILL.md files
++        env:
++          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
++          HEAD_SHA: ${{ github.sha }}
++        run: |
++          set -euo pipefail
++          echo "Base: $BASE_SHA"
++          echo "Head: $HEAD_SHA"
++
++          DIFF=$(git diff --name-status "$BASE_SHA" "$HEAD_SHA" -- 'skills/*/SKILL.md' || true)
++
++          if [ -z "$DIFF" ]; then
++            exit 0
++          fi
++
++          # Check for deleted skills
++          DELETED_FILES=$(echo "$DIFF" | awk '$1 ~ /^D/ {print $2}')
++
++          PARTIAL_DELETE_FOLDERS=""
++          FULL_DELETE_FOLDERS=""
++
++          if [ -n "$DELETED_FILES" ]; then
++            while IFS= read -r p; do
++              [ -z "$p" ] && continue
++              folder=$(echo "$p" | awk -F/ '{print $1"/"$2}')
++              if [ -d "$folder" ]; then
++                PARTIAL_DELETE_FOLDERS="${PARTIAL_DELETE_FOLDERS}"$'\n'"$folder"
++              else
++                FULL_DELETE_FOLDERS="${FULL_DELETE_FOLDERS}"$'\n'"$folder"
++              fi
++            done <<< "$DELETED_FILES"
++
++            PARTIAL_DELETE_FOLDERS=$(echo "$PARTIAL_DELETE_FOLDERS" | sed '/^$/d' | sort -u)
++            FULL_DELETE_FOLDERS=$(echo "$FULL_DELETE_FOLDERS" | sed '/^$/d' | sort -u)
++
++            if [ -n "$FULL_DELETE_FOLDERS" ]; then
++              FULL_COUNT=$(echo "$FULL_DELETE_FOLDERS" | wc -l | tr -d ' ')
++              echo ""
++              echo "$FULL_COUNT skills have been deleted (folder missing in HEAD), as listed in:"
++              echo "$FULL_DELETE_FOLDERS"
++              echo ""
++            fi
++
++            if [ -n "$PARTIAL_DELETE_FOLDERS" ]; then
++              PARTIAL_COUNT=$(echo "$PARTIAL_DELETE_FOLDERS" | wc -l | tr -d ' ')
++              echo ""
++              echo "[ERROR] $PARTIAL_COUNT skills have SKILL.md deleted but folder still exists in HEAD. Please delete the whole folder or restore SKILL.md:"
++              echo "$PARTIAL_DELETE_FOLDERS"
++              echo ""
++              exit 1
++            fi
++          fi
++
++          # Validate skills that were added or modified
++          CHANGED_FILES=$(echo "$DIFF" | awk '
++            $1 ~ /^A/ {print $2}
++            $1 ~ /^M/ {print $2}
++            $1 ~ /^R/ {print $3}
++          ')
++
++          if [ -z "$CHANGED_FILES" ]; then
++            exit 0
++          fi
++
++          echo "Validating:"
++          echo "$CHANGED_FILES"
++
++          INVALID_COUNT=0
++          while IFS= read -r f; do
++            [ -z "$f" ] && continue
++            if [ ! -f "$f" ]; then
++              echo "[SKIP] missing file: $f"
++              continue
++            fi
++            if ! python scripts/check_skill_md.py "$f"; then
++              INVALID_COUNT=$((INVALID_COUNT + 1))
++            fi
++          done <<< "$CHANGED_FILES"
++
++          echo ""
++          echo "$INVALID_COUNT skills failed validation."
++
++          if [ "$INVALID_COUNT" -ne 0 ]; then
++            exit 1
++          fi
++
++          exit 0
+\ No newline at end of file
+diff --git a/scripts/validate_skill.py b/scripts/validate_skill.py
+new file mode 100644
+index 00000000..538be549
+--- /dev/null
++++ b/scripts/validate_skill.py
+@@ -0,0 +1,80 @@
++#!/usr/bin/env python3
++"""
++Quick validation script for skills - minimal version
++"""
++
++import sys
++import re
++import yaml
++from pathlib import Path
++
++def validate_skill(skill_path):
++    """Basic validation of a skill"""
++    skill_path = Path(skill_path)
++
++    # Check SKILL.md exists
++    skill_md = skill_path / 'SKILL.md'
++    if not skill_md.exists():
++        return False, "SKILL.md not found"
++
++    # Read and validate frontmatter
++    content = skill_md.read_text()
++    # Allow frontmatter block to appear anywhere in the file
++    match = re.search(r'(?m)^---\n(.*?)\n---', content, re.DOTALL)
++    if not match:
++        return False, "Invalid frontmatter format"
++
++    frontmatter_text = match.group(1)
++
++    # Parse YAML frontmatter
++    try:
++        frontmatter = yaml.safe_load(frontmatter_text)
++        if not isinstance(frontmatter, dict):
++            return False, "Frontmatter must be a YAML dictionary"
++    except yaml.YAMLError as e:
++        return False, f"Invalid YAML in frontmatter: {e}"
++
++    # Required fields: other frontmatter keys are allowed.
++    if 'name' not in frontmatter:
++        return False, "Missing 'name' in frontmatter"
++    if 'description' not in frontmatter:
++        return False, "Missing 'description' in frontmatter"
++
++    # Extract name for validation
++    name = frontmatter.get('name', '')
++    if not isinstance(name, str):
++        return False, f"Name must be a string, got {type(name).__name__}"
++    name = name.strip()
++    if name:
++        # Check naming convention (kebab-case: lowercase with hyphens)
++        if not re.match(r'^[a-z0-9-]+$', name):
++            return False, f"Name '{name}' should be kebab-case (lowercase letters, digits, and hyphens only)"
++        if name.startswith('-') or name.endswith('-') or '--' in name:
++            return False, f"Name '{name}' cannot start/end with hyphen or contain consecutive hyphens"
++        # Check name length (max 64 characters per spec)
++        if len(name) > 64:
++            return False, f"Name is too long ({len(name)} characters). Maximum is 64 characters."
++
++    # Extract and validate description
++    description = frontmatter.get('description', '')
++    if not isinstance(description, str):
++        return False, f"Description must be a string, got {type(description).__name__}"
++    description = description.strip()
++    # if description:
++    #     # Check for angle brackets
++    #     if '<' in description or '>' in description:
++    #         return False, "Description cannot contain angle brackets (< or >)"
++    #     # Check description length (max 1024 characters per spec)
++    #     if len(description) > 1024:
++    #         return False, f"Description is too long ({len(description)} characters). Maximum is 1024 characters."
++
++    return True, "Skill is valid!"
++
++if __name__ == "__main__":
++    if len(sys.argv) != 2:
++        print("Usage: python quick_validate.py <skill_directory>")
++        sys.exit(1)
++    
++    valid, message = validate_skill(sys.argv[1])
++    print(message)
++    sys.exit(0 if valid else 1)
+diff --git a/skills/biomaster-workflows/repo/RAGadd/nature15393.pdf b/skills/biomaster-workflows/repo/RAGadd/nature15393.pdf
+deleted file mode 100644
+index 15cd4480..00000000
+Binary files a/skills/biomaster-workflows/repo/RAGadd/nature15393.pdf and /dev/null differ
+diff --git a/skills/biomaster-workflows/repo/RAGadd/planRAGadd.py b/skills/biomaster-workflows/repo/RAGadd/planRAGadd.py
+deleted file mode 100644
+index 4ff40546..00000000
+--- a/skills/biomaster-workflows/repo/RAGadd/planRAGadd.py
++++ /dev/null
+@@ -1,27 +0,0 @@
+-# COPYRIGHT NOTICE
+-# This file is part of the "Universal Biomedical Skills" project.
+-# Copyright (c) 2026 MD BABU MIA, PhD <md.babu.mia@mssm.edu>
+-# All Rights Reserved.
+-#
+-# This code is proprietary and confidential.
+-# Unauthorized copying of this file, via any medium is strictly prohibited.
+-#
+-# Provenance: Authenticated by MD BABU MIA
+-
+-from agents.Knowledge import generate_workflow_markdown, convert_markdown_to_json
+-if __name__ == "__main__":
+-    # my_content_path = "https://nf-co.re/oncoanalyser/1.0.0/"  # 可以是PDF路径或网页URL
+-    my_content_path = "./nature15393.pdf"  # 可以是PDF路径或网页URL
+-    my_openai_key = "[REDACTED_OPENAI_FOR_PUBLIC_RELEASE]"
+-    my_openai_url = "https://sg.uiuiapi.com/v1"
+-    
+-    # 生成Markdown格式的工作流
+-    markdown_file = "plan_knowledge.md"
+-    generate_workflow_markdown(my_content_path, my_openai_key, my_openai_url, markdown_file)
+-    
+-    # 将Markdown转换为JSON并保存
+-    json_file = "./doc/Plan_Knowledge.json"
+-    convert_markdown_to_json(markdown_file, json_file)
+-    
+-    print("工作流程提取和转换完成！")
+-__AUTHOR_SIGNATURE__ = "9a7f3c2e-MD-BABU-MIA-2026-MSSM-SECURE"
+diff --git a/skills/biomaster-workflows/repo/runv.py b/skills/biomaster-workflows/repo/runv.py
+index 0bf50ba1..edd8c0a1 100644
+--- a/skills/biomaster-workflows/repo/runv.py
++++ b/skills/biomaster-workflows/repo/runv.py
+@@ -574,8 +574,8 @@ def add_knowledge_entry(knowledge_type, source, page, content):
+         with gr.Row(equal_height=True):
+             # Left side inputs and buttons
+             with gr.Column(scale=1):
+-                base_url_in = gr.Textbox(label="Base URL", value="https://sg.uiuiapi.com/v1")
+-                api_key_in = gr.Textbox(label="API Key", value="sk-xxx...")
++                base_url_in = gr.Textbox(label="Base URL", value="openAI base URL here")
++                api_key_in = gr.Textbox(label="API Key", value="your openAI key here")
+                 goal_in = gr.Textbox(label="Goal", value="please do rna-seq analysis.")
+                 datalist_in = gr.Textbox(
+                     label="Data List (One item per line. Format: Path: Description)",

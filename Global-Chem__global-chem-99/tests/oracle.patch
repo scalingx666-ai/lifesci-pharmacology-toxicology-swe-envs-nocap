@@ -1,0 +1,144 @@
+diff --git a/.gitignore b/.gitignore
+index aa5ed59f..b035606b 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -28,6 +28,7 @@ share/python-wheels/
+ .installed.cfg
+ *.egg
+ MANIFEST
++.DS_Store
+ 
+ # PyInstaller
+ #  Usually these files are written by a python script from a template
+diff --git a/front_end/flashcards/src/css/styles.css b/front_end/flashcards/src/css/styles.css
+index c6025a80..3c821bed 100644
+--- a/front_end/flashcards/src/css/styles.css
++++ b/front_end/flashcards/src/css/styles.css
+@@ -55,3 +55,7 @@
+ .study-all{
+     font-size: 10px;
+ }
++
++.created-by{
++    font-size: 10px;
++}
+diff --git a/front_end/flashcards/src/index.html b/front_end/flashcards/src/index.html
+index cea41e1b..17dd66f2 100644
+--- a/front_end/flashcards/src/index.html
++++ b/front_end/flashcards/src/index.html
+@@ -9,24 +9,30 @@
+             rel="stylesheet"
+             integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3"
+             crossorigin="anonymous">
+-        <link rel="stylesheet" href="css/styles.css">
+-        <link rel="stylesheet" href="css/sidebars.css">
++        <link rel="stylesheet" href="./css/styles.css">
++        <link rel="stylesheet" href="./css/sidebars.css">
+         <title>Global Chem Flashcards</title>
+     </head>
+     <body>
+         <div class="container">
+             <nav class="navbar navbar-light">
+                 <div class="container-fluid">
+-                    <span class="navbar-brand mb-0 h1">Global Chem Flashcards <span class="badge beta">Beta</span></span>
++                    <span class="navbar-brand mb-0 h1">Global Chem Flashcards
++                        <span class="badge beta">Beta</span>
++                        <div class="created-by">
++                            <div>Created By:</div>
++                            <div>Graduate Student: Suliman Sharif, University of Maryland, School of Pharmacy</div>
++                            <div>Undergraduate Student: Daniel Khavrutskii, University of Maryland Baltimore County</div>
++                        </div>
++                    </span>
++
+                 </div>
+             </nav>
+         </div>
+ 
+-       
+-
+         <div class="container">
+             <div class="row align-items-center justify-content-center">
+-                <div class="navigation col-lg-3" >
++                <div class="navigation col-lg-3">
+                     <div class="flex-shrink-0 mt-5 bg-white" style="width: 450px;">
+                         <a
+                             href="/"
+@@ -34,11 +40,10 @@
+                             id="top-menu">
+                             <span class="fs-5 fw-semibold ms-4">Categories</span>
+                         </a>
+-                        <ul class="list-unstyled ps-0" id="root-ul">
+-                        </ul>
++                        <ul class="list-unstyled ps-0" id="root-ul"></ul>
+                     </div>
+                 </div>
+-                <div class="col-lg-9 align-self-start" >
++                <div class="col-lg-9 align-self-start">
+                     <div class="container text-center" style="margin-top: 5rem;">
+                         <h1 id="category-title">Select a category to start</h1>
+                         <div class="card mx-auto flip-card" style="width: 30rem; border: none">
+@@ -51,11 +56,13 @@ <h5 id="chem-name"></h5>
+                                     <small id="smiles-string"></small>
+                                 </div>
+                             </div>
+-                            
++
+                         </div>
+                         <div class="btn-group mt-5" style="width: 30rem;">
+-                            <button type="button" class="btn" id="previous">Previous </button>
+-                            <button type="button" class="btn" id="next"> Next</button>
++                            <button type="button" class="btn" id="previous">Previous
++                            </button>
++                            <button type="button" class="btn" id="next">
++                                Next</button>
+                         </div>
+                     </div>
+                 </div>
+@@ -65,7 +72,7 @@ <h5 id="chem-name"></h5>
+             src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"
+             integrity="sha384-ka7Sk0Gln4gmtz2MlQnikT1wXgYsOg+OMhuP+IlRH9sENBO0LRn5q+8nbTov4+1p"
+             crossorigin="anonymous"></script>
+-        <script src="./scripts/main.js" type="module" ></script>
++        <script src="./scripts/main.js" type="module"></script>
+         <script src="./scripts/smiles-drawer.min.js"></script>
+     </body>
+ </html>
+\ No newline at end of file
+diff --git a/front_end/landing/src/css/styles.css b/front_end/landing/src/css/styles.css
+index 7473e4dd..dc9d773d 100644
+--- a/front_end/landing/src/css/styles.css
++++ b/front_end/landing/src/css/styles.css
+@@ -32,7 +32,7 @@
+ 
+ .section{
+     position: absolute;
+-    width: 40em;
++    width: 100%;
+     margin-left: auto;
+     margin-right: auto;
+     left: 0;
+diff --git a/index.html b/index.html
+index c6ea7a09..729fd79d 100644
+--- a/index.html
++++ b/index.html
+@@ -29,13 +29,15 @@
+                     <section class="text-center section">
+                         <div>
+                             <h1 class="white">Global Chem</h1>
+-                            <a
++                            <div class="container">
++                                <a
+                                 href="front_end/flashcards/src/index.html"
+                                 class="btn btn-lg me-1 main-button my-2">Study Flashcards</a>
+-                            <a
+-                                href="https://github.com/Sulstice/global-chem"
+-                                class="btn btn-lg me-1 ms-1 main-button my-2">Software</a>
+-                            <a href="https://chemistrydb.com/" class="btn btn-lg ms-1 main-button my-2">Chemistry Database</a>
++                                <a
++                                    href="https://github.com/Sulstice/global-chem"
++                                    class="btn btn-lg me-1 ms-1 main-button my-2">Software</a>
++                                <a href="https://chemistrydb.com/" class="btn btn-lg ms-1 main-button my-2">Chemistry Database</a>
++                            </div>
+                         </p>
+                     </div>
+                 </section>

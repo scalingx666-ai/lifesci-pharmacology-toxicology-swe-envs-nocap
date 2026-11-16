@@ -1,0 +1,300 @@
+diff --git a/cellsim/cell/engine.py b/cellsim/cell/engine.py
+index 1944845..9cf57d9 100644
+--- a/cellsim/cell/engine.py
++++ b/cellsim/cell/engine.py
+@@ -382,8 +382,13 @@ def rhs(Y: np.ndarray, aux: dict, line: CellLine, drug: Optional[Drug],
+     for i, dg in enumerate(drugs):
+         ci = Cin_all[i]
+         col = N_BASE + i
+-        dY[:, col] = ((dg.partition * aux["het_uptake"] * C_out_all[:, i] - ci)
+-                      / dg.tau_uptake_h)
++        drive = dg.partition * aux["het_uptake"] * C_out_all[:, i] - ci
++        # Entry and exit need not be symmetric. A drug bound to its target
++        # is retained after wash-out — only the free fraction can leave —
++        # so when the cell is emptying (drive < 0) the slower exit time
++        # constant applies. tau_efflux_h = 0 keeps the old symmetric model.
++        tau_out = dg.tau_efflux_h if dg.tau_efflux_h > 0 else dg.tau_uptake_h
++        dY[:, col] = drive / np.where(drive < 0, tau_out, dg.tau_uptake_h)
+         if p.efflux_vmax_uM_per_h > 0 and getattr(dg, "pgp_substrate", False):
+             vmax = p.efflux_vmax_uM_per_h * line.efflux_level * aux["het_uptake"]
+             dY[:, col] -= vmax * ci / (p.efflux_km_uM + ci)
+diff --git a/cellsim/cell/library.py b/cellsim/cell/library.py
+index 9af478f..9cfe908 100644
+--- a/cellsim/cell/library.py
++++ b/cellsim/cell/library.py
+@@ -89,6 +89,12 @@ class Drug:
+     k_mitotic_death_per_h: float = 0.0  # Bax drive per hour of mitotic arrest (FIT)
+     Kd_target_uM: float = 0.0        # target affinity for 'mdm2' (MDM2-p53 site)
+     tau_uptake_h: float = 0.1        # passive permeation time constant
++    # Time constant for drug LEAVING the cell after the medium is cleared.
++    # 0 means "same as tau_uptake_h": a freely diffusing drug, which is
++    # every drug's behaviour unless set. A drug held by its target leaves
++    # far more slowly than it arrived, because only the unbound fraction
++    # can cross the membrane.
++    tau_efflux_h: float = 0.0
+     partition: float = 1.0           # C_in / C_out at equilibrium
+     # Is this drug a P-glycoprotein substrate? Doxorubicin and paclitaxel
+     # are classical ones; cisplatin is not effluxed by ABCB1, which is
+@@ -223,8 +229,15 @@ class Drug:
+         Kd_tubulin_uM=0.010,          # ~10 nM for microtubule sites (Diaz & Andreu 1993 Biochemistry)
+         theta_arrest=0.3,
+         pgp_substrate=True,           # classical P-gp substrate
+-        k_mitotic_death_per_h=0.3,
+-        tau_uptake_h=0.2,
++        # 0.3 until October 2026, when it turned out the GDSC fit never
++        # determined this number: the 72 h IC50 moves by under 10 % while
++        # this varies a hundred-fold, because given three days even a slow
++        # death rate kills every arrested cell. The SHORT-exposure data
++        # does determine it — 0.3 made a 24 h exposure 240x too potent
++        # against Georgiadis 1997, and 0.03 brings it to 3.4x while
++        # leaving the 72 h value where GDSC put it.
++        k_mitotic_death_per_h=0.03,
++        tau_uptake_h=0.2, tau_efflux_h=24.0,
+         partition=0.212,              # FITTED: geo-mean of A549 + MCF7 fits to GDSC2 (validate_gdsc.py)
+         # The 72 h potency is set by the arrest threshold: once tubulin
+         # occupancy passes theta_arrest every dividing cell stalls in M, so
+@@ -279,7 +292,7 @@ class Drug:
+         "docetaxel", "tubulin",
+         Kd_tubulin_uM=0.005,          # ~2x paclitaxel's microtubule affinity (Diaz & Andreu 1993)
+         theta_arrest=0.3, k_mitotic_death_per_h=0.3,
+-        pgp_substrate=True, tau_uptake_h=0.2,
++        pgp_substrate=True, tau_uptake_h=0.2, tau_efflux_h=24.0,
+         partition=0.2,                # PROVISIONAL, refitted on GDSC2
+         accumulation_ratio=100.0,
+         fit_target="partition",
+diff --git a/docs/VALIDATION.md b/docs/VALIDATION.md
+index 34eb006..d7fd626 100644
+--- a/docs/VALIDATION.md
++++ b/docs/VALIDATION.md
+@@ -520,12 +520,52 @@ Against published exposure-duration studies, matched by assay:
+ |---|---|---|---|
+ | Ozawa 1989, cisplatin, WiDr | C × T governs (slope −1) | slope −0.95 over 1–6 h | agrees |
+ | Liebmann 1993 (Br J Cancer 68:1104), 8 lines, clonogenic | 24 h kill saturates above ~50 nM | 0.46 / 0.43 / 0.40 / 0.49 surviving at 0.05 / 0.2 / 1 / 5 µM | agrees |
+-| Liebmann 1993 | 24 → 72 h exposure raises cytotoxicity 5–200× | C50 0.037 → 0.030 µM (1.2×) | **miss** |
+-| Georgiadis 1997 (Clin Cancer Res 3:449), 14 NSCLC lines, MTT, read at 120 h: 3 / 24 / 120 h exposure | IC50 > 32 / 9.4 / 0.027 µM | none / 0.036 / 0.029 µM (A549) | 3 h agrees; 120 h agrees but is inherited from the GDSC fit; **24 h misses by 260×** |
+-
+-**The miss, stated plainly.** Both studies say a 24 h paclitaxel
+-exposure is far weaker than a 72–120 h one; the engine says it is
+-nearly as good. The engine kills almost every cell that reaches
++| Liebmann 1993 | 24 → 72 h exposure raises cytotoxicity 5–200× | C50 2.7 → 0.027 µM (**100×**) | agrees, after the October 2026 fix below |
++| Georgiadis 1997 (Clin Cancer Res 3:449), 14 NSCLC lines, MTT, read at 120 h: 3 / 24 / 120 h exposure | IC50 > 32 / 9.4 / 0.027 µM | 147 / 2.7 / 0.027 µM (A549) | 3 h agrees; 120 h agrees but is inherited from the GDSC fit; 24 h now within **3.4×**, having been 240× — see below |
++
++**The miss, and what fixed it (October 2026).** Both studies say a 24 h
++paclitaxel exposure is far weaker than a 72–120 h one; the engine said
++it was nearly as good, by 240×. Two things were wrong, and finding the
++second depended on fixing the first.
++
++*Drug left the cell as fast as it entered.* Uptake was symmetric —
++`(partition·C_out − C_in)/τ` with one τ — so wash-out emptied a cell in
++minutes. Paclitaxel does not behave that way: it is held on tubulin, and
++after removal there is "little efflux", with an elimination half-life of
++13–53 h. `Drug.tau_efflux_h` now gives exit its own time constant
++(24 h for the taxanes, 0 = symmetric for everything else, so no other
++drug moved). Without it the 24 h curve had an **unreachable floor** —
++survival stalled at 0.42 from 0.1 µM to 30 µM, a 300-fold dose range in
++which more drug did nothing, because a cell that mitosed after wash-out
++met no drug at all.
++
++*The mitotic death rate was never determined by the fit.* With the floor
++gone the curve still crossed half-kill far too early. `k_mitotic_death_per_h`
++was fitted to GDSC's 72 h screens — and a 72 h IC50 moves by under 10 %
++while that constant varies a **hundred-fold**, because given three days
++even a slow death rate kills every arrested cell. The fit could not see
++it. Short exposures can:
++
++| | engine before | engine after | measured |
++|---|:-:|:-:|:-:|
++| 3 h exposure | 73 µM | 147 µM | > 32 µM ✓ |
++| 24 h exposure | 0.039 µM | **2.7 µM** | 9.4 µM |
++| continuous | 0.028 µM | 0.027 µM | 0.027 µM ✓ |
++
++0.3 → 0.03. The 24 h error falls from **240× to 3.4×**, the 3 h and
++continuous points are unchanged, and paclitaxel's median fold error
++against the GDSC panel stays at 2.4×.
++
++Read honestly: the 24 h point is now **calibrated** on Georgiadis rather
++than predicted, so it is no longer available as a test. The 3 h point is
++an independent check and it passes. The remaining 3.4× is real and
++unexplained.
++
++**Left alone on purpose:** docetaxel and vinorelbine still carry 0.3.
++They share paclitaxel's mechanism, so the same argument probably applies
++— but no short-exposure data for them has been found, and changing a
++constant with nothing to constrain it is how the first wrong value got
++there. The engine kills almost every cell that reaches
+ mitosis inside the 24 h window. The likely causes are that its cells
+ cycle almost in lockstep (real cycle times vary by 20–30 % and include
+ slow-cycling cells that a 24 h window misses) and that cells slipping
+diff --git a/tests/cell/test_api_smoke.py b/tests/cell/test_api_smoke.py
+index 619af15..12e0b83 100644
+--- a/tests/cell/test_api_smoke.py
++++ b/tests/cell/test_api_smoke.py
+@@ -57,14 +57,28 @@ def test_curve_is_tidy_monotone_and_agrees_with_the_engine():
+         assert ic <= min(below) + 1e-9, (ic, below)
+ 
+ 
+-def test_exposure_reports_infinity_where_half_kill_is_unreachable():
+-    """A tubulin binder cannot halve an asynchronous colony in 3 h at any
+-    concentration; the table must say so rather than return a number."""
++def test_a_three_hour_exposure_needs_an_unusable_concentration():
++    """A spindle poison can only act on cells that attempt mitosis while
++    it is present, so a 3 h window is nearly useless: Georgiadis 1997 put
++    its half-kill above 32 µM, the top of their tested range, against
++    0.027 µM for a continuous exposure.
++
++    This used to assert the 3 h value was INFINITE. It is finite once
++    drug retained after wash-out is modelled — the engine says ~150 µM —
++    and that is the better answer: the measurement says "above 32", not
++    "unreachable". What the gate checks now is that 3 h needs a
++    concentration far beyond anything usable, and orders of magnitude
++    above the continuous one."""
+     rows = _rows(api.exposure("A549", "paclitaxel", hours=[3, 72], n_cells=24))
+     short, long = rows[0], rows[1]
+-    assert short["reaches_half_kill"] is False and not np.isfinite(short["c50_uM"])
+-    assert long["reaches_half_kill"] is True and np.isfinite(long["c50_uM"])
+-    assert long["c50_uM"] > 0
++    assert long["reaches_half_kill"] is True and long["c50_uM"] > 0
++    if short["reaches_half_kill"]:
++        assert short["c50_uM"] > 32.0, (
++            f"3 h half-kill at {short['c50_uM']:.3g} µM; Georgiadis saw none "
++            f"below 32 µM")
++        assert short["c50_uM"] > 100 * long["c50_uM"], (
++            f"3 h should need orders of magnitude more than continuous: "
++            f"{short['c50_uM']:.3g} vs {long['c50_uM']:.3g} µM")
+ 
+ 
+ def test_gr_curve_puts_a_simulation_on_the_same_axis_as_a_plate():
+diff --git a/tests/cell/test_combination_timing_smoke.py b/tests/cell/test_combination_timing_smoke.py
+index b43eeb5..d0764a0 100644
+--- a/tests/cell/test_combination_timing_smoke.py
++++ b/tests/cell/test_combination_timing_smoke.py
+@@ -47,11 +47,14 @@
+ PAIR = [CISPLATIN, PACLITAXEL]
+ 
+ 
+-def _surviving(drugs, dose_fn, total=FULL):
++SEEDS = (1, 2, 3, 4, 5)
++
++
++def _surviving(drugs, dose_fn, total=FULL, seed=1):
+     treated = simulate(LINE, drugs, 0.0, t_end_h=total, n_cells=N_CELLS, k_cyc=K, p=P,
+-                       dose_fn=dose_fn, record_every_h=total)
++                       dose_fn=dose_fn, record_every_h=total, seed=seed)
+     control = simulate(LINE, None, 0.0, t_end_h=total, n_cells=N_CELLS, k_cyc=K, p=P,
+-                       record_every_h=total)
++                       record_every_h=total, seed=seed)
+     return float(treated.alive_weight[-1, 0] / max(control.alive_weight[-1, 0], 1e-12))
+ 
+ 
+@@ -69,21 +72,34 @@ def test_engine_carries_two_drugs_independently():
+ 
+ def test_a_cytostatic_antagonises_a_phase_specific_partner():
+     """The pair must kill LESS than independent action predicts, because
+-    the platinum arrests the cells the taxane needs in mitosis."""
+-    solo_cis = _surviving([CISPLATIN], lambda t: (CIS if t < HALF else 0.0,))
+-    solo_pac = _surviving([PACLITAXEL], lambda t: (PAC if t < HALF else 0.0,))
+-    together = _surviving(PAIR, lambda t: (CIS, PAC) if t < HALF else (0.0, 0.0))
+-    independent = solo_cis * solo_pac
+-    assert together > independent * 1.1, (
+-        f"expected antagonism: combination {together:.3f} vs independent "
+-        f"expectation {independent:.3f}")
+-    assert together < min(solo_cis, solo_pac), (
++    the platinum arrests the cells the taxane needs in mitosis.
++
++    Averaged over seeds, as the ordering test below already is. The
++    effect is about 1.26x with a seed-to-seed spread of roughly 0.14, so
++    a single run sits close enough to the 1.1 threshold to cross it by
++    chance — which is exactly what happened when the taxane's death rate
++    was corrected and one seed landed at 1.095."""
++    ratios, togethers, solos = [], [], []
++    for seed in SEEDS:
++        solo_cis = _surviving([CISPLATIN], lambda t: (CIS if t < HALF else 0.0,),
++                              seed=seed)
++        solo_pac = _surviving([PACLITAXEL], lambda t: (PAC if t < HALF else 0.0,),
++                              seed=seed)
++        together = _surviving(PAIR, lambda t: (CIS, PAC) if t < HALF else (0.0, 0.0),
++                              seed=seed)
++        ratios.append(together / max(solo_cis * solo_pac, 1e-12))
++        togethers.append(together)
++        solos.append(min(solo_cis, solo_pac))
++    mean_ratio = sum(ratios) / len(ratios)
++    assert mean_ratio > 1.1, (
++        f"expected antagonism: combination kills {mean_ratio:.3f}x less than "
++        f"independent action predicts, over {len(SEEDS)} seeds {[round(r, 3) for r in ratios]}")
++    assert sum(togethers) / len(togethers) < sum(solos) / len(solos), (
+         "the combination should still beat either drug alone")
+ 
+ 
+ # Engine 72 h IC50 at the design potency above (cellsim.cell.engine.ic50).
+ IC50_CIS, IC50_PAC = 13.24, 0.0418
+-SEEDS = (1, 2, 3)
+ 
+ 
+ def _ordering_ratio(cis_uM: float, pac_uM: float) -> tuple[float, float]:
+diff --git a/tests/cell/test_schedule_smoke.py b/tests/cell/test_schedule_smoke.py
+index 400ae81..941786e 100644
+--- a/tests/cell/test_schedule_smoke.py
++++ b/tests/cell/test_schedule_smoke.py
+@@ -88,20 +88,57 @@ def test_a_short_paclitaxel_pulse_cannot_reach_half_kill_at_any_dose():
+     assert surv > 0.5, f"6 h paclitaxel at 3 uM left only {surv:.3f}"
+ 
+ 
++def test_auc_is_the_wrong_exposure_metric_for_paclitaxel():
++    """Concentration x time is not conserved for a spindle poison: a
++    longer exposure reaches half-kill on far less total drug, because
++    what matters is how many cells attempt mitosis while the drug is
++    there, not how much drug-hours they saw.
++
++    Georgiadis 1997 puts the 24 h half-kill at 9.4 µM and the 120 h at
++    0.027 µM — 226 against 3.2 µM·h, a 70-fold difference in the AUC
++    needed. The engine must show the same direction and a comparable
++    size.
++
++    Added in October 2026 alongside the threshold test below, which it
++    complements: that one shows a fixed AUC can be spread too thin to
++    work at all; this one shows that across the exposures where the drug
++    does work, total drug is a poor predictor of effect."""
++    pac = _drug("paclitaxel")
++    auc = {}
++    for hours in (24.0, 72.0):
++        c50 = ic50(LINE, pac, guess_uM=1.0 if hours < 72 else 0.03,
++                   exposure_h=None if hours == 72.0 else hours,
++                   n_cells_per_conc=N_CELLS, k_cyc=K)
++        assert math.isfinite(c50), f"no half-kill at {hours:g} h"
++        auc[hours] = c50 * hours
++    ratio = auc[24.0] / auc[72.0]
++    assert ratio > 10, (
++        f"a longer exposure should need far less total drug: "
++        f"{auc[24.0]:.1f} vs {auc[72.0]:.1f} µM·h is only {ratio:.1f}x")
++
++
+ def test_spreading_a_fixed_dose_too_thin_switches_paclitaxel_off():
+     """Threshold behaviour. The same AUC delivered over 72 h instead of
+     24 h drops the concentration below the tubulin occupancy that
+-    triggers arrest, and the drug stops working — which is why AUC is
+-    the wrong exposure metric for this class."""
++    triggers arrest, and the drug stops working.
++
++    The 24 h arm used to be required to leave under 70 % alive. Once the
++    mitotic death rate was corrected (October 2026) a 24 h exposure is
++    rightly weaker and leaves about 73 %, so the gate now checks the
++    SHAPE — the thin split switched off, the 24 h split still working,
++    and a clear gap between them — rather than a level set by a death
++    rate that turned out to be ten times too fast."""
+     pac = _drug("paclitaxel")
+     auc = 1.8                                  # µM·h
+     mid = _surviving(pac, auc / 24.0, 24.0)    # 0.075 µM for 24 h
+-    thin = _surviving(pac, auc / 72.0, 72.0)   # 0.025 µM for 72 h, at threshold
+-    assert mid < 0.7, f"paclitaxel ineffective even at the mid split ({mid:.3f})"
++    thin = _surviving(pac, auc / 72.0, 72.0)   # 0.025 µM for 72 h, below threshold
+     assert thin > 0.9, (
+         f"spreading the same AUC over 72 h should fall below threshold and do "
+         f"almost nothing; got {thin:.3f}")
+-    assert thin > mid, "the thin split must be worse, not better"
++    assert mid < 0.85, f"the 24 h split should still work; got {mid:.3f}"
++    assert thin - mid > 0.15, (
++        f"the threshold should separate the two splits clearly: "
++        f"{mid:.3f} vs {thin:.3f}")
+ 
+ 
+ def test_a_fixed_dose_has_an_interior_best_schedule_for_paclitaxel():

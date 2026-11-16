@@ -1,0 +1,68 @@
+version = "1.0"
+
+[task]
+name = "default/mqcomplab__bitbirch-19"
+description = "Updates on parallel bitbirch"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "bitbirch",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "mqcomplab/bitbirch"
+ref = "c2cac79ac5ae262b987f16bf4b1fe43ee3d3c6ce"
+reference = "https://github.com/mqcomplab/bitbirch/pull/19"
+source_access = "auto"
+built_at = "2026-11-16T10:59:45.514768+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:020c893903ad232f4fc5f2d9b91b00c8c8e3f65e412657ff2be48192c9c287d9"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2025-03-24T23:43:18Z"
+diff_format = "unified"
+context_files = [
+    "bitbirch/bitbirch.py",
+    "examples/parallel_birch/birch_BFs.py",
+    "examples/parallel_birch/birch_centroids.py",
+    "examples/parallel_birch/birch_parallel.py",
+    "examples/parallel_birch/parallel_example.ipynb",
+    "examples/parallel_birch/sub_final_clustering.sh",
+    "examples/parallel_birch/sub_parallel.sh",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 236
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

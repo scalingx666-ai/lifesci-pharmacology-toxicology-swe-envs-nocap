@@ -1,0 +1,62 @@
+version = "1.0"
+
+[task]
+name = "default/Global-Chem__global-chem-294"
+description = "Output Percent of the Variance Explained and full PCs df"
+
+[metadata]
+difficulty = "medium"
+category = "bugfix"
+keywords = [
+    "global-chem",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "Global-Chem/global-chem"
+ref = "464df7ffe2a48acfc433766e5d34709a713b51a6"
+reference = "https://github.com/Global-Chem/global-chem/pull/294"
+source_access = "auto"
+built_at = "2026-11-16T09:53:04.761633+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:2f67d8f092de5540dbc15a58c4795c644b74a39871109a3d57e1fcc29a88abbe"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2024-04-03T13:53:18Z"
+diff_format = "unified"
+context_files = [
+    "global_chem_extensions/global_chem_extensions/cheminformatics/applications/node_pca_analysis.py",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 21
+difficulty = "medium"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

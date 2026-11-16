@@ -1,0 +1,64 @@
+version = "1.0"
+
+[task]
+name = "default/FreedomIntelligence__OpenClaw-Medical-Skills-12"
+description = "fix: correct badge URLs, add .gitattributes, and fix clone instructions"
+
+[metadata]
+difficulty = "medium"
+category = "bugfix"
+keywords = [
+    "OpenClaw-Medical-Skills",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "FreedomIntelligence/OpenClaw-Medical-Skills"
+ref = "b188633ae16dd0fc758aae680cf0ff04d6e75d6b"
+reference = "https://github.com/FreedomIntelligence/OpenClaw-Medical-Skills/pull/12"
+source_access = "auto"
+built_at = "2026-11-15T10:17:34.516588+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:e4d3c18d05e1d2bab22c09ec2cd5b120aa66d6fa4ea1a1477dcdfe87b693cc97"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2026-03-15T00:07:23Z"
+diff_format = "unified"
+context_files = [
+    ".gitattributes",
+    "README.md",
+    "README_zh.md",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 66
+difficulty = "medium"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

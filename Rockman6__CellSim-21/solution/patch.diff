@@ -1,0 +1,1384 @@
+diff --git a/README.md b/README.md
+index 909ebc7..5549a8d 100755
+--- a/README.md
++++ b/README.md
+@@ -103,6 +103,12 @@ spheroid("DLD-1", days=6)                 # size, hypoxia, necrotic core over ti
+ question end to end — *should I pulse this drug or leave it on?* — with
+ every command run and its actual output.
+ 
++`ic50_spread()` is worth running before quoting any IC50 from this
++engine: the number moves 10–20 % between seeds, because a population's
++IC50 is set by which resistant lineages were drawn rather than by how
++many cells were counted ([why](docs/VALIDATION.md)). Two numbers that
++differ by less than that do not differ.
++
+ `exposure()` is the one worth knowing about: it returns `inf` where no
+ concentration reaches half kill, which is the honest answer for a taxane
+ given for three hours, and the reason AUC is the wrong exposure metric
+diff --git a/benchmarks/cell/calibration_holdout.json b/benchmarks/cell/calibration_holdout.json
+new file mode 100644
+index 0000000..3ba023c
+--- /dev/null
++++ b/benchmarks/cell/calibration_holdout.json
+@@ -0,0 +1,559 @@
++{
++ "line": "A549",
++ "drug": "cisplatin",
++ "perturbations": [
++  0.5,
++  2.0
++ ],
++ "plate_noise_sd": 0.05,
++ "pulse_hours": 12.0,
++ "readout_hours": 72.0,
++ "n_trials": 20,
++ "coverage": 0.8,
++ "median_band_width": 0.4346590909090909,
++ "median_constant_ratio": 0.8391575881067559,
++ "median_abs_point_error": 0.19573170731707323,
++ "usable": true,
++ "trials": [
++  {
++   "perturbation": 0.5,
++   "trial": 0,
++   "true_constant": 0.0005905,
++   "calibrated_constant": 0.00046553573406441304,
++   "constant_ratio": 0.7883755022259323,
++   "constant_ci": [
++    0.00037514833441961397,
++    0.0005777008713798007
++   ],
++   "measured_ic50_uM": 23.15091104394824,
++   "measured_ic50_ci": [
++    18.523427219022764,
++    28.453217304045314
++   ],
++   "true_ic50_uM": 23.856359278616367,
++   "holdout_truth": 0.2682926829268293,
++   "holdout_truth_spread": 0.2164772727272727,
++   "holdout_band": [
++    0.2625,
++    0.8238636363636364
++   ],
++   "holdout_point": 0.5609756097560976,
++   "covered": true,
++   "band_width": 0.5613636363636363,
++   "point_error": 0.29268292682926833
++  },
++  {
++   "perturbation": 0.5,
++   "trial": 1,
++   "true_constant": 0.0005905,
++   "calibrated_constant": 0.0004913495047130122,
++   "constant_ratio": 0.8320906091668285,
++   "constant_ci": [
++    0.00039595015983345425,
++    0.0005473505043716886
++   ],
++   "measured_ic50_uM": 21.65437335424957,
++   "measured_ic50_ci": [
++    19.50819190343808,
++    27.302646558242113
++   ],
++   "true_ic50_uM": 23.856359278616367,
++   "holdout_truth": 0.36585365853658536,
++   "holdout_truth_spread": 0.1875,
++   "holdout_band": [
++    0.4146341463414634,
++    0.8238636363636364
++   ],
++   "holdout_point": 0.575,
++   "covered": false,
++   "band_width": 0.40922949002217296,
++   "point_error": 0.2091463414634146
++  },
++  {
++   "perturbation": 0.5,
++   "trial": 2,
++   "true_constant": 0.0005905,
++   "calibrated_constant": 0.0004782684940059902,
++   "constant_ratio": 0.809938177825555,
++   "constant_ci": [
++    0.00044107812791523203,
++    0.0005935014339898908
++   ],
++   "measured_ic50_uM": 22.318421724768545,
++   "measured_ic50_ci": [
++    18.307003142559324,
++    24.551706841065023
++   ],
++   "true_ic50_uM": 23.856359278616367,
++   "holdout_truth": 0.32926829268292684,
++   "holdout_truth_spread": 0.17272727272727273,
++   "holdout_band": [
++    0.2625,
++    0.6875
++   ],
++   "holdout_point": 0.575,
++   "covered": true,
++   "band_width": 0.425,
++   "point_error": 0.2457317073170731
++  },
++  {
++   "perturbation": 0.5,
++   "trial": 3,
++   "true_constant": 0.0005905,
++   "calibrated_constant": 0.0004913495047130122,
++   "constant_ratio": 0.8320906091668285,
++   "constant_ci": [
++    0.00044107812791523203,
++    0.0005935014339898908
++   ],
++   "measured_ic50_uM": 21.789514231932007,
++   "measured_ic50_ci": [
++    18.248428896027722,
++    24.407423563908445
++   ],
++   "true_ic50_uM": 23.856359278616367,
++   "holdout_truth": 0.36585365853658536,
++   "holdout_truth_spread": 0.2,
++   "holdout_band": [
++    0.3,
++    0.7329545454545454
++   ],
++   "holdout_point": 0.575,
++   "covered": true,
++   "band_width": 0.4329545454545454,
++   "point_error": 0.2091463414634146
++  },
++  {
++   "perturbation": 0.5,
++   "trial": 4,
++   "true_constant": 0.0005905,
++   "calibrated_constant": 0.00046553573406441304,
++   "constant_ratio": 0.7883755022259323,
++   "constant_ci": [
++    0.00037514833441961397,
++    0.0005777008713798007
++   ],
++   "measured_ic50_uM": 23.354685565575284,
++   "measured_ic50_ci": [
++    18.393400260297348,
++    28.48044467475064
++   ],
++   "true_ic50_uM": 23.856359278616367,
++   "holdout_truth": 0.2682926829268293,
++   "holdout_truth_spread": 0.1960227272727273,
++   "holdout_band": [
++    0.24375,
++    0.8238636363636364
++   ],
++   "holdout_point": 0.55,
++   "covered": true,
++   "band_width": 0.5801136363636363,
++   "point_error": 0.28170731707317076
++  },
++  {
++   "perturbation": 0.5,
++   "trial": 5,
++   "true_constant": 0.0005905,
++   "calibrated_constant": 0.0004913495047130122,
++   "constant_ratio": 0.8320906091668285,
++   "constant_ci": [
++    0.00044107812791523203,
++    0.0005935014339898908
++   ],
++   "measured_ic50_uM": 21.722710195953603,
++   "measured_ic50_ci": [
++    18.26072016104041,
++    24.29062460082696
++   ],
++   "true_ic50_uM": 23.856359278616367,
++   "holdout_truth": 0.36585365853658536,
++   "holdout_truth_spread": 0.1875,
++   "holdout_band": [
++    0.3,
++    0.7329545454545454
++   ],
++   "holdout_point": 0.575,
++   "covered": true,
++   "band_width": 0.4329545454545454,
++   "point_error": 0.2091463414634146
++  },
++  {
++   "perturbation": 0.5,
++   "trial": 6,
++   "true_constant": 0.0005905,
++   "calibrated_constant": 0.00040677970086561686,
++   "constant_ratio": 0.6888733291543047,
++   "constant_ci": [
++    0.0003554393635729493,
++    0.00045314195354080226
++   ],
++   "measured_ic50_uM": 26.516660454139306,
++   "measured_ic50_ci": [
++    23.64101243936267,
++    30.055676584800512
++   ],
++   "true_ic50_uM": 23.856359278616367,
++   "holdout_truth": 0.18292682926829268,
++   "holdout_truth_spread": 0.2534090909090909,
++   "holdout_band": [
++    0.4125,
++    0.7329545454545454
++   ],
++   "holdout_point": 0.55,
++   "covered": false,
++   "band_width": 0.32045454545454544,
++   "point_error": 0.36707317073170737
++  },
++  {
++   "perturbation": 0.5,
++   "trial": 7,
++   "true_constant": 0.0005905,
++   "calibrated_constant": 0.0005777008713798007,
++   "constant_ratio": 0.9783249303637607,
++   "constant_ci": [
++    0.0005047882911114329,
++    0.0006264108516255087
++   ],
++   "measured_ic50_uM": 18.710985900955542,
++   "measured_ic50_ci": [
++    17.132550882733806,
++    21.252705760860948
++   ],
++   "true_ic50_uM": 23.856359278616367,
++   "holdout_truth": 0.55,
++   "holdout_truth_spread": 0.09977827050997778,
++   "holdout_band": [
++    0.4146341463414634,
++    0.7329545454545454
++   ],
++   "holdout_point": 0.55,
++   "covered": true,
++   "band_width": 0.318320399113082,
++   "point_error": 0.0
++  },
++  {
++   "perturbation": 0.5,
++   "trial": 8,
++   "true_constant": 0.0005905,
++   "calibrated_constant": 0.0005623209611295829,
++   "constant_ratio": 0.9522793583904875,
++   "constant_ci": [
++    0.00045314195354080226,
++    0.0006097341541250319
++   ],
++   "measured_ic50_uM": 19.284889204109184,
++   "measured_ic50_ci": [
++    17.84876145845794,
++    23.61505815531746
++   ],
++   "true_ic50_uM": 23.856359278616367,
++   "holdout_truth": 0.4878048780487805,
++   "holdout_truth_spread": 0.12727272727272732,
++   "holdout_band": [
++    0.4146341463414634,
++    0.8238636363636364
++   ],
++   "holdout_point": 0.55,
++   "covered": true,
++   "band_width": 0.40922949002217296,
++   "point_error": 0.06219512195121957
++  },
++  {
++   "perturbation": 0.5,
++   "trial": 9,
++   "true_constant": 0.0005905,
++   "calibrated_constant": 0.0005777008713798007,
++   "constant_ratio": 0.9783249303637607,
++   "constant_ci": [
++    0.0005047882911114329,
++    0.0006264108516255087
++   ],
++   "measured_ic50_uM": 18.66162667656041,
++   "measured_ic50_ci": [
++    17.09985562821333,
++    21.413233774912964
++   ],
++   "true_ic50_uM": 23.856359278616367,
++   "holdout_truth": 0.55,
++   "holdout_truth_spread": 0.09977827050997778,
++   "holdout_band": [
++    0.43902439024390244,
++    0.7329545454545454
++   ],
++   "holdout_point": 0.5609756097560976,
++   "covered": true,
++   "band_width": 0.293930155210643,
++   "point_error": 0.01097560975609757
++  },
++  {
++   "perturbation": 2.0,
++   "trial": 0,
++   "true_constant": 0.002362,
++   "calibrated_constant": 0.00210961411520478,
++   "constant_ratio": 0.8931473815430906,
++   "constant_ci": [
++    0.00179428126560671,
++    0.0024803645896432987
++   ],
++   "measured_ic50_uM": 5.095860717891945,
++   "measured_ic50_ci": [
++    4.305379404362541,
++    6.056093241989327
++   ],
++   "true_ic50_uM": 4.627245914469459,
++   "holdout_truth": 0.4146341463414634,
++   "holdout_truth_spread": 0.1670454545454546,
++   "holdout_band": [
++    0.3125,
++    0.8238636363636364
++   ],
++   "holdout_point": 0.5609756097560976,
++   "covered": true,
++   "band_width": 0.5113636363636364,
++   "point_error": 0.14634146341463422
++  },
++  {
++   "perturbation": 2.0,
++   "trial": 1,
++   "true_constant": 0.002362,
++   "calibrated_constant": 0.00210961411520478,
++   "constant_ratio": 0.8931473815430906,
++   "constant_ci": [
++    0.00179428126560671,
++    0.0025482044665347836
++   ],
++   "measured_ic50_uM": 5.121787525890786,
++   "measured_ic50_ci": [
++    4.217955060816442,
++    5.912166020258632
++   ],
++   "true_ic50_uM": 4.627245914469459,
++   "holdout_truth": 0.4146341463414634,
++   "holdout_truth_spread": 0.1443181818181818,
++   "holdout_band": [
++    0.2875,
++    0.7560975609756098
++   ],
++   "holdout_point": 0.55,
++   "covered": true,
++   "band_width": 0.4685975609756098,
++   "point_error": 0.13536585365853665
++  },
++  {
++   "perturbation": 2.0,
++   "trial": 2,
++   "true_constant": 0.002362,
++   "calibrated_constant": 0.00210961411520478,
++   "constant_ratio": 0.8931473815430906,
++   "constant_ci": [
++    0.0017465127989212306,
++    0.002414330787953821
++   ],
++   "measured_ic50_uM": 5.063843669479528,
++   "measured_ic50_ci": [
++    4.410264362392308,
++    6.171227327290501
++   ],
++   "true_ic50_uM": 4.627245914469459,
++   "holdout_truth": 0.4146341463414634,
++   "holdout_truth_spread": 0.1670454545454546,
++   "holdout_band": [
++    0.3875,
++    0.8238636363636364
++   ],
++   "holdout_point": 0.575,
++   "covered": true,
++   "band_width": 0.43636363636363634,
++   "point_error": 0.16036585365853656
++  },
++  {
++   "perturbation": 2.0,
++   "trial": 3,
++   "true_constant": 0.002362,
++   "calibrated_constant": 0.001998782427364266,
++   "constant_ratio": 0.8462245670466834,
++   "constant_ci": [
++    0.0017465127989212306,
++    0.0026895013871612106
++   ],
++   "measured_ic50_uM": 5.375664154208138,
++   "measured_ic50_ci": [
++    4.041757340584255,
++    6.0817142470866035
++   ],
++   "true_ic50_uM": 4.627245914469459,
++   "holdout_truth": 0.36585365853658536,
++   "holdout_truth_spread": 0.1875,
++   "holdout_band": [
++    0.19375,
++    0.7560975609756098
++   ],
++   "holdout_point": 0.5609756097560976,
++   "covered": true,
++   "band_width": 0.5623475609756098,
++   "point_error": 0.19512195121951226
++  },
++  {
++   "perturbation": 2.0,
++   "trial": 4,
++   "true_constant": 0.002362,
++   "calibrated_constant": 0.00216731368181753,
++   "constant_ratio": 0.9175756485256267,
++   "constant_ci": [
++    0.00179428126560671,
++    0.0024803645896432987
++   ],
++   "measured_ic50_uM": 4.961339021674481,
++   "measured_ic50_ci": [
++    4.281710264997589,
++    6.015124239153078
++   ],
++   "true_ic50_uM": 4.627245914469459,
++   "holdout_truth": 0.4625,
++   "holdout_truth_spread": 0.1649113082039912,
++   "holdout_band": [
++    0.3625,
++    0.8238636363636364
++   ],
++   "holdout_point": 0.5609756097560976,
++   "covered": true,
++   "band_width": 0.46136363636363636,
++   "point_error": 0.09847560975609759
++  },
++  {
++   "perturbation": 2.0,
++   "trial": 5,
++   "true_constant": 0.002362,
++   "calibrated_constant": 0.00179428126560671,
++   "constant_ratio": 0.7596449049986072,
++   "constant_ci": [
++    0.0016107032041264252,
++    0.002226591375900752
++   ],
++   "measured_ic50_uM": 5.98307838837292,
++   "measured_ic50_ci": [
++    4.794417046777522,
++    6.595174470694514
++   ],
++   "true_ic50_uM": 4.627245914469459,
++   "holdout_truth": 0.2682926829268293,
++   "holdout_truth_spread": 0.2085227272727273,
++   "holdout_band": [
++    0.2625,
++    0.7102272727272727
++   ],
++   "holdout_point": 0.5609756097560976,
++   "covered": true,
++   "band_width": 0.4477272727272727,
++   "point_error": 0.29268292682926833
++  },
++  {
++   "perturbation": 2.0,
++   "trial": 6,
++   "true_constant": 0.002362,
++   "calibrated_constant": 0.0020534506621759695,
++   "constant_ratio": 0.8693694590076078,
++   "constant_ci": [
++    0.0018433562365507846,
++    0.0028386331656417487
++   ],
++   "measured_ic50_uM": 5.222828059105332,
++   "measured_ic50_ci": [
++    3.8354357300376813,
++    5.902056937207122
++   ],
++   "true_ic50_uM": 4.627245914469459,
++   "holdout_truth": 0.4146341463414634,
++   "holdout_truth_spread": 0.16022727272727272,
++   "holdout_band": [
++    0.18125,
++    0.7102272727272727
++   ],
++   "holdout_point": 0.575,
++   "covered": true,
++   "band_width": 0.5289772727272727,
++   "point_error": 0.16036585365853656
++  },
++  {
++   "perturbation": 2.0,
++   "trial": 7,
++   "true_constant": 0.002362,
++   "calibrated_constant": 0.0022874903604530477,
++   "constant_ratio": 0.968454852012298,
++   "constant_ci": [
++    0.0018433562365507846,
++    0.0026895013871612106
++   ],
++   "measured_ic50_uM": 4.721587969967208,
++   "measured_ic50_ci": [
++    3.9516276752070567,
++    5.7694126924771565
++   ],
++   "true_ic50_uM": 4.627245914469459,
++   "holdout_truth": 0.55,
++   "holdout_truth_spread": 0.10144124168514412,
++   "holdout_band": [
++    0.3125,
++    0.8238636363636364
++   ],
++   "holdout_point": 0.55,
++   "covered": true,
++   "band_width": 0.5113636363636364,
++   "point_error": 0.0
++  },
++  {
++   "perturbation": 2.0,
++   "trial": 8,
++   "true_constant": 0.002362,
++   "calibrated_constant": 0.0019455696041446094,
++   "constant_ratio": 0.8236958527284545,
++   "constant_ci": [
++    0.0017000160539291224,
++    0.002226591375900752
++   ],
++   "measured_ic50_uM": 5.54808163852853,
++   "measured_ic50_ci": [
++    4.792389508219429,
++    6.326646412508541
++   ],
++   "true_ic50_uM": 4.627245914469459,
++   "holdout_truth": 0.35365853658536583,
++   "holdout_truth_spread": 0.17272727272727273,
++   "holdout_band": [
++    0.3625,
++    0.7329545454545454
++   ],
++   "holdout_point": 0.55,
++   "covered": false,
++   "band_width": 0.3704545454545454,
++   "point_error": 0.1963414634146342
++  },
++  {
++   "perturbation": 2.0,
++   "trial": 9,
++   "true_constant": 0.002362,
++   "calibrated_constant": 0.0018937734456485568,
++   "constant_ratio": 0.8017669117902442,
++   "constant_ci": [
++    0.0017465127989212306,
++    0.002226591375900752
++   ],
++   "measured_ic50_uM": 5.634235980387152,
++   "measured_ic50_ci": [
++    4.83998146164621,
++    6.223502444889923
++   ],
++   "true_ic50_uM": 4.627245914469459,
++   "holdout_truth": 0.3048780487804878,
++   "holdout_truth_spread": 0.1977272727272727,
++   "holdout_band": [
++    0.3125,
++    0.6875
++   ],
++   "holdout_point": 0.575,
++   "covered": false,
++   "band_width": 0.375,
++   "point_error": 0.27012195121951216
++  }
++ ]
++}
+diff --git a/cellsim/api.py b/cellsim/api.py
+index 79c80d4..31906c1 100644
+--- a/cellsim/api.py
++++ b/cellsim/api.py
+@@ -10,6 +10,10 @@
+ against (`docs/VALIDATION.md`), and no further:
+ 
+     curve()        a dose-response curve and its IC50
++    ic50_spread()  the same IC50 under several seeds, and how far it
++                   moves — run this before quoting one
++    gr_curve()     the same run as GR values, which is the axis a
++                   measured plate can be compared on
+     exposure()     the iso-effect curve: the concentration needed for
+                    half kill at each exposure time, which is how a
+                    schedule decision is actually made
+@@ -37,7 +41,8 @@
+                                  ic50_from_curve, simulate)
+ from cellsim.cell.library import CELL_LINES, DRUGS, CellLine, Drug, get_drug, get_line
+ 
+-__all__ = ["curve", "exposure", "washout", "combination", "spheroid", "lines", "drugs"]
++__all__ = ["curve", "exposure", "washout", "combination", "spheroid", "gr_curve",
++           "ic50_spread", "lines", "drugs"]
+ 
+ 
+ def _table(rows: list[dict]):
+@@ -106,6 +111,81 @@ def curve(line: Union[str, CellLine], drug: Union[str, Drug], *,
+                    for c, v in zip(conc, viab[1:])])
+ 
+ 
++def gr_curve(line: Union[str, CellLine], drug: Union[str, Drug], *,
++             concentrations: Optional[Sequence[float]] = None, hours: float = 72.0,
++             exposure_h: Optional[float] = None, n_cells: int = 48, seed: int = 1,
++             params: Params = Params()):
++    """The same simulation as `curve()`, reported as GR values.
++
++    A measured plate analysed by `cellsim.plate.gr_metrics` and a
++    simulation analysed here are then the same quantity, so they can be
++    plotted on one axis and compared. Viability cannot be compared that
++    way between a fast and a slow line, which is the whole reason GR
++    exists (Hafner et al. 2016 Nat Methods 13:521).
++
++    GR = 1 is untreated growth, 0 is complete cytostasis, below 0 is net
++    cell loss. The engine's alive weight is the cell count GR needs, and
++    the untreated arm of the same run supplies the control."""
++    from cellsim.plate import gr_metrics
++    ln, dg = _line(line), _drug(drug)
++    k = calibrate_cycle_scale(ln, params)
++    if concentrations is None:
++        centre = ic50(ln, dg, guess_uM=_guess(dg), t_end_h=hours, n_cells_per_conc=24,
++                      k_cyc=k, p=params, exposure_h=exposure_h)
++        if not np.isfinite(centre):
++            centre = _guess(dg) * 100
++        concentrations = centre * np.logspace(-2, 2, 9)
++    conc = np.asarray(list(concentrations), float)
++    _, res = dose_response(ln, dg, conc, t_end_h=hours, n_cells_per_conc=n_cells,
++                           seed=seed, p=params, k_cyc=k, exposure_h=exposure_h)
++    # Group 0 is the untreated control that dose_response prepends.
++    t0 = float(res.alive_weight[0, 0])
++    control = float(res.alive_weight[-1, 0])
++    treated = [float(res.alive_weight[-1, i + 1]) for i in range(len(conc))]
++    gr = gr_metrics(conc, treated, control=control, t0=t0)
++    return _table([{"line": ln.name, "drug": dg.name, "conc_uM": float(c),
++                    "gr": float(g), "gr50_uM": gr.gr50_uM, "gr_max": gr.gr_max,
++                    "gr_aoc": gr.gr_aoc,
++                    "control_doublings": gr.doublings_in_assay,
++                    "exposure_h": exposure_h if exposure_h is not None else hours,
++                    "readout_h": hours}
++                   for c, g in zip(gr.conc_uM, gr.gr)])
++
++
++def ic50_spread(line: Union[str, CellLine], drug: Union[str, Drug], *,
++                seeds: Sequence[int] = (1, 2, 3, 4, 5), hours: float = 72.0,
++                exposure_h: Optional[float] = None, n_cells: int = 32,
++                params: Params = Params()):
++    """The same IC50 measured under several seeds, and how far it moves.
++
++    Worth running before quoting an IC50 from this engine. The number is
++    a random variable: repeating an identical simulation under a
++    different seed moves it by 10-20 %, because the engine draws a finite
++    sample of lineages and a population's IC50 is set by its resistant
++    tail rather than by its mean. More cells barely helps — with
++    heterogeneity switched off the spread collapses to under 1 %, which
++    is how the cause was identified (docs/VALIDATION.md).
++
++    Returns one row per seed plus the median and the spread, so a caller
++    can see whether a difference they care about is larger than the
++    engine's own. Two numbers from this engine that differ by less than
++    the spread do not differ.
++    """
++    ln, dg = _line(line), _drug(drug)
++    k = calibrate_cycle_scale(ln, params)
++    vals = [ic50(ln, dg, guess_uM=_guess(dg), t_end_h=hours, n_cells_per_conc=n_cells,
++                 k_cyc=k, p=params, seed=int(s), exposure_h=exposure_h) for s in seeds]
++    finite = [v for v in vals if np.isfinite(v)]
++    median = float(np.median(finite)) if finite else float("nan")
++    spread = float(max(finite) / min(finite)) if len(finite) > 1 else float("nan")
++    return _table([{"line": ln.name, "drug": dg.name, "seed": int(s),
++                    "ic50_uM": float(v), "median_ic50_uM": median,
++                    "spread_fold": spread, "n_finite": len(finite),
++                    "exposure_h": exposure_h if exposure_h is not None else hours,
++                    "readout_h": hours}
++                   for s, v in zip(seeds, vals)])
++
++
+ def exposure(line: Union[str, CellLine], drug: Union[str, Drug],
+              hours: Iterable[float] = (1, 3, 6, 12, 24, 48, 72), *,
+              readout_h: float = 72.0, n_cells: int = 32, seed: int = 1,
+diff --git a/cellsim/calibrate.py b/cellsim/calibrate.py
+index 638feef..33bcb8e 100644
+--- a/cellsim/calibrate.py
++++ b/cellsim/calibrate.py
+@@ -109,14 +109,22 @@ def rel_se(a):
+ class Calibration:
+     """A drug's fitted constant for one line, with its interval.
+ 
+-    `simulated_ic50_uM` will usually sit a few per cent from the measured
+-    IC50 it was fitted to, and that gap is the IC50 ESTIMATOR, not the
+-    fit. The search drives viability at the target concentration to one
+-    half exactly; the reported figure is then read off a log grid whose
+-    steps are about 1.1x, so it lands on the nearest rung. The tell is
+-    that the ratio is the same for every target at a given `n_cells`
+-    (1.00, 0.92 and 1.04 at 32, 64 and 128 cells) rather than scattering
+-    as a fitting error would.
++    A KNOWN OFFSET, measured rather than suspected. The fitted constant
++    comes out about 10 % below the truth, consistently rather than on
++    average: 0.88x, 0.91x and 0.92x for lines perturbed 0.5x, 1x and 2x,
++    with the measurement noise removed entirely.
++
++    The cause is that two definitions of "the IC50" are in play and they
++    differ by roughly that much. This module targets the concentration at
++    which median viability is one half. `cellsim.cell.engine.ic50`
++    instead interpolates a 0.5 crossing on a log grid, and on a curve as
++    steep as this engine's it lands about 1.1x low (calibrating to its
++    answer and measuring back gives 1.07-1.15x). Targeting the estimator
++    instead would cost a full concentration series per iteration — the
++    thing that makes calibration fast enough to use — to chase a bias
++    that sits well inside the +-20 % run-to-run spread the engine has
++    anyway (see `predict_band`). So it is recorded here rather than
++    removed, and `predict_band`'s interval is what should be read.
+     """
+     line: str
+     drug: str
+@@ -148,7 +156,7 @@ def summary(self) -> str:
+ 
+ 
+ def _fit_constant(line: CellLine, drug: Drug, target_uM: float, *, n_cells: int,
+-                  iters: int, p: Params, k_cyc: float,
++                  iters: int, p: Params, k_cyc: float, seeds: Sequence[int] = (1,),
+                   bracket_decades: float = 1.5, max_decades: float = 3.0,
+                   report_ic50: bool = True) -> tuple[float, float]:
+     """Bisection in log10 of the drug's one fitted constant, until the
+@@ -193,13 +201,31 @@ def _fit_constant(line: CellLine, drug: Drug, target_uM: float, *, n_cells: int,
+ 
+     def sim(log_v: float) -> float:
+         """A monotone stand-in for the simulated IC50: viability at the
+-        target concentration, mapped so that larger means a higher IC50."""
++        target concentration, mapped so that larger means a higher IC50.
++
++        `seeds` averages the criterion over repeats. It defaults to one,
++        because averaging was tried and MEASURED NOT TO HELP: three seeds
++        returned byte-identical constants for every case tried, at three
++        times the cost, and moved the systematic offset by under half a
++        per cent (0.869/0.913/0.946 to 0.878/0.910/0.943). The offset is
++        definitional rather than noise — see the note on `Calibration` —
++        so averaging the noise cannot touch it. The option is kept
++        because a future criterion might need it; the default is not.
++
++        What DOES vary with the seed is the answer itself: the same
++        target calibrated under different seeds gives constants spanning
++        about 1.14x, which is the engine's own stochasticity showing
++        through. That is what `predict_band` spans, and why it must."""
+         key = round(log_v, 6)
+         if key not in cache:
+             d = dataclasses.replace(drug, **{field: 10.0 ** key})
+-            viab, _ = dose_response(line, d, np.array([target_uM]), n_cells_per_conc=n_cells,
+-                                    p=p, k_cyc=k_cyc)
+-            cache[key] = float(viab[1])
++            runs = []
++            for sd in seeds:
++                viab, _ = dose_response(line, d, np.array([target_uM]),
++                                        n_cells_per_conc=n_cells, p=p, k_cyc=k_cyc,
++                                        seed=int(sd))
++                runs.append(float(viab[1]))
++            cache[key] = float(np.median(runs))
+         return cache[key]
+ 
+     centre = math.log10(start)
+@@ -242,7 +268,8 @@ def calibrate_potency(line: Union[str, CellLine], drug: Union[str, Drug],
+                       measured_ic50_uM: float,
+                       measured_ic50_ci: Optional[tuple[float, float]] = None, *,
+                       params: Params = Params(), n_cells: int = 32,
+-                      iters: int = 12, report_ic50: bool = True) -> Calibration:
++                      iters: int = 12, seeds: Sequence[int] = (1,),
++                      report_ic50: bool = True) -> Calibration:
+     """Fit the drug's one constant so the engine reproduces a measured IC50.
+ 
+     `measured_ic50_ci` should be the interval from `cellsim.plate.fit_4pl`.
+@@ -255,7 +282,7 @@ def calibrate_potency(line: Union[str, CellLine], drug: Union[str, Drug],
+     dg = drug if isinstance(drug, Drug) else get_drug(drug)
+     k = calibrate_cycle_scale(ln, params)
+     value, achieved = _fit_constant(ln, dg, measured_ic50_uM, n_cells=n_cells,
+-                                    iters=iters, p=params, k_cyc=k,
++                                    iters=iters, p=params, k_cyc=k, seeds=seeds,
+                                     report_ic50=report_ic50)
+     if not np.isfinite(value):
+         raise ValueError(
+@@ -276,7 +303,7 @@ def calibrate_potency(line: Union[str, CellLine], drug: Union[str, Drug],
+             # The ends only pin the interval; their own IC50s are not
+             # reported, so the extra concentration series is skipped.
+             v, _ = _fit_constant(ln, dg, target, n_cells=n_cells, iters=iters,
+-                                 p=params, k_cyc=k, report_ic50=False)
++                                 p=params, k_cyc=k, seeds=seeds, report_ic50=False)
+             ends.append(v)
+         if not all(np.isfinite(ends)):
+             ci = (value, value)
+@@ -295,20 +322,38 @@ def calibrate_potency(line: Union[str, CellLine], drug: Union[str, Drug],
+                        simulated_ic50_uM=float(achieved), note=note)
+ 
+ 
+-def predict_band(calibration: Calibration, fn, *, labels=("low", "value", "high")):
+-    """Run `fn(drug)` at each end of the calibrated interval and in the
+-    middle, and return {label: result} plus the spread.
++def predict_band(calibration: Calibration, fn, *, seeds: Sequence[int] = (1, 2, 3),
++                 labels=("low", "value", "high")):
++    """Run `fn(drug, seed)` across the calibrated interval AND across
++    seeds, and return the envelope.
+ 
+-    `fn` takes a `Drug` and returns a number — a surviving fraction, a
+-    fold change, whatever the question is. The spread it comes back with
+-    is the part that matters: two schedules that differ by less than the
+-    calibration's own width have not been shown to differ.
++    `fn` takes a `Drug` and a seed and returns a number — a surviving
++    fraction, a fold change, whatever the question is.
++
++    **Both sources of uncertainty belong in the band**, and leaving one
++    out was a real error here. The first version varied only the
++    constant, at a single seed, and its bands missed the truth in a
++    hold-out test more often than they contained it
++    (`scripts/validate_calibration.py`). The reason is that the engine is
++    stochastic: repeating the same simulation with a different seed moves
++    its IC50 by about 1.2x, which is as large as the calibration
++    uncertainty it was reporting. A band that counts the measurement's
++    error and ignores the model's own is not an honest interval, however
++    carefully the first part was computed.
++
++    Two schedules whose bands overlap have not been shown to differ.
+     """
+-    out = {}
++    per_label: dict = {}
+     for which, label in zip(("low", "value", "high"), labels):
+-        out[label] = fn(calibration.drug_at(which))
+-    vals = [v for v in out.values() if isinstance(v, (int, float)) and np.isfinite(v)]
+-    if vals:
+-        out["spread"] = float(max(vals) - min(vals))
+-        out["range"] = (float(min(vals)), float(max(vals)))
++        drug = calibration.drug_at(which)
++        vals = [fn(drug, int(s)) for s in seeds]
++        finite = [v for v in vals if isinstance(v, (int, float)) and np.isfinite(v)]
++        per_label[label] = float(np.median(finite)) if finite else float("nan")
++        per_label.setdefault("_all", []).extend(finite)
++    allv = per_label.pop("_all")
++    out = dict(per_label)
++    if allv:
++        out["range"] = (float(min(allv)), float(max(allv)))
++        out["spread"] = float(max(allv) - min(allv))
++        out["n_runs"] = len(allv)
+     return out
+diff --git a/docs/PLAN.md b/docs/PLAN.md
+index c660642..75447ce 100644
+--- a/docs/PLAN.md
++++ b/docs/PLAN.md
+@@ -273,17 +273,19 @@ single highest-value piece of work left, and it is Phase 4.
+ 
+ ### Phase 4 — the user's own cells
+ 
+-- Read plate-reader exports (96/384-well with a plate map) and tidy CSV;
+-  normalise to controls, fit four-parameter curves with bootstrap
+-  confidence intervals.
++- *Done.* Read plate-reader exports (96/384-well with a plate map) and
++  tidy CSV; normalise to controls, fit four-parameter curves with
++  bootstrap confidence intervals whose coverage has been measured
++  (`cellsim/plate.py`).
+ - *Done for measured data.* Report GR metrics (GR50, GRmax, GR_AOC;
+   Hafner et al. 2016 Nat Methods 13:521), so fast- and slow-growing
+   cultures are compared fairly. Still to do: the same metrics out of a
+   simulation, so model and experiment sit on one axis. The engine
+   already produces the counts they need.
+-- Calibrate: fit the line's doubling time from its controls and each
+-  drug's single constant from its curve, with uncertainty, and say
+-  plainly when a curve cannot identify the constant.
++- *Done.* Calibrate: fit the line's doubling time from its controls and
++  each drug's single constant from its curve, with uncertainty, and say
++  plainly when a curve cannot identify the constant
++  (`cellsim/calibrate.py`).
+ - Carry that uncertainty into every prediction (sample the posterior),
+   so schedules and combinations come out as bands, not lines.
+ - Validation: hold out a concentration range or a time point from the
+diff --git a/docs/VALIDATION.md b/docs/VALIDATION.md
+index 82b0472..546beb3 100644
+--- a/docs/VALIDATION.md
++++ b/docs/VALIDATION.md
+@@ -488,7 +488,13 @@ log T would have slope −1.
+ | doxorubicin (0.063 µM) | 2.06 | 0.68 | 0.34 | 0.17 | 0.089 | 0.060 | **−1.01** | 1 h |
+ | paclitaxel (0.030 µM) | none | none | none | none | 0.037 | 0.030 | — | **24 h** |
+ 
+-(C50 in µM; "none" = no concentration reaches half kill.)
++(C50 in µM; "none" = no concentration reaches half kill. **These are
++single-seed figures and carry about ±20 %** — repeating the run with a
++different seed moves each by 1.16–1.35×, for the reason set out under
++"Which published claims that ±20 % actually touches" below. Read them to
++one or two significant figures. The *slope* is not affected, because the
++seed shifts the whole curve together rather than tilting it, which is
++the point of that section.)
+ 
+ **Cisplatin and doxorubicin are AUC-governed over short exposures**:
+ C50 × T stays at 326–367 µM·h for cisplatin from 1 to 12 h and at
+@@ -962,6 +968,138 @@ the extrapolation can go anywhere. So a wide interval here is not a
+ conservative answer, it is an absent one. Those fits are flagged
+ `extrapolated`, and the flag, not the width, is what to act on.
+ 
++### Does a calibrated engine predict what it was NOT calibrated on?
++
++Fitting a constant so the simulated IC50 matches a measured one proves
++nothing: the constant was chosen to make that number right. The claim
++worth testing is the next one — that the calibrated model then says
++something true about a condition it never saw — and
++`scripts/validate_calibration.py` measures it with ground truth we
++control. Perturb a drug's constant to a value the calibrator is never
++told; simulate the noisy 72 h plate those cells would give; hand over
++**only** the fitted IC50 and its interval; then ask about a 12 h pulse
++washed out long before the readout, and check whether the predicted band
++contains the truth.
++
++**It failed the first time, and the failure was the useful part.**
++Calibrated bands contained the held-out truth in **3 of 7 trials**. A
++band advertised as covering the answer was wrong more often than right,
++and nothing upstream was broken: the plate fit's coverage had been
++measured, the calibration's propagation had been measured, and each
++piece passed its own test. What had never been tested was the
++composition.
++
++The cause is that the band counted the measurement's uncertainty and
++ignored the model's own.
++
++### The engine's IC50 is a random variable, and more cells do not fix it
++
++Repeating the identical simulation with a different seed moves the
++engine's IC50 by 1.1–1.2×. That is not counting noise, and the
++measurement that settles it is switching the cell-to-cell heterogeneity
++off:
++
++| `Params.het_sigma` | 24 cells/dose | 96 cells/dose |
++|---|:-:|:-:|
++| 0.30 (default) | **1.187×** | **1.108×** |
++| 0 (identical cells) | 1.009× | 1.008× |
++
++With identical cells the engine is deterministic to under a per cent.
++With the default heterogeneity the spread is ten to twenty per cent and
++**quadrupling the cells barely moves it**, because a population's IC50
++is set by which resistant lineages happened to be drawn, not by how many
++cells were counted — and a tail converges far more slowly than a mean.
++
++That is a property of the model rather than a defect, and it is also the
++right biology: a real colony's survival is dominated by its resistant
++minority (Spencer et al. 2009 Nature 459:428, the same observation the
++heterogeneity was built from). But it has three consequences that matter
++to anyone using these numbers:
++
++1. **A single-seed IC50 is good to about ±20 %**, so differences smaller
++   than that between two runs are not differences.
++2. **Any calibration from one measurement inherits that**, which is why
++   the recovered constant scatters between 0.7× and 1.0× of the truth
++   even with no measurement noise at all.
++3. **More cells is the wrong remedy; more seeds is the right one.**
++
++`predict_band` therefore spans the calibrated interval **and** seeds,
++and the hold-out is scored against the truth's own median over the same
++seeds, since no band can honestly be narrower than the quantity it is
++predicting.
++
++### Which published claims that ±20 % actually touches
++
++A spread that large in every IC50 is alarming until it is checked
++against the claims that rest on it, so here is that check rather than a
++reassurance. Five seeds, A549:
++
++| Claim | Across seeds | Verdict |
++|---|---|:-:|
++| Nutlin calls 11/11 lines correctly (Phase 3 headline) | **0 of 11 lines change call**; sensitive lines give viability 0.00, resistant 0.85–1.11 | safe |
++| Paclitaxel cannot halve the colony below 24 h at any dose | half kill reached in **0/5 seeds at 3, 6 and 12 h; 5/5 at 24 h** | safe |
++| Cisplatin follows C × T over 1–6 h (slope −1) | slope median **−0.974**, range −1.00 to −0.88; the −0.95 quoted above sits mid-range | safe |
++| The C50 values themselves (e.g. 318 µM at 1 h) | spread **1.16–1.35×** between seeds | **quoted too precisely** |
++
++The pattern is consistent and it is worth stating as a working rule for
++this engine. **A comparison made within one seed is far more robust than
++either number in it.** The seed fixes which lineages were drawn, and that
++draw shifts a whole dose-response curve up or down together rather than
++tilting it — so a slope, a ratio between two arms, or a threshold with a
++wide margin survives, while the absolute concentration does not.
++
++That is why the slope holds to ±0.06 while the C50s it is computed from
++move by a third, and it retroactively justifies how the Phase-2 and
++Phase-3 experiments were built: every one of them compares arms inside a
++run rather than quoting a number from one.
++
++What it does NOT justify is the single C50 figures quoted in the
++schedule table above. They carried an unstated ±20 % until this audit;
++the table now says so, and they should be read to one or two
++significant figures.
++
++### What a calibrated prediction is actually worth
++
++Twenty trials, with the band spanning the calibrated interval and seeds:
++
++| | before the fix | after |
++|---|:-:|:-:|
++| band contains the held-out truth | 3/7 (43 %) | **16/20 (80 %)** |
++| median band width | — | 0.435 surviving fraction |
++| the truth's OWN spread across seeds | — | 0.173 |
++| constant recovered | 0.79–0.83× | 0.84× median (0.69–0.98) |
++
++Read the second and third rows together. The band is 0.44 wide and the
++quantity it predicts moves by 0.17 on its own between runs, so roughly
++40 % of the width is irreducible: no honest band here can be much
++narrower. What that buys a user is an answer like *"between a quarter
++and two thirds of the cells survive this pulse"* — enough to rule out
++*nearly all die* and *nearly all live*, not enough to separate 35 % from
++45 %. Two schedules whose bands overlap have not been shown to differ,
++which is the whole reason `predict_band` returns a range.
++
++**One thing tried and rejected.** If the engine's viability carries
++±20 % run-to-run spread, averaging the calibration criterion over seeds
++ought to help. It does not: three seeds returned byte-identical
++constants in every case tried, at three times the cost, and moved the
++offset below by under half a per cent. The reason is that the offset is
++definitional, not noise, so averaging noise cannot reach it. The option
++is kept in the signature and the default is one seed. What *does* move
++with the seed is the answer itself — the same target calibrated under
++different seeds spans about 1.14× — and that is what the prediction band
++spans.
++
++**A residual bias, measured and left in place.** The fitted constant
++lands about 10 % below the truth, one-sidedly, and with the measurement
++noise removed entirely it is still 0.88–0.92×. Two definitions of "the
++IC50" are in play: calibration targets the concentration where median
++viability is one half, while `engine.ic50` interpolates a crossing on a
++log grid and on a curve this steep lands ~1.1× low. Targeting the
++estimator instead would cost a full concentration series per iteration —
++the thing that makes calibration fast enough to use — to chase a bias
++that sits well inside the ±20 % the engine varies by anyway. It is
++recorded rather than removed.
++
+ ### Two bugs the plate files caught
+ 
+ Writing real plate files for the tests, rather than passing arrays
+diff --git a/docs/cell_tutorial.md b/docs/cell_tutorial.md
+index 6706905..813d3b4 100644
+--- a/docs/cell_tutorial.md
++++ b/docs/cell_tutorial.md
+@@ -50,11 +50,20 @@ every dividing cell stalls, so the curve is much steeper than a Hill
+ slope of 1. Concentrations default to four decades either
+ side of it, so you do not have to guess the range.
+ 
+-> **How much is this number worth?** The engine's IC50s carry a
+-> calibrated interval: ±2.6× covers 64 % of held-out lines, ±4.8× covers
+-> 85 %. That is wide, and honestly so — GDSC's own repeat screens of the
+-> same line and drug disagree by a median 5.3×. Treat a predicted IC50 as
+-> an order of magnitude, not a measurement.
++> **How much is this number worth?** Two things, and they compound.
++>
++> *Against the real world*, the engine's IC50s carry a calibrated
++> interval: ±2.6× covers 64 % of held-out cell lines, ±4.8× covers 85 %.
++> That is wide and honestly so — GDSC's own repeat screens of the same
++> line and drug disagree by a median 5.3×.
++>
++> *Against itself*, the same simulation run with a different seed moves
++> by 10–20 %, because a population's IC50 is set by which resistant
++> lineages happened to be drawn. Run `ic50_spread("A549", "paclitaxel")`
++> to see it. More cells barely helps; more seeds does.
++>
++> So treat a predicted IC50 as an order of magnitude, and treat a
++> difference smaller than 20 % between two runs as no difference.
+ 
+ ## 2. Ask the schedule question properly
+ 
+diff --git a/scripts/validate_calibration.py b/scripts/validate_calibration.py
+new file mode 100644
+index 0000000..f9fe6a6
+--- /dev/null
++++ b/scripts/validate_calibration.py
+@@ -0,0 +1,220 @@
++#!/usr/bin/env python3
++"""Does a calibrated engine predict what it was NOT calibrated on?
++
++This is the question the whole of Phase 4 rests on. Fitting a constant so
++the simulated IC50 matches a measured one is easy and proves nothing: the
++constant was chosen to make that number right. The useful claim is the
++next one — that the calibrated model then says something true about a
++condition the calibration never saw — and that claim has to be measured.
++
++The design is a hold-out, with ground truth we control:
++
++1. **Truth.** Take a drug and perturb its one fitted constant to a value
++   `v_true` that the calibrator is never told. This stands in for a lab's
++   cells differing from the reference line.
++2. **Measurement.** Simulate the 72 h continuous dose-response those
++   cells would give, add plate-reader noise, and fit it with
++   `cellsim.plate.fit_4pl` exactly as a real plate would be fitted. This
++   yields a measured IC50 and its confidence interval — and nothing else.
++3. **Calibration.** Hand only that IC50 and interval to
++   `calibrate_potency`, which returns a constant and its interval.
++4. **Hold-out prediction.** Ask the calibrated model about a condition
++   that played no part in any of the above: survival under a SHORT PULSE,
++   washed out long before the readout. Run it at both ends of the
++   calibrated interval to get a band.
++5. **Score.** Compute the same quantity with `v_true` and ask whether the
++   band contains it.
++
++Repeating that gives the coverage of a calibrated prediction, which is
++the number a user actually needs: not "how well does it fit" but "how
++often is the truth inside the band it gives me".
++
++Two ways this can fail, and they mean different things. If the band is
++too narrow the uncertainty is understated and the model is overconfident.
++If the band is enormous the calibration has not constrained anything and
++the prediction is not worth making — so the width is reported beside the
++coverage, and both are needed to read the result.
++
++Usage:
++    python scripts/validate_calibration.py            # ~20 min
++    python scripts/validate_calibration.py --quick    # ~6 min
++"""
++from __future__ import annotations
++
++import argparse
++import dataclasses
++import json
++import math
++import sys
++import time
++from pathlib import Path
++
++import numpy as np
++
++REPO_ROOT = Path(__file__).resolve().parents[1]
++sys.path.insert(0, str(REPO_ROOT))
++
++from cellsim.calibrate import calibrate_potency  # noqa: E402
++from cellsim.cell.engine import (Params, calibrate_cycle_scale, dose_response,  # noqa: E402
++                                 ic50, simulate)
++from cellsim.cell.library import get_drug, get_line  # noqa: E402
++from cellsim.plate import fit_4pl  # noqa: E402
++
++OUT_JSON = REPO_ROOT / "benchmarks" / "cell" / "calibration_holdout.json"
++LINE_NAME, DRUG_NAME = "A549", "cisplatin"
++# How far the "lab's" cells differ from the reference line. Derived
++# resistant lines reach two- to eight-fold (McDermott 2014), so a factor
++# of two either way is a realistic difference to ask the engine to learn.
++PERTURBATIONS = (0.5, 2.0)
++PLATE_NOISE_SD = 0.05           # residual sd of a decent plate (validate_plate_fit.py)
++PULSE_HOURS = 12.0              # the held-out condition: a pulse, washed out
++READOUT_HOURS = 72.0
++
++
++def simulated_plate(line, drug, centre_uM, *, n_cells, rng, k_cyc, p):
++    """The dose-response those cells would give, with plate noise on top."""
++    conc = centre_uM * np.logspace(-1.5, 1.5, 10)
++    viab, _ = dose_response(line, drug, conc, t_end_h=READOUT_HOURS,
++                            n_cells_per_conc=n_cells, k_cyc=k_cyc, p=p)
++    noisy = np.clip(viab[1:] + rng.normal(0.0, PLATE_NOISE_SD, len(conc)), 0.0, 1.5)
++    return conc, noisy
++
++
++def pulse_survival(line, drug, conc_uM, *, n_cells, k_cyc, p, seed=1):  # noqa: D401
++    """The held-out quantity: surviving fraction after a short pulse."""
++    def dose(t_h):
++        return conc_uM if t_h < PULSE_HOURS - 1e-9 else 0.0
++    treated = simulate(line, drug, 0.0, t_end_h=READOUT_HOURS, n_cells=n_cells,
++                       k_cyc=k_cyc, p=p, dose_fn=dose, record_every_h=READOUT_HOURS,
++                       seed=seed)
++    control = simulate(line, None, 0.0, t_end_h=READOUT_HOURS, n_cells=n_cells,
++                       k_cyc=k_cyc, p=p, record_every_h=READOUT_HOURS, seed=seed)
++    return float(treated.alive_weight[-1, 0] / max(control.alive_weight[-1, 0], 1e-12))
++
++
++def one_trial(perturb: float, trial: int, *, n_cells: int, cal_cells: int,
++              iters: int) -> dict | None:
++    line, drug = get_line(LINE_NAME), get_drug(DRUG_NAME)
++    p = Params()
++    k = calibrate_cycle_scale(line, p)
++    field = drug.fit_target
++    v_true = getattr(drug, field) * perturb
++    truth_drug = dataclasses.replace(drug, **{field: v_true})
++    rng = np.random.default_rng(1000 * trial + int(perturb * 10))
++
++    # 1-2. what the lab would measure, and nothing more
++    centre = ic50(line, truth_drug, guess_uM=10.0, n_cells_per_conc=n_cells, k_cyc=k, p=p)
++    if not np.isfinite(centre):
++        return None
++    conc, viab = simulated_plate(line, truth_drug, centre, n_cells=n_cells, rng=rng,
++                                 k_cyc=k, p=p)
++    try:
++        fit = fit_4pl(conc, viab, n_boot=300, seed=trial)
++    except ValueError:
++        return None
++    if not np.isfinite(fit.ic50_ci[0]):
++        return None
++
++    # 3. calibration sees only the fitted IC50 and its interval
++    try:
++        cal = calibrate_potency(LINE_NAME, DRUG_NAME, fit.ic50_uM, fit.ic50_ci,
++                                n_cells=cal_cells, iters=iters, report_ic50=False)
++    except ValueError:
++        return None
++
++    # 4-5. a condition none of the above involved. The band spans the
++    # calibrated interval AND seeds, because the engine's own run-to-run
++    # variability is as large as the calibration's (see predict_band).
++    pulse_conc = 3.0 * fit.ic50_uM
++    seeds = (1, 2, 3)
++    from cellsim.calibrate import predict_band
++    band_out = predict_band(
++        cal, lambda d, sd: pulse_survival(line, d, pulse_conc, n_cells=n_cells,
++                                          k_cyc=k, p=p, seed=sd), seeds=seeds)
++    lo, hi = band_out["range"]
++    band = [band_out["low"], band_out["value"], band_out["high"]]
++    # The truth is itself a stochastic quantity; its median over the same
++    # seeds is what the band is asked to contain.
++    truth_runs = [pulse_survival(line, truth_drug, pulse_conc, n_cells=n_cells,
++                                 k_cyc=k, p=p, seed=sd) for sd in seeds]
++    truth = float(np.median(truth_runs))
++    truth_spread = float(max(truth_runs) - min(truth_runs))
++    return {"perturbation": perturb, "trial": trial,
++            "true_constant": float(v_true), "calibrated_constant": cal.value,
++            "constant_ratio": float(cal.value / v_true),
++            "constant_ci": list(cal.ci),
++            "measured_ic50_uM": fit.ic50_uM, "measured_ic50_ci": list(fit.ic50_ci),
++            "true_ic50_uM": float(centre),
++            "holdout_truth": truth, "holdout_truth_spread": truth_spread,
++            "holdout_band": [lo, hi], "holdout_point": band[1],
++            "covered": bool(lo <= truth <= hi),
++            "band_width": float(hi - lo),
++            "point_error": float(band[1] - truth)}
++
++
++def main(argv=None) -> int:
++    ap = argparse.ArgumentParser(description=__doc__,
++                                 formatter_class=argparse.RawDescriptionHelpFormatter)
++    ap.add_argument("--quick", action="store_true")
++    ap.add_argument("--trials", type=int, default=None)
++    ap.add_argument("--no-write", action="store_true")
++    a = ap.parse_args(argv)
++    trials = a.trials if a.trials else (4 if a.quick else 10)
++    n_cells, cal_cells, iters = (24, 20, 7) if a.quick else (32, 24, 8)
++
++    print(f"{LINE_NAME} + {DRUG_NAME}. The 'lab' line differs from the reference by "
++          f"{PERTURBATIONS[0]}x and {PERTURBATIONS[1]}x in {get_drug(DRUG_NAME).fit_target}.\n"
++          f"Calibration sees ONLY a noisy 72 h dose-response (sd {PLATE_NOISE_SD}); the "
++          f"held-out question is survival after a {PULSE_HOURS:g} h pulse read at "
++          f"{READOUT_HOURS:g} h.\n")
++    rows, t0 = [], time.time()
++    for perturb in PERTURBATIONS:
++        for trial in range(trials):
++            r = one_trial(perturb, trial, n_cells=n_cells, cal_cells=cal_cells,
++                          iters=iters)
++            if r is None:
++                continue
++            rows.append(r)
++            print(f"  {perturb:>4.1f}x trial {trial}: constant recovered "
++                  f"{r['constant_ratio']:.2f}x; held-out truth {r['holdout_truth']:.3f}, "
++                  f"band {r['holdout_band'][0]:.3f}-{r['holdout_band'][1]:.3f} "
++                  f"-> {'covered' if r['covered'] else 'MISSED'}", flush=True)
++
++    if not rows:
++        print("no trial completed", file=sys.stderr)
++        return 1
++    cov = float(np.mean([r["covered"] for r in rows]))
++    width = float(np.median([r["band_width"] for r in rows]))
++    cr = np.array([r["constant_ratio"] for r in rows])
++    err = np.array([abs(r["point_error"]) for r in rows])
++    print(f"\n{len(rows)} trials in {time.time() - t0:.0f} s")
++    print(f"  constant recovered:        median {np.median(cr):.2f}x "
++          f"(range {cr.min():.2f}-{cr.max():.2f})")
++    print(f"  held-out band covered:     {cov:.0%} of trials")
++    print(f"  median band width:         {width:.3f} surviving fraction")
++    print(f"  median point error:        {np.median(err):.3f}")
++    ts = np.array([r["holdout_truth_spread"] for r in rows])
++    print(f"  the truth's OWN seed spread: median {np.median(ts):.3f} — the engine is "
++          f"stochastic,\n{'':29}so no band can be narrower than this and still be honest")
++    verdict = cov >= 0.7 and width < 0.5
++    print(f"\nA calibrated prediction of an unseen condition is "
++          f"{'USABLE' if verdict else 'NOT yet usable'}: the band contains the truth "
++          f"{cov:.0%} of the time and is {width:.2f} wide.")
++    print("Both numbers are needed. A band that always covers because it spans every\n"
++          "possible answer has told the user nothing; one that is narrow and wrong is\n"
++          "worse than nothing.")
++    report = {"line": LINE_NAME, "drug": DRUG_NAME, "perturbations": list(PERTURBATIONS),
++              "plate_noise_sd": PLATE_NOISE_SD, "pulse_hours": PULSE_HOURS,
++              "readout_hours": READOUT_HOURS, "n_trials": len(rows),
++              "coverage": cov, "median_band_width": width,
++              "median_constant_ratio": float(np.median(cr)),
++              "median_abs_point_error": float(np.median(err)),
++              "usable": bool(verdict), "trials": rows}
++    if not a.no_write:
++        OUT_JSON.write_text(json.dumps(report, indent=1, default=float) + "\n")
++        print(f"\nwrote {OUT_JSON.relative_to(REPO_ROOT)}")
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+diff --git a/tests/cell/test_api_smoke.py b/tests/cell/test_api_smoke.py
+index 8f53724..619af15 100644
+--- a/tests/cell/test_api_smoke.py
++++ b/tests/cell/test_api_smoke.py
+@@ -67,6 +67,45 @@ def test_exposure_reports_infinity_where_half_kill_is_unreachable():
+     assert long["c50_uM"] > 0
+ 
+ 
++def test_gr_curve_puts_a_simulation_on_the_same_axis_as_a_plate():
++    """GR = 1 is untreated growth, 0 is complete cytostasis, below 0 is net
++    cell loss. A measured plate and a simulation both reduced to GR can be
++    compared; viability cannot be compared that way between lines, which
++    is why GR exists."""
++    rows = _rows(api.gr_curve("A549", "cisplatin", concentrations=[1, 3, 10, 30, 100],
++                              n_cells=24))
++    assert len(rows) == 5
++    gr = [r["gr"] for r in rows]
++    assert gr[0] > 0.8, f"a low dose should barely touch growth: {gr}"
++    assert gr[-1] < 0.1, f"a high dose should at least arrest growth: {gr}"
++    assert gr[0] >= gr[-1] - 0.05, f"GR should fall with dose: {gr}"
++    # the control's own growth is what makes GR comparable; A549 doubles
++    # every 22 h, so a 72 h assay is a little over three doublings
++    doublings = rows[0]["control_doublings"]
++    assert 2.5 < doublings < 4.0, doublings
++    assert all(r["gr"] >= -1.0 for r in rows), "GR is floored at total loss"
++
++
++def test_ic50_spread_exposes_the_engines_own_stochasticity():
++    """The number a user should see before quoting an IC50. The engine
++    draws a finite sample of lineages, so its IC50 moves 10-20 % between
++    seeds; with heterogeneity off it is near-deterministic, which is what
++    identifies the cause as the draw rather than cell count."""
++    rows = _rows(api.ic50_spread("A549", "cisplatin", seeds=(1, 2, 3), n_cells=24))
++    assert len(rows) == 3 and {r["seed"] for r in rows} == {1, 2, 3}
++    vals = [r["ic50_uM"] for r in rows]
++    assert all(np.isfinite(v) and v > 0 for v in vals), vals
++    spread = rows[0]["spread_fold"]
++    assert abs(spread - max(vals) / min(vals)) < 1e-9
++    assert 1.0 < spread < 2.0, f"expected a real but bounded spread, got {spread}"
++    # with identical cells the same measurement is near-deterministic
++    flat = _rows(api.ic50_spread("A549", "cisplatin", seeds=(1, 2, 3), n_cells=24,
++                                 params=Params(het_sigma=0.0)))
++    assert flat[0]["spread_fold"] < 1.05, (
++        f"heterogeneity should be the source of the spread: {flat[0]['spread_fold']}")
++    assert flat[0]["spread_fold"] < spread
++
++
+ def test_washout_shows_the_drug_leaving_and_the_colony_recovering():
+     rows = _rows(api.washout("A549", "cisplatin", conc_uM=20.0, exposure_h=12.0,
+                              hours=96.0, n_cells=48, record_every_h=12.0))
+diff --git a/tests/cell/test_calibrate_smoke.py b/tests/cell/test_calibrate_smoke.py
+index 5e92127..a5129fd 100644
+--- a/tests/cell/test_calibrate_smoke.py
++++ b/tests/cell/test_calibrate_smoke.py
+@@ -138,13 +138,32 @@ def test_predictions_come_back_as_a_band():
+     range, and a difference smaller than that range is not a result."""
+     cal = calibrate_potency("A549", "cisplatin", 8.0, (5.0, 13.0),
+                             n_cells=N_CELLS, iters=ITERS, report_ic50=False)
+-    band = predict_band(cal, lambda d: ic50(LINE, d, guess_uM=8.0,
+-                                            n_cells_per_conc=N_CELLS, k_cyc=K, p=P))
+-    assert set(band) >= {"low", "value", "high", "spread", "range"}
+-    assert band["range"][0] < band["value"] < band["range"][1], band
++    band = predict_band(cal, lambda d, sd: ic50(LINE, d, guess_uM=8.0,
++                                                n_cells_per_conc=N_CELLS, k_cyc=K,
++                                                p=P, seed=sd), seeds=(1, 2))
++    assert set(band) >= {"low", "value", "high", "spread", "range", "n_runs"}
++    assert band["n_runs"] == 6, "three constants x two seeds"
++    assert band["range"][0] <= band["value"] <= band["range"][1], band
+     assert band["spread"] > 1.0, f"a 2.6-fold measurement should give a real spread: {band}"
+ 
+ 
++def test_the_band_widens_when_seeds_are_included():
++    """The error that a hold-out test caught: a band built from the
++    calibration interval alone, at one seed, ignores the engine's own
++    run-to-run variability — which is about as large. Including seeds
++    must widen it."""
++    cal = calibrate_potency("A549", "cisplatin", 8.0, (6.5, 10.0),
++                            n_cells=N_CELLS, iters=ITERS, report_ic50=False)
++
++    def run(d, sd):
++        return ic50(LINE, d, guess_uM=8.0, n_cells_per_conc=N_CELLS, k_cyc=K, p=P, seed=sd)
++
++    one_seed = predict_band(cal, run, seeds=(1,))
++    three = predict_band(cal, run, seeds=(1, 2, 3))
++    assert three["spread"] >= one_seed["spread"], (one_seed["spread"], three["spread"])
++    assert three["n_runs"] == 9 and one_seed["n_runs"] == 3
++
++
+ if __name__ == "__main__":
+     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+     failed = 0

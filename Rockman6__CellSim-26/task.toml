@@ -1,0 +1,65 @@
+version = "1.0"
+
+[task]
+name = "default/Rockman6__CellSim-26"
+description = "Glucose fails its validation, and is labelled so"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "CellSim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "Rockman6/CellSim"
+ref = "b42bd11c7db5c9018ca2f91f32d8dbc08304d26f"
+reference = "https://github.com/Rockman6/CellSim/pull/26"
+source_access = "auto"
+built_at = "2026-11-16T11:04:27.236675+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:d849bdbe28976a163316bde656f27f7eb268e48b15f1085d9d4d01a2b7a36fe4"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2026-10-07T05:21:12Z"
+diff_format = "unified"
+context_files = [
+    "README.md",
+    "benchmarks/cell/glucose_validation.json",
+    "docs/VALIDATION.md",
+    "scripts/validate_glucose.py",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 303
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

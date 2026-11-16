@@ -1,0 +1,1303 @@
+diff --git a/skills/science/knowledge-graph-tools/SKILL.md b/skills/science/knowledge-graph-tools/SKILL.md
+new file mode 100644
+index 0000000..7a6f47c
+--- /dev/null
++++ b/skills/science/knowledge-graph-tools/SKILL.md
+@@ -0,0 +1,168 @@
++---
++name: knowledge-graph-tools
++description: Drug-discovery knowledge-graph workflow guide for assembling drug-target-disease-pathway relationship graphs from OpenTargets GraphQL, ChEMBL REST, STRING PPI, and Reactome pathway APIs, then running hub detection, shortest-path queries, and neighborhood expansion with networkx. Use when the user asks to build, query, or visualize a biomedical knowledge graph connecting drugs, targets, diseases, and pathways from real public databases without making clinical claims.
++---
++
++# Knowledge Graph Tools
++
++Use this skill for building and querying biomedical relationship graphs from public drug-discovery APIs, not for clinical decision-making.
++
++Typical triggers:
++- build a knowledge graph seeded from a disease, a drug, or a target list
++- find shortest paths from a drug to a disease through intermediate targets and pathways
++- identify hub targets that bridge multiple disease areas or drug mechanisms
++- expand the neighborhood around a protein to see connected drugs, diseases, and pathways
++- merge OpenTargets, ChEMBL, STRING, and Reactome data into one queryable graph
++
++## Working Rules
++
++1. Every node gets a typed label: `drug`, `target`, `disease`, or `pathway`.
++2. Every edge records its source database and, where available, an evidence score.
++3. Use canonical identifiers: Ensembl for targets, ChEMBL for drugs, EFO for diseases, Reactome stable IDs for pathways.
++4. Hub analysis reflects database connectivity, not biological importance; well-studied proteins dominate.
++5. Shortest-path hypotheses are topological leads, not validated biology.
++6. Do not claim causal or therapeutic conclusions from graph structure alone.
++
++## Environment Check
++
++```bash
++which python3 || true
++python3 - <<'PY'
++mods = ["networkx", "requests"]
++for name in mods:
++    try:
++        __import__(name)
++        print(f"{name}: ok")
++    except Exception as exc:
++        print(f"{name}: missing ({exc})")
++PY
++```
++
++If networkx or requests is missing, say so immediately. If network access is blocked, only the `query` mode on pre-built GraphML files will work.
++
++## Bundled Assets
++
++- `templates/knowledge_graph.py`
++
++## Build: Disease-Centric Graph
++
++Use `templates/knowledge_graph.py --mode build --seed-type disease` for:
++- fetching disease-associated targets from OpenTargets
++- fetching known drugs for those targets from OpenTargets
++- adding protein-protein interactions from STRING
++- adding pathway membership from Reactome
++- assembling typed nodes and edges into a single graph
++
++Quick start:
++
++```bash
++python3 templates/knowledge_graph.py \
++  --mode build \
++  --seed-type disease \
++  --seed "Crohn's disease" \
++  --max-targets 30 \
++  --include-string \
++  --include-reactome \
++  --output kg/crohn_graph.graphml \
++  --summary kg/crohn_summary.json
++```
++
++Deliverables:
++- GraphML file with typed nodes (`entity_type`) and typed edges (`relation`, `source_db`, `score`)
++- summary JSON with node/edge counts by type, top hubs, and data sources queried
++
++## Build: Drug-Centric Graph
++
++Use `--seed-type drug` to start from a drug and expand through its targets:
++
++```bash
++python3 templates/knowledge_graph.py \
++  --mode build \
++  --seed-type drug \
++  --seed "imatinib" \
++  --max-targets 20 \
++  --include-string \
++  --include-reactome \
++  --output kg/imatinib_graph.graphml \
++  --summary kg/imatinib_summary.json
++```
++
++## Query: Shortest Path
++
++Use `--mode query --query-type shortest-path` on an existing GraphML file:
++
++```bash
++python3 templates/knowledge_graph.py \
++  --mode query \
++  --input kg/crohn_graph.graphml \
++  --query-type shortest-path \
++  --from-node "CHEMBL941" \
++  --to-node "EFO_0000384" \
++  --summary kg/path_result.json
++```
++
++Deliverables:
++- summary JSON with path length, node sequence, and edge relations for each step
++
++## Query: Hub Analysis
++
++Use `--mode query --query-type hubs`:
++
++```bash
++python3 templates/knowledge_graph.py \
++  --mode query \
++  --input kg/crohn_graph.graphml \
++  --query-type hubs \
++  --top-k 20 \
++  --summary kg/hub_targets.json
++```
++
++Deliverables:
++- summary JSON with top-K nodes ranked by degree and betweenness centrality, with entity type
++
++## Query: Neighborhood Expansion
++
++Use `--mode query --query-type neighbors`:
++
++```bash
++python3 templates/knowledge_graph.py \
++  --mode query \
++  --input kg/crohn_graph.graphml \
++  --query-type neighbors \
++  --center-node "ENSG00000141510" \
++  --radius 2 \
++  --summary kg/tp53_neighborhood.json
++```
++
++Deliverables:
++- summary JSON with subgraph node list, edge list, and entity-type breakdown
++
++## Output Expectations
++
++Good answers should mention:
++- seed entity and type (drug, disease, or target list)
++- which APIs were queried (OpenTargets, ChEMBL, STRING, Reactome)
++- graph size: node count by type, edge count by relation type
++- for hub queries: top hub identifiers, degrees, and entity types
++- for path queries: full path with intermediate nodes and edge types
++- identifier schemes used
++- where GraphML and JSON were saved
++
++## Related Skills
++
++For compound and regulatory database lookups from ChEMBL, openFDA, ClinicalTrials.gov, activate `pharma-db-tools`.
++For target-specific intelligence dossiers, activate `target-intelligence-tools`.
++For drug repurposing hypothesis generation, activate `drug-repurposing-tools`.
++For pathway enrichment from gene lists, activate `pathway-enrichment-tools`.
++For network pharmacology analysis, activate `network-pharmacology-tools`.
++For raw bio database lookups in UniProt, PDB, ClinVar, gnomAD, Reactome, STRING, activate `bio-db-tools`.
++
++## Reference
++
++This skill queries the following public APIs during `build` mode:
++- **OpenTargets Platform GraphQL** — `https://api.platform.opentargets.org/api/v4/graphql` — disease-target associations (`associatedTargets`), known drugs (`knownDrugs`), and entity search ([platform.opentargets.org](https://platform.opentargets.org/))
++- **ChEMBL REST API** — `https://www.ebi.ac.uk/chembl/api/data` — molecule search, mechanism-of-action retrieval, and target cross-references ([chembl.gitbook.io](https://chembl.gitbook.io/chembl-interface-documentation/web-services))
++- **STRING API v12** — `https://version-12-0.string-db.org/api` — protein-protein interaction partners with combined confidence scores ([string-db.org](https://string-db.org/))
++- **Reactome Content Service** — `https://reactome.org/ContentService` — pathway search by gene symbol with species filter ([reactome.org](https://reactome.org/))
++- Graph analysis uses **networkx** — `nx.shortest_path`, `nx.betweenness_centrality`, `nx.ego_graph` ([networkx.org](https://networkx.org/))
++- The `target-intelligence-tools` skill in this repository served as the reference implementation for API calling patterns, error handling, and identifier resolution.
+\ No newline at end of file
+diff --git a/skills/science/knowledge-graph-tools/template/knowledge_graph.py b/skills/science/knowledge-graph-tools/template/knowledge_graph.py
+new file mode 100644
+index 0000000..25c77ea
+--- /dev/null
++++ b/skills/science/knowledge-graph-tools/template/knowledge_graph.py
+@@ -0,0 +1,595 @@
++#!/usr/bin/env python3
++"""Build and query drug-discovery knowledge graphs from OpenTargets, ChEMBL, STRING, and Reactome."""
++from __future__ import annotations
++
++import argparse
++import json
++from pathlib import Path
++from typing import Any
++
++try:
++    import networkx as nx
++except Exception:  # pragma: no cover - optional at runtime
++    nx = None
++
++try:
++    import requests
++except Exception:  # pragma: no cover - optional at runtime
++    requests = None
++
++OPENTARGETS_URL = "https://api.platform.opentargets.org/api/v4/graphql"
++CHEMBL_BASE = "https://www.ebi.ac.uk/chembl/api/data"
++STRING_BASE = "https://version-12-0.string-db.org/api"
++REACTOME_BASE = "https://reactome.org/ContentService"
++
++
++# ---------------------------------------------------------------------------
++# CLI
++# ---------------------------------------------------------------------------
++
++def parse_args() -> argparse.Namespace:
++    p = argparse.ArgumentParser(
++        description="Build and query drug-target-disease-pathway knowledge graphs"
++    )
++    p.add_argument("--mode", choices=["build", "query"], required=True)
++
++    grp_build = p.add_argument_group("build options")
++    grp_build.add_argument("--seed-type", choices=["disease", "drug"])
++    grp_build.add_argument("--seed", help="Disease name / EFO ID, or drug name / ChEMBL ID")
++    grp_build.add_argument("--max-targets", type=int, default=30)
++    grp_build.add_argument("--max-drugs-per-target", type=int, default=5)
++    grp_build.add_argument("--string-limit", type=int, default=10)
++    grp_build.add_argument("--pathway-limit", type=int, default=5)
++    grp_build.add_argument("--include-string", action="store_true")
++    grp_build.add_argument("--include-reactome", action="store_true")
++    grp_build.add_argument("--organism-id", type=int, default=9606)
++    grp_build.add_argument("--species-name", default="Homo sapiens")
++    grp_build.add_argument("--timeout", type=int, default=30)
++
++    grp_query = p.add_argument_group("query options")
++    grp_query.add_argument("--input", help="GraphML file to load for query mode")
++    grp_query.add_argument("--query-type", choices=["shortest-path", "hubs", "neighbors"])
++    grp_query.add_argument("--from-node", help="Source node for shortest-path")
++    grp_query.add_argument("--to-node", help="Target node for shortest-path")
++    grp_query.add_argument("--center-node", help="Center node for neighbor expansion")
++    grp_query.add_argument("--radius", type=int, default=2)
++    grp_query.add_argument("--top-k", type=int, default=20)
++
++    p.add_argument("--output", default="kg/knowledge_graph.graphml")
++    p.add_argument("--summary", default="kg/knowledge_graph.json")
++    return p.parse_args()
++
++
++# ---------------------------------------------------------------------------
++# Helpers
++# ---------------------------------------------------------------------------
++
++def require_networkx():
++    if nx is None:
++        raise SystemExit("knowledge_graph.py requires networkx")
++
++
++def require_requests():
++    if requests is None:
++        raise SystemExit("knowledge_graph.py requires requests for build mode")
++    return requests
++
++
++def clean_text(value: Any) -> str:
++    if value is None:
++        return ""
++    return str(value).strip()
++
++
++def http_json(method: str, url: str, *, timeout: int,
++              params: dict[str, Any] | None = None,
++              json_body: dict[str, Any] | None = None,
++              headers: dict[str, str] | None = None) -> Any:
++    req = require_requests()
++    resp = req.request(method, url, params=params, json=json_body,
++                       headers=headers, timeout=timeout)
++    resp.raise_for_status()
++    if not resp.content:
++        return {}
++    return resp.json()
++
++
++def ot_graphql(query: str, variables: dict[str, Any], timeout: int) -> Any:
++    return http_json("POST", OPENTARGETS_URL, timeout=timeout,
++                     json_body={"query": query, "variables": variables},
++                     headers={"Content-Type": "application/json"})
++
++
++def write_json(path: str, payload: Any) -> None:
++    Path(path).parent.mkdir(parents=True, exist_ok=True)
++    Path(path).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
++
++
++# ---------------------------------------------------------------------------
++# OpenTargets queries
++# ---------------------------------------------------------------------------
++
++SEARCH_DISEASE = """
++query ($q: String!, $size: Int!) {
++  search(queryString: $q, entityNames: ["disease"], page: {index: 0, size: $size}) {
++    hits { id name entity }
++  }
++}"""
++
++DISEASE_TARGETS = """
++query ($efoId: String!, $size: Int!) {
++  disease(efoId: $efoId) {
++    id name
++    associatedTargets(page: {index: 0, size: $size}) {
++      count
++      rows { target { id approvedSymbol approvedName } score }
++    }
++  }
++}"""
++
++TARGET_DRUGS = """
++query ($ensemblId: String!, $size: Int!) {
++  target(ensemblId: $ensemblId) {
++    id approvedSymbol
++    knownDrugs(size: $size) {
++      rows { drug { id name } mechanismOfAction phase status }
++    }
++  }
++}"""
++
++SEARCH_TARGET = """
++query ($q: String!, $size: Int!) {
++  search(queryString: $q, entityNames: ["target"], page: {index: 0, size: $size}) {
++    hits { id name entity }
++  }
++}"""
++
++TARGET_DISEASES = """
++query ($ensemblId: String!, $size: Int!) {
++  target(ensemblId: $ensemblId) {
++    id approvedSymbol
++    associatedDiseases(page: {index: 0, size: $size}) {
++      rows { disease { id name } score }
++    }
++  }
++}"""
++
++
++# ---------------------------------------------------------------------------
++# Build: resolve seed entities
++# ---------------------------------------------------------------------------
++
++def resolve_disease(name: str, timeout: int) -> dict[str, str]:
++    if name.startswith("EFO_") or name.startswith("MONDO_") or name.startswith("Orphanet_"):
++        return {"efo_id": name, "name": name}
++    data = ot_graphql(SEARCH_DISEASE, {"q": name, "size": 5}, timeout)
++    hits = data.get("data", {}).get("search", {}).get("hits", [])
++    if not hits:
++        raise SystemExit(f"Disease not found in OpenTargets: {name}")
++    return {"efo_id": hits[0]["id"], "name": hits[0].get("name", name)}
++
++
++def resolve_drug_chembl(name: str, timeout: int) -> tuple[str, str]:
++    """Return (chembl_id, pref_name)."""
++    req = require_requests()
++    resp = req.get(f"{CHEMBL_BASE}/molecule/search.json",
++                   params={"q": name, "limit": 3}, timeout=timeout)
++    if resp.status_code != 200:
++        raise SystemExit(f"ChEMBL molecule search failed for: {name}")
++    mols = resp.json().get("molecules", [])
++    if not mols:
++        raise SystemExit(f"Drug not found in ChEMBL: {name}")
++    return (clean_text(mols[0].get("molecule_chembl_id")),
++            clean_text(mols[0].get("pref_name") or name))
++
++
++def fetch_drug_mechanisms(chembl_id: str, timeout: int) -> list[dict[str, Any]]:
++    req = require_requests()
++    resp = req.get(f"{CHEMBL_BASE}/mechanism.json",
++                   params={"molecule_chembl_id": chembl_id, "limit": 50}, timeout=timeout)
++    if resp.status_code != 200:
++        return []
++    mechanisms = resp.json().get("mechanisms", [])
++    results = []
++    seen: set[str] = set()
++    for mech in mechanisms:
++        tid = clean_text(mech.get("target_chembl_id"))
++        if not tid or tid in seen:
++            continue
++        seen.add(tid)
++        results.append({
++            "target_chembl_id": tid,
++            "target_name": clean_text(mech.get("target_pref_name")),
++            "mechanism": clean_text(mech.get("mechanism_of_action")),
++        })
++    return results
++
++
++def chembl_target_to_ensembl(chembl_target_id: str, timeout: int) -> str:
++    req = require_requests()
++    try:
++        resp = req.get(f"{CHEMBL_BASE}/target/{chembl_target_id}.json", timeout=timeout)
++        if resp.status_code != 200:
++            return ""
++        for comp in resp.json().get("target_components") or []:
++            for xref in comp.get("target_component_xrefs") or []:
++                if xref.get("xref_src_db") == "EnsemblGene":
++                    return clean_text(xref.get("xref_id"))
++    except Exception:
++        pass
++    return ""
++
++
++# ---------------------------------------------------------------------------
++# Build: fetch layers
++# ---------------------------------------------------------------------------
++
++def fetch_disease_targets(efo_id: str, limit: int, timeout: int) -> list[dict[str, Any]]:
++    data = ot_graphql(DISEASE_TARGETS, {"efoId": efo_id, "size": limit}, timeout)
++    rows = data.get("data", {}).get("disease", {}).get("associatedTargets", {}).get("rows", [])
++    return [{"ensembl_id": r["target"]["id"],
++             "symbol": r["target"]["approvedSymbol"],
++             "name": r["target"].get("approvedName", ""),
++             "ot_score": r.get("score", 0)} for r in rows]
++
++
++def fetch_target_drugs(ensembl_id: str, limit: int, timeout: int) -> list[dict[str, Any]]:
++    data = ot_graphql(TARGET_DRUGS, {"ensemblId": ensembl_id, "size": limit}, timeout)
++    target = data.get("data", {}).get("target", {}) or {}
++    drugs: list[dict[str, Any]] = []
++    for row in (target.get("knownDrugs") or {}).get("rows", []):
++        drug = row.get("drug") or {}
++        drugs.append({
++            "chembl_id": clean_text(drug.get("id")),
++            "name": clean_text(drug.get("name")),
++            "mechanism": clean_text(row.get("mechanismOfAction")),
++            "phase": row.get("phase", ""),
++        })
++    return drugs
++
++
++def fetch_target_diseases(ensembl_id: str, limit: int, timeout: int) -> list[dict[str, Any]]:
++    data = ot_graphql(TARGET_DISEASES, {"ensemblId": ensembl_id, "size": limit}, timeout)
++    target = data.get("data", {}).get("target", {}) or {}
++    diseases: list[dict[str, Any]] = []
++    for row in (target.get("associatedDiseases") or {}).get("rows", []):
++        d = row.get("disease") or {}
++        diseases.append({
++            "efo_id": clean_text(d.get("id")),
++            "name": clean_text(d.get("name")),
++            "ot_score": row.get("score", 0),
++        })
++    return diseases
++
++
++def fetch_string_partners(symbol: str, species: int,
++                          limit: int, timeout: int) -> list[dict[str, Any]]:
++    try:
++        data = http_json("GET", f"{STRING_BASE}/json/interaction_partners",
++                         timeout=timeout,
++                         params={"identifiers": symbol, "species": species,
++                                 "caller_identity": "drugclaw", "limit": limit})
++    except Exception:
++        return []
++    partners: list[dict[str, Any]] = []
++    for item in (data or [])[:limit]:
++        partners.append({
++            "partner": clean_text(item.get("preferredName_B")),
++            "score": item.get("score"),
++        })
++    return partners
++
++
++def fetch_reactome_pathways(symbol: str, species_name: str,
++                            limit: int, timeout: int) -> list[dict[str, Any]]:
++    try:
++        data = http_json("GET", f"{REACTOME_BASE}/search/query",
++                         timeout=timeout,
++                         params={"query": symbol, "species": species_name,
++                                 "types": "Pathway", "cluster": "true"},
++                         headers={"Accept": "application/json"})
++    except Exception:
++        return []
++    pathways: list[dict[str, Any]] = []
++    for group in data.get("results", []) or []:
++        for entry in group.get("entries", []) or []:
++            pathways.append({
++                "pathway_id": clean_text(entry.get("stId")),
++                "name": clean_text(entry.get("name")),
++            })
++            if len(pathways) >= limit:
++                return pathways
++    return pathways
++
++
++# ---------------------------------------------------------------------------
++# Build: assemble graph
++# ---------------------------------------------------------------------------
++
++def build_disease_graph(args: argparse.Namespace) -> Any:
++    require_networkx()
++    disease = resolve_disease(args.seed, args.timeout)
++    efo_id = disease["efo_id"]
++    disease_name = disease["name"]
++    print(f"Disease: {disease_name} ({efo_id})")
++
++    G = nx.DiGraph()
++    G.add_node(efo_id, entity_type="disease", label=disease_name)
++
++    targets = fetch_disease_targets(efo_id, args.max_targets, args.timeout)
++    print(f"  Targets from OpenTargets: {len(targets)}")
++    for t in targets:
++        G.add_node(t["ensembl_id"], entity_type="target", label=t["symbol"])
++        G.add_edge(t["ensembl_id"], efo_id,
++                    relation="associated_with", source_db="opentargets",
++                    score=str(t["ot_score"]))
++
++    drug_count = 0
++    for t in targets:
++        drugs = fetch_target_drugs(t["ensembl_id"], args.max_drugs_per_target, args.timeout)
++        for d in drugs:
++            cid = d["chembl_id"]
++            if not cid:
++                continue
++            if cid not in G:
++                G.add_node(cid, entity_type="drug", label=d["name"])
++            G.add_edge(cid, t["ensembl_id"],
++                       relation="targets", source_db="opentargets",
++                       mechanism=d.get("mechanism", ""),
++                       phase=str(d.get("phase", "")))
++            drug_count += 1
++    print(f"  Drug-target edges from OpenTargets: {drug_count}")
++
++    if args.include_string:
++        ppi_count = 0
++        for t in targets:
++            partners = fetch_string_partners(t["symbol"], args.organism_id,
++                                             args.string_limit, args.timeout)
++            for p in partners:
++                partner_name = p["partner"]
++                if not partner_name:
++                    continue
++                partner_id = f"STRING:{partner_name}"
++                if partner_id not in G:
++                    G.add_node(partner_id, entity_type="target", label=partner_name)
++                G.add_edge(t["ensembl_id"], partner_id,
++                           relation="interacts_with", source_db="string",
++                           score=str(p.get("score", "")))
++                ppi_count += 1
++        print(f"  PPI edges from STRING: {ppi_count}")
++
++    if args.include_reactome:
++        pathway_count = 0
++        for t in targets:
++            pathways = fetch_reactome_pathways(t["symbol"], args.species_name,
++                                               args.pathway_limit, args.timeout)
++            for pw in pathways:
++                pid = pw["pathway_id"]
++                if not pid:
++                    continue
++                if pid not in G:
++                    G.add_node(pid, entity_type="pathway", label=pw["name"])
++                G.add_edge(t["ensembl_id"], pid,
++                           relation="member_of", source_db="reactome")
++                pathway_count += 1
++        print(f"  Pathway edges from Reactome: {pathway_count}")
++
++    return G
++
++
++def build_drug_graph(args: argparse.Namespace) -> Any:
++    require_networkx()
++    chembl_id, drug_name = resolve_drug_chembl(args.seed, args.timeout)
++    print(f"Drug: {drug_name} ({chembl_id})")
++
++    G = nx.DiGraph()
++    G.add_node(chembl_id, entity_type="drug", label=drug_name)
++
++    mechanisms = fetch_drug_mechanisms(chembl_id, args.timeout)
++    print(f"  Mechanisms from ChEMBL: {len(mechanisms)}")
++
++    targets_for_expansion: list[dict[str, Any]] = []
++    for mech in mechanisms:
++        ensembl = chembl_target_to_ensembl(mech["target_chembl_id"], args.timeout)
++        if not ensembl:
++            data = ot_graphql(SEARCH_TARGET, {"q": mech["target_name"], "size": 3}, args.timeout)
++            hits = data.get("data", {}).get("search", {}).get("hits", [])
++            ensembl = hits[0]["id"] if hits else ""
++        if ensembl:
++            symbol = mech["target_name"]
++            G.add_node(ensembl, entity_type="target", label=symbol)
++            G.add_edge(chembl_id, ensembl,
++                       relation="targets", source_db="chembl",
++                       mechanism=mech.get("mechanism", ""))
++            targets_for_expansion.append({"ensembl_id": ensembl, "symbol": symbol})
++
++    disease_count = 0
++    for t in targets_for_expansion[:args.max_targets]:
++        diseases = fetch_target_diseases(t["ensembl_id"], 10, args.timeout)
++        for d in diseases:
++            did = d["efo_id"]
++            if not did:
++                continue
++            if did not in G:
++                G.add_node(did, entity_type="disease", label=d["name"])
++            G.add_edge(t["ensembl_id"], did,
++                       relation="associated_with", source_db="opentargets",
++                       score=str(d.get("ot_score", "")))
++            disease_count += 1
++    print(f"  Disease edges from OpenTargets: {disease_count}")
++
++    if args.include_string:
++        ppi_count = 0
++        for t in targets_for_expansion[:args.max_targets]:
++            partners = fetch_string_partners(t["symbol"], args.organism_id,
++                                             args.string_limit, args.timeout)
++            for p in partners:
++                partner_name = p["partner"]
++                if not partner_name:
++                    continue
++                partner_id = f"STRING:{partner_name}"
++                if partner_id not in G:
++                    G.add_node(partner_id, entity_type="target", label=partner_name)
++                G.add_edge(t["ensembl_id"], partner_id,
++                           relation="interacts_with", source_db="string",
++                           score=str(p.get("score", "")))
++                ppi_count += 1
++        print(f"  PPI edges from STRING: {ppi_count}")
++
++    if args.include_reactome:
++        pathway_count = 0
++        for t in targets_for_expansion[:args.max_targets]:
++            pathways = fetch_reactome_pathways(t["symbol"], args.species_name,
++                                               args.pathway_limit, args.timeout)
++            for pw in pathways:
++                pid = pw["pathway_id"]
++                if not pid:
++                    continue
++                if pid not in G:
++                    G.add_node(pid, entity_type="pathway", label=pw["name"])
++                G.add_edge(t["ensembl_id"], pid,
++                           relation="member_of", source_db="reactome")
++                pathway_count += 1
++        print(f"  Pathway edges from Reactome: {pathway_count}")
++
++    return G
++
++
++# ---------------------------------------------------------------------------
++# Query
++# ---------------------------------------------------------------------------
++
++def hub_analysis(G: Any, top_k: int) -> list[dict[str, Any]]:
++    degree = dict(G.degree())
++    try:
++        betweenness = nx.betweenness_centrality(G)
++    except Exception:
++        betweenness = {n: 0.0 for n in G.nodes()}
++    ranked = sorted(degree.keys(), key=lambda n: degree[n], reverse=True)[:top_k]
++    return [{
++        "node": n,
++        "entity_type": G.nodes[n].get("entity_type", ""),
++        "label": G.nodes[n].get("label", ""),
++        "degree": degree[n],
++        "betweenness": round(betweenness.get(n, 0.0), 6),
++    } for n in ranked]
++
++
++def shortest_path_query(G: Any, from_node: str, to_node: str) -> dict[str, Any]:
++    try:
++        path = nx.shortest_path(G, source=from_node, target=to_node)
++        steps = []
++        for i in range(len(path) - 1):
++            edge_data = G.get_edge_data(path[i], path[i + 1]) or {}
++            steps.append({
++                "from": path[i],
++                "from_type": G.nodes[path[i]].get("entity_type", ""),
++                "from_label": G.nodes[path[i]].get("label", ""),
++                "to": path[i + 1],
++                "to_type": G.nodes[path[i + 1]].get("entity_type", ""),
++                "to_label": G.nodes[path[i + 1]].get("label", ""),
++                "relation": edge_data.get("relation", ""),
++                "source_db": edge_data.get("source_db", ""),
++            })
++        return {"found": True, "length": len(path) - 1, "path": path, "steps": steps}
++    except (nx.NetworkXNoPath, nx.NodeNotFound) as exc:
++        return {"found": False, "error": str(exc)}
++
++
++def neighbor_query(G: Any, center: str, radius: int) -> dict[str, Any]:
++    if center not in G:
++        return {"found": False, "error": f"Node '{center}' not in graph"}
++    sub = nx.ego_graph(G, center, radius=radius, undirected=True)
++    nodes = [{"node": n, "entity_type": G.nodes[n].get("entity_type", ""),
++              "label": G.nodes[n].get("label", "")} for n in sub.nodes()]
++    edges = [{"from": u, "to": v,
++              "relation": d.get("relation", ""),
++              "source_db": d.get("source_db", "")} for u, v, d in sub.edges(data=True)]
++    return {"found": True, "center": center, "radius": radius,
++            "node_count": len(nodes), "edge_count": len(edges),
++            "nodes": nodes, "edges": edges}
++
++
++def graph_summary(G: Any) -> dict[str, Any]:
++    type_counts: dict[str, int] = {}
++    for _, d in G.nodes(data=True):
++        t = d.get("entity_type", "unknown")
++        type_counts[t] = type_counts.get(t, 0) + 1
++    rel_counts: dict[str, int] = {}
++    source_counts: dict[str, int] = {}
++    for _, _, d in G.edges(data=True):
++        r = d.get("relation", "unknown")
++        rel_counts[r] = rel_counts.get(r, 0) + 1
++        s = d.get("source_db", "unknown")
++        source_counts[s] = source_counts.get(s, 0) + 1
++    return {
++        "total_nodes": G.number_of_nodes(),
++        "total_edges": G.number_of_edges(),
++        "node_types": type_counts,
++        "edge_relations": rel_counts,
++        "data_sources": source_counts,
++    }
++
++
++# ---------------------------------------------------------------------------
++# Main
++# ---------------------------------------------------------------------------
++
++def main() -> None:
++    args = parse_args()
++    require_networkx()
++
++    if args.mode == "build":
++        if not args.seed_type or not args.seed:
++            raise SystemExit("--seed-type and --seed required for build mode")
++
++        if args.seed_type == "disease":
++            G = build_disease_graph(args)
++        else:
++            G = build_drug_graph(args)
++
++        Path(args.output).parent.mkdir(parents=True, exist_ok=True)
++        nx.write_graphml(G, args.output)
++        print(f"Graph saved: {args.output}")
++
++        hubs = hub_analysis(G, 10)
++        summary = {
++            **graph_summary(G),
++            "seed_type": args.seed_type,
++            "seed": args.seed,
++            "include_string": args.include_string,
++            "include_reactome": args.include_reactome,
++            "top_hubs": hubs,
++            "output": args.output,
++        }
++        write_json(args.summary, summary)
++
++    elif args.mode == "query":
++        if not args.input:
++            raise SystemExit("--input (GraphML) required for query mode")
++        G = nx.read_graphml(args.input)
++        print(f"Loaded graph: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
++
++        if args.query_type == "shortest-path":
++            if not args.from_node or not args.to_node:
++                raise SystemExit("--from-node and --to-node required")
++            result = shortest_path_query(G, args.from_node, args.to_node)
++            summary: dict[str, Any] = {"query_type": "shortest-path", **result}
++        elif args.query_type == "hubs":
++            hubs = hub_analysis(G, args.top_k)
++            summary = {"query_type": "hubs", "top_k": args.top_k, "hubs": hubs}
++        elif args.query_type == "neighbors":
++            if not args.center_node:
++                raise SystemExit("--center-node required for neighbor query")
++            result = neighbor_query(G, args.center_node, args.radius)
++            summary = {"query_type": "neighbors", **result}
++        else:
++            raise SystemExit(f"Unknown query type: {args.query_type}")
++
++        write_json(args.summary, summary)
++
++    print(json.dumps({"output": args.output, "summary": args.summary}, ensure_ascii=False))
++
++
++if __name__ == "__main__":
++    main()
+\ No newline at end of file
+diff --git a/skills/science/patent(US)-landscape-tools/SKILL.md b/skills/science/patent(US)-landscape-tools/SKILL.md
+new file mode 100644
+index 0000000..1a914f9
+--- /dev/null
++++ b/skills/science/patent(US)-landscape-tools/SKILL.md
+@@ -0,0 +1,171 @@
++---
++name: patent-landscape-tools
++description: Drug-patent landscape workflow guide for searching US patents via the PatentsView API, classifying pharmaceutical claim types (NCE, formulation, method-of-use, polymorph, combination, biologic, process), grouping by patent family and assignee, estimating expiry timelines, and cross-referencing the FDA Orange Book for marketed-drug exclusivity windows. Use when the user asks about patent coverage, IP white-space, patent cliffs, or competitive filing activity around a drug, target, or compound class without asking for legal counsel.
++---
++
++# Patent Landscape Tools
++
++Use this skill for research-grade patent intelligence around drugs, targets, or mechanisms, not legal freedom-to-operate opinions.
++
++Typical triggers:
++- search US patents related to a drug compound, target, or mechanism of action
++- classify pharmaceutical patents by claim type: NCE, formulation, method-of-use, polymorph, biologic, process
++- build a landscape summary showing filing trends, top assignees, and claim-type distribution
++- estimate patent expiry windows for one or more patent families
++- cross-reference the FDA Orange Book for a marketed drug's listed patents and exclusivity codes
++- identify IP white-space or under-patented mechanism classes before a new filing strategy
++
++## Working Rules
++
++1. Always apply a pharmaceutical CPC filter (A61K, A61P, or C07) to avoid non-drug noise.
++2. Distinguish granted patents from applications; PatentsView covers grants only.
++3. Report the data source, query date, and coverage limitation (US-only) in every output.
++4. Claim-type classification is heuristic from title and abstract keywords, not from reading claims.
++5. Expiry is estimated as filing date + 20 years; PTE, PTA, SPC, and terminal disclaimers are not computed.
++6. Do not present any output as freedom-to-operate analysis, legal advice, or infringement opinion.
++
++## Environment Check
++
++```bash
++which python3 || true
++python3 - <<'PY'
++mods = ["requests"]
++for name in mods:
++    try:
++        __import__(name)
++        print(f"{name}: ok")
++    except Exception as exc:
++        print(f"{name}: missing ({exc})")
++PY
++```
++
++If network access is unavailable, say so before claiming patent data was retrieved.
++
++## Bundled Assets
++
++- `templates/patent_landscape.py`
++
++## Patent Landscape Search
++
++Use `templates/patent_landscape.py` for:
++- keyword + CPC-filtered patent search on PatentsView
++- automatic claim-type classification of each result
++- assignee ranking, filing-trend extraction, and family grouping
++- optional markdown landscape brief
++
++Quick start:
++
++```bash
++python3 templates/patent_landscape.py \
++  --query "KRAS G12C inhibitor" \
++  --cpc-filter A61K \
++  --max-results 200 \
++  --output patents/kras_g12c_landscape.csv \
++  --summary patents/kras_g12c_summary.json \
++  --brief patents/kras_g12c_brief.md
++```
++
++Broad landscape with date range:
++
++```bash
++python3 templates/patent_landscape.py \
++  --query "PD-1 antibody" \
++  --cpc-filter A61K39 \
++  --date-from 2015-01-01 \
++  --max-results 500 \
++  --output patents/pd1_ab_landscape.csv \
++  --summary patents/pd1_ab_summary.json
++```
++
++Deliverables:
++- per-patent CSV with patent number, title, filing date, grant date, assignee, country, CPC, claim-type guess, estimated expiry year, and abstract snippet
++- summary JSON with total count, estimated family count, claim-type distribution, top assignees, country distribution, filing-year trend, and expiry window
++- optional markdown brief with tables and caveats
++
++## Expiry Timeline
++
++Use `templates/patent_landscape.py --mode expiry-timeline` for:
++- patent expiry estimation sorted by earliest expiry
++- identification of upcoming patent cliffs for a compound or class
++
++```bash
++python3 templates/patent_landscape.py \
++  --query "semaglutide" \
++  --mode expiry-timeline \
++  --output patents/semaglutide_expiry.csv \
++  --summary patents/semaglutide_expiry.json
++```
++
++Deliverables:
++- patent CSV sorted by estimated expiry year
++- summary JSON with total patents and timeline entry count
++
++## Orange Book Cross-Reference
++
++Use `--orange-book-query` to add FDA Orange Book data for a marketed drug:
++
++```bash
++python3 templates/patent_landscape.py \
++  --query "semaglutide" \
++  --mode expiry-timeline \
++  --orange-book-query "semaglutide" \
++  --output patents/semaglutide_expiry.csv \
++  --summary patents/semaglutide_expiry.json
++```
++
++Orange Book entries include: brand name, generic name, NDA number, dosage form, route, and marketing status.
++
++## CPC Filter Reference
++
++| CPC | Scope |
++|-----|-------|
++| A61K | Pharmaceutical compositions (broadest drug filter) |
++| A61K31 | Small-molecule active ingredients |
++| A61K39 | Antibodies, vaccines, antigens |
++| A61K47 | Excipients, carriers, formulation technology |
++| A61P | Therapeutic activity by indication |
++| C07D | Heterocyclic compounds (core scaffolds) |
++| C07K | Peptides and proteins |
++
++## Claim-Type Classification Heuristics
++
++The template matches title + abstract keywords to assign one of:
++- `NCE / composition-of-matter` — compound, molecule, chemical entity, active ingredient
++- `formulation` — dosage form, tablet, capsule, nanoparticle, sustained release
++- `method-of-use` — method of treating, therapeutic use, for the treatment
++- `polymorph / salt form` — polymorph, crystal form, salt, co-crystal, hydrate
++- `combination` — combination, co-administration, synergistic
++- `biologic` — antibody, recombinant, fusion protein, monoclonal
++- `diagnostic` — biomarker, companion diagnostic, imaging agent
++- `device / delivery` — device, inhaler, auto-injector, applicator
++- `process / manufacturing` — synthesis, preparation, method of making
++
++First match wins. Unmatched patents are labeled `unclassified`. This is not claim analysis.
++
++## Output Expectations
++
++Good answers should mention:
++- the query terms, CPC filter, and date range applied
++- number of patent families and individual documents retrieved
++- claim-type distribution
++- top assignees with filing counts
++- filing trend by year
++- estimated expiry window for key families
++- Orange Book listings if queried
++- explicit caveat: US patents only, heuristic classification, not legal counsel
++- where the CSV, JSON, and optional brief were saved
++
++## Related Skills
++
++For compound and regulatory lookups from ChEMBL, openFDA, ClinicalTrials.gov, activate `pharma-db-tools`.
++For target-level intelligence dossiers, activate `target-intelligence-tools`.
++For clinical-pipeline competitive analysis, activate `competitive-intelligence-tools`.
++For drug repurposing hypothesis generation, activate `drug-repurposing-tools`.
++
++## Reference
++
++This skill queries the following public APIs:
++- **USPTO PatentsView API** — `https://api.patentsview.org/patents/query` — US granted-patent search with CPC, date, and full-text filters ([patentsview.org/apis](https://patentsview.org/apis))
++- **FDA openFDA drugsFDA API** — `https://api.fda.gov/drug/drugsfda.json` — Orange Book product listings including brand/generic names, NDA numbers, dosage forms, and marketing status ([open.fda.gov/apis/drug/drugsfda](https://open.fda.gov/apis/drug/drugsfda/))
++- **CPC classification scheme** — Cooperative Patent Classification maintained by EPO and USPTO; A61K/A61P/C07 subclasses are used as pharmaceutical relevance filters ([cooperativepatentclassification.org](https://www.cooperativepatentclassification.org/))
++- Claim-type classification heuristics are adapted from pharmaceutical IP landscape methodology described in: Dubey R, Maheshwari S. "Patent landscape analysis: A methodology for drug discovery." *Drug Discovery Today*, 2020.
+\ No newline at end of file
+diff --git a/skills/science/patent(US)-landscape-tools/template/patent(us)_landscape.py b/skills/science/patent(US)-landscape-tools/template/patent(us)_landscape.py
+new file mode 100644
+index 0000000..abdf1a3
+--- /dev/null
++++ b/skills/science/patent(US)-landscape-tools/template/patent(us)_landscape.py
+@@ -0,0 +1,341 @@
++#!/usr/bin/env python3
++"""Drug-patent landscape analysis from USPTO PatentsView and FDA Orange Book."""
++from __future__ import annotations
++
++import argparse
++import csv
++import json
++import re
++from collections import Counter
++from datetime import datetime, timezone
++from pathlib import Path
++from typing import Any
++
++try:
++    import requests
++except Exception:  # pragma: no cover - optional at runtime
++    requests = None
++
++PATENTSVIEW_BASE = "https://api.patentsview.org/patents/query"
++ORANGEBOOK_API = "https://api.fda.gov/drug/drugsfda.json"
++
++CLAIM_PATTERNS = [
++    (r"composition|compound|molecule|chemical.entity|NCE|novel.compound|active.ingredient", "NCE / composition-of-matter"),
++    (r"formulation|dosage.form|tablet|capsule|injection|sustained.release|nanoparticle|liposom", "formulation"),
++    (r"method.of.treat|therapeutic.use|method.of.use|treating.*disease|for.the.treatment", "method-of-use"),
++    (r"polymorph|crystal.form|salt|co.?crystal|hydrate|solvate|amorphous", "polymorph / salt form"),
++    (r"combination|co.?administration|synergistic|adjunct", "combination"),
++    (r"antibody|biologic|recombinant|fusion.protein|monoclonal", "biologic"),
++    (r"diagnos|biomarker|assay|companion.diagnostic|imaging.agent", "diagnostic"),
++    (r"device|deliver|applicator|inhaler|auto.?injector", "device / delivery"),
++    (r"process|synthesis|manufactur|preparation.of|method.of.making", "process / manufacturing"),
++]
++
++
++def parse_args() -> argparse.Namespace:
++    parser = argparse.ArgumentParser(
++        description="Drug-patent landscape search, classification, and expiry estimation"
++    )
++    parser.add_argument("--query", required=True, help="Drug name, target, mechanism, or keyword phrase")
++    parser.add_argument("--mode", choices=["landscape", "expiry-timeline"], default="landscape")
++    parser.add_argument("--cpc-filter", help="CPC subclass filter, e.g. A61K, A61P, C07D")
++    parser.add_argument("--date-from", help="Earliest filing date YYYY-MM-DD")
++    parser.add_argument("--date-to", help="Latest filing date YYYY-MM-DD")
++    parser.add_argument("--max-results", type=int, default=200)
++    parser.add_argument("--orange-book-query", help="Drug name for FDA Orange Book cross-reference")
++    parser.add_argument("--timeout", type=int, default=30)
++    parser.add_argument("--output", default="patents/patent_landscape.csv")
++    parser.add_argument("--summary", default="patents/patent_landscape.json")
++    parser.add_argument("--brief", help="Optional markdown brief output path")
++    return parser.parse_args()
++
++
++def require_requests():
++    if requests is None:
++        raise SystemExit("patent_landscape.py requires the requests library")
++    return requests
++
++
++def clean_text(value: Any) -> str:
++    if value is None:
++        return ""
++    return str(value).strip()
++
++
++def classify_claim_type(title: str, abstract: str) -> str:
++    text = f"{title} {abstract}".lower()
++    for pattern, label in CLAIM_PATTERNS:
++        if re.search(pattern, text):
++            return label
++    return "unclassified"
++
++
++# ---------------------------------------------------------------------------
++# PatentsView
++# ---------------------------------------------------------------------------
++
++def query_patentsview(query: str, max_results: int, cpc_filter: str | None,
++                      date_from: str | None, date_to: str | None,
++                      timeout: int) -> list[dict[str, Any]]:
++    req = require_requests()
++    criteria: list[dict] = [{"_text_any": {"patent_abstract": query}}]
++    if cpc_filter:
++        criteria.append({"_begins": {"cpc_subgroup_id": cpc_filter}})
++    if date_from:
++        criteria.append({"_gte": {"app_date": date_from}})
++    if date_to:
++        criteria.append({"_lte": {"app_date": date_to}})
++
++    q = {"_and": criteria} if len(criteria) > 1 else criteria[0]
++    payload = {
++        "q": json.dumps(q),
++        "f": json.dumps([
++            "patent_number", "patent_title", "patent_date", "patent_abstract",
++            "patent_type", "app_date", "app_number",
++            "assignee_organization", "assignee_country",
++            "cpc_subgroup_id", "cpc_subgroup_title",
++        ]),
++        "o": json.dumps({"page": 1, "per_page": min(max_results, 1000)}),
++    }
++    resp = req.get(PATENTSVIEW_BASE, params=payload, timeout=timeout)
++    resp.raise_for_status()
++    data = resp.json()
++
++    patents: list[dict[str, Any]] = []
++    for pat in data.get("patents") or []:
++        assignees = pat.get("assignees") or [{}]
++        org = clean_text(assignees[0].get("assignee_organization")) if assignees else ""
++        country = clean_text(assignees[0].get("assignee_country")) if assignees else ""
++
++        cpcs = pat.get("cpcs") or [{}]
++        cpc_id = clean_text(cpcs[0].get("cpc_subgroup_id")) if cpcs else ""
++
++        title = clean_text(pat.get("patent_title"))
++        abstract = clean_text(pat.get("patent_abstract"))[:500]
++        filing_date = clean_text(pat.get("app_date"))
++        grant_date = clean_text(pat.get("patent_date"))
++        app_number = clean_text(pat.get("app_number"))
++
++        expiry_year = None
++        if filing_date and len(filing_date) >= 4:
++            try:
++                expiry_year = int(filing_date[:4]) + 20
++            except ValueError:
++                pass
++
++        patents.append({
++            "patent_number": clean_text(pat.get("patent_number")),
++            "title": title,
++            "filing_date": filing_date,
++            "grant_date": grant_date,
++            "patent_type": clean_text(pat.get("patent_type")),
++            "app_number": app_number,
++            "assignee": org,
++            "country": country,
++            "cpc": cpc_id,
++            "claim_type_guess": classify_claim_type(title, abstract),
++            "estimated_expiry_year": expiry_year,
++            "abstract_snippet": abstract[:300],
++        })
++    return patents
++
++
++# ---------------------------------------------------------------------------
++# Orange Book
++# ---------------------------------------------------------------------------
++
++def query_orange_book(drug_name: str, timeout: int) -> list[dict[str, Any]]:
++    req = require_requests()
++    params = {
++        "search": f'openfda.brand_name:"{drug_name}" OR openfda.generic_name:"{drug_name}"',
++        "limit": 10,
++    }
++    try:
++        resp = req.get(ORANGEBOOK_API, params=params, timeout=timeout)
++        if resp.status_code != 200:
++            return []
++        data = resp.json()
++    except Exception:
++        return []
++
++    results: list[dict[str, Any]] = []
++    for item in data.get("results", []):
++        openfda = item.get("openfda", {})
++        for prod in item.get("products") or []:
++            results.append({
++                "brand_name": "; ".join(openfda.get("brand_name", [])),
++                "generic_name": "; ".join(openfda.get("generic_name", [])),
++                "nda_number": clean_text(prod.get("application_number")),
++                "dosage_form": clean_text(prod.get("dosage_form")),
++                "route": clean_text(prod.get("route")),
++                "marketing_status": clean_text(prod.get("marketing_status")),
++            })
++    return results
++
++
++# ---------------------------------------------------------------------------
++# Analysis
++# ---------------------------------------------------------------------------
++
++def analyze_landscape(patents: list[dict[str, Any]]) -> dict[str, Any]:
++    assignee_counts = Counter(p["assignee"] for p in patents if p["assignee"])
++    country_counts = Counter(p["country"] for p in patents if p["country"])
++    claim_type_counts = Counter(p.get("claim_type_guess", "") for p in patents)
++
++    year_counts: dict[str, int] = {}
++    for p in patents:
++        d = p.get("filing_date") or ""
++        if len(d) >= 4:
++            year_counts[d[:4]] = year_counts.get(d[:4], 0) + 1
++
++    family_groups: dict[str, list[str]] = {}
++    for p in patents:
++        app = (p.get("app_number") or "")[:8]
++        if app:
++            family_groups.setdefault(app, []).append(p["patent_number"])
++
++    expiry_years = [p["estimated_expiry_year"] for p in patents if p.get("estimated_expiry_year")]
++    return {
++        "total_patents": len(patents),
++        "estimated_families": len(family_groups),
++        "claim_type_distribution": dict(claim_type_counts),
++        "top_assignees": [{"assignee": a, "count": c} for a, c in assignee_counts.most_common(15)],
++        "country_distribution": dict(country_counts.most_common(10)),
++        "filing_trend_by_year": dict(sorted(year_counts.items())),
++        "expiry_window": {
++            "earliest": min(expiry_years) if expiry_years else None,
++            "latest": max(expiry_years) if expiry_years else None,
++        },
++    }
++
++
++# ---------------------------------------------------------------------------
++# Brief renderer
++# ---------------------------------------------------------------------------
++
++def render_brief(query: str, analysis: dict[str, Any],
++                 orange_book: list[dict[str, Any]] | None) -> str:
++    lines = ["# Drug-Patent Landscape Brief", ""]
++    lines.append(f"**Query**: {query}")
++    lines.append(f"**Retrieved**: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
++    lines.append(f"**Source**: USPTO PatentsView (US grants only)")
++    lines.append(f"**Total patents**: {analysis['total_patents']}")
++    lines.append(f"**Estimated families**: {analysis['estimated_families']}")
++    lines.append("")
++
++    lines.append("## Claim Type Distribution")
++    for ct, cnt in sorted(analysis["claim_type_distribution"].items(), key=lambda x: -x[1]):
++        lines.append(f"- {ct}: {cnt}")
++    lines.append("")
++
++    lines.append("## Top Assignees")
++    lines.append("| Assignee | Patents |")
++    lines.append("|----------|---------|")
++    for a in analysis["top_assignees"][:15]:
++        lines.append(f"| {a['assignee']} | {a['count']} |")
++    lines.append("")
++
++    lines.append("## Filing Trend")
++    for yr, cnt in sorted(analysis["filing_trend_by_year"].items()):
++        lines.append(f"- {yr}: {cnt}")
++    lines.append("")
++
++    ew = analysis.get("expiry_window", {})
++    if ew.get("earliest"):
++        lines.append("## Expiry Window (estimated)")
++        lines.append(f"- Earliest: {ew['earliest']}")
++        lines.append(f"- Latest: {ew['latest']}")
++        lines.append("- Note: baseline filing+20yr only; PTE/PTA/SPC not computed.")
++        lines.append("")
++
++    if orange_book:
++        lines.append("## Orange Book Cross-Reference")
++        for ob in orange_book[:5]:
++            lines.append(f"- {ob.get('brand_name', '')} / {ob.get('generic_name', '')} "
++                         f"— NDA: {ob.get('nda_number', '')}, "
++                         f"Form: {ob.get('dosage_form', '')}, "
++                         f"Status: {ob.get('marketing_status', '')}")
++        lines.append("")
++
++    lines.append("## Caveats")
++    lines.append("- PatentsView covers US granted patents only; EP/WO/CN/JP not queried.")
++    lines.append("- Claim-type classification is heuristic from title/abstract, not claim text.")
++    lines.append("- Expiry estimates do not account for PTE, PTA, SPC, or terminal disclaimers.")
++    lines.append("- This is research intelligence, not freedom-to-operate legal counsel.")
++    return "\n".join(lines) + "\n"
++
++
++# ---------------------------------------------------------------------------
++# Main
++# ---------------------------------------------------------------------------
++
++def write_csv(rows: list[dict[str, Any]], path: str) -> None:
++    if not rows:
++        Path(path).parent.mkdir(parents=True, exist_ok=True)
++        Path(path).write_text("no_results\n")
++        return
++    keys: list[str] = []
++    seen: set[str] = set()
++    for row in rows:
++        for k in row:
++            if k not in seen:
++                seen.add(k)
++                keys.append(k)
++    Path(path).parent.mkdir(parents=True, exist_ok=True)
++    with open(path, "w", newline="", encoding="utf-8") as f:
++        w = csv.DictWriter(f, fieldnames=keys)
++        w.writeheader()
++        w.writerows(rows)
++
++
++def write_json(path: str, payload: Any) -> None:
++    Path(path).parent.mkdir(parents=True, exist_ok=True)
++    Path(path).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
++
++
++def main() -> None:
++    args = parse_args()
++    print(f"Querying PatentsView: {args.query}")
++    patents = query_patentsview(
++        args.query, args.max_results, args.cpc_filter,
++        args.date_from, args.date_to, args.timeout,
++    )
++    print(f"  Retrieved {len(patents)} patents")
++
++    if args.mode == "expiry-timeline":
++        patents.sort(key=lambda p: p.get("estimated_expiry_year") or 9999)
++
++    analysis = analyze_landscape(patents)
++
++    orange_book = None
++    if args.orange_book_query:
++        print(f"Cross-referencing Orange Book: {args.orange_book_query}")
++        orange_book = query_orange_book(args.orange_book_query, args.timeout)
++        print(f"  Orange Book entries: {len(orange_book)}")
++
++    write_csv(patents, args.output)
++
++    summary: dict[str, Any] = {
++        "query": args.query,
++        "mode": args.mode,
++        "retrieval_date": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
++        "cpc_filter": args.cpc_filter,
++        "date_range": {"from": args.date_from, "to": args.date_to},
++        **analysis,
++        "output": args.output,
++    }
++    if orange_book:
++        summary["orange_book"] = orange_book
++    write_json(args.summary, summary)
++
++    if args.brief:
++        md = render_brief(args.query, analysis, orange_book)
++        Path(args.brief).parent.mkdir(parents=True, exist_ok=True)
++        Path(args.brief).write_text(md, encoding="utf-8")
++        print(f"Brief: {args.brief}")
++
++    print(json.dumps({"output": args.output, "summary": args.summary, "result_count": len(patents)}, ensure_ascii=False))
++
++
++if __name__ == "__main__":
++    main()
+\ No newline at end of file

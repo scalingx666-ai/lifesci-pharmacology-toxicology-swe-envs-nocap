@@ -1,0 +1,13 @@
+diff --git a/bitbirch.py b/bitbirch.py
+index f7f68de..516f2a5 100644
+--- a/bitbirch.py
++++ b/bitbirch.py
+@@ -562,7 +562,7 @@ def _get_leaves(self):
+         return leaves
+     
+     def get_centroids(self):
+-        """Method to return the indices of molecules in each cluster"""
++        """Method to return a list of Numpy arrays containing the centroids' fingerprints"""
+         if self.first_call:
+             raise ValueError('The model has not been fitted yet.')
+         

@@ -1,0 +1,62 @@
+version = "1.0"
+
+[task]
+name = "default/AngelRuizMoreno__Jupyter_Dock-7"
+description = "Updated the version of mdanalysis"
+
+[metadata]
+difficulty = "easy"
+category = "bugfix"
+keywords = [
+    "Jupyter_Dock",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "AngelRuizMoreno/Jupyter_Dock"
+ref = "5ad6c6645cf6be9bb15ac0552df52ec5b9295b63"
+reference = "https://github.com/AngelRuizMoreno/Jupyter_Dock/pull/7"
+source_access = "auto"
+built_at = "2026-11-16T01:42:34.494730+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:f2287fadb840289b00526eeff252263c295013c0e9b576e4478642fa393111e0"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2022-05-23T14:15:28Z"
+diff_format = "unified"
+context_files = [
+    "Jupyter_Dock.yml",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 2
+difficulty = "trivial"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

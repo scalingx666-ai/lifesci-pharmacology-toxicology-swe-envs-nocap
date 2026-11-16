@@ -1,0 +1,73 @@
+version = "1.0"
+
+[task]
+name = "default/Rockman6__CellSim-37"
+description = "Inside a cell: look up any drug, or design your own (1.6.0)"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "CellSim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "Rockman6/CellSim"
+ref = "ec9cce3261ad503e356b526a302c2ed9b8a3d48b"
+reference = "https://github.com/Rockman6/CellSim/pull/37"
+source_access = "auto"
+built_at = "2026-11-16T11:04:12.079063+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:ad77ab6a1438fe842af48f422e28cef7017f6de4f1b29c36a3d0221737a70699"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2026-10-08T12:55:00Z"
+diff_format = "unified"
+context_files = [
+    "CHANGELOG.md",
+    "README.md",
+    "cellsim/cell/compound.py",
+    "cellsim/cell/engine.py",
+    "cellsim/cell/library.py",
+    "pyproject.toml",
+    "tests/cell/test_design_smoke.py",
+    "web/index.html",
+    "web/lab/cell.css",
+    "web/lab/cell.html",
+    "web/lab/cell.js",
+    "web/lab/lookup.js",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 750
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

@@ -1,0 +1,72 @@
+version = "1.0"
+
+[task]
+name = "default/NVIDIA-BioNeMo__KERMT-21"
+description = "feat: optional multi-GPU (DDP) finetuning"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "KERMT",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "NVIDIA-BioNeMo/KERMT"
+ref = "dc0dae393c15eec7a2d0a4dc9e890398b816fe4b"
+reference = "https://github.com/NVIDIA-BioNeMo/KERMT/pull/21"
+source_access = "auto"
+built_at = "2026-11-16T11:12:42.064751+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:da5bdd5eb0ac7187ab3bff428b9c308ead1335c6788eb161d84aae1f12c566b6"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2026-07-13T20:41:44Z"
+diff_format = "unified"
+context_files = [
+    "agent/config/defaults_finetune.json",
+    "agent/scripts/run_finetune_local.py",
+    "agent/skills/kermt-finetune/SKILL.md",
+    "agent/tests/test_run_finetune_local.py",
+    "kermt/util/ddp_utils.py",
+    "kermt/util/utils.py",
+    "main.py",
+    "main_hpo.py",
+    "pretrain_ddp.py",
+    "task/cross_validate.py",
+    "task/train.py",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 589
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

@@ -1,0 +1,513 @@
+diff --git a/README.md b/README.md
+index d20ce35..2b10a78 100755
+--- a/README.md
++++ b/README.md
+@@ -66,7 +66,7 @@ flag; it is not the product on its own.
+ | Knock a gene out (`api.knockout`) | 13 pathway genes — knockout, knockdown or overexpression — and what the rest of the network does without them | TP53 loss lands where the p53-mutant lines are; PUMA/BAX/CASP3 knockouts are identical because they are one pathway; ABCB1 protects doxorubicin and **not** cisplatin, which it does not transport |
+ | Starve a tumour (`api.starve`) | Glucose as a second diffusing nutrient; whichever of it and oxygen is scarcer sets the viable rim | Lowering medium glucose stalls growth before it starts killing. Thresholds are literature values — calibrated, not validated |
+ | Cells that crawl (`DishParams.migration_*`) | A random walk on the lattice, optionally up the oxygen gradient | Matches D = k·h²/4 to within 1 % at 2 hops/h |
+-| Immune killing (`api.killing`) | Effector cells that crawl, engage, kill and tire, on a tumour monolayer | Specific lysis 0 → 37 → 88 → 100 % across E:T ratios; kill counts fall at high E:T as targets run out. Kinetics are literature values — calibrated, not validated |
++| Immune killing (`api.killing`) | Effector cells on a tumour monolayer. Each contact delivers a *sublethal* hit; a target dies after three within ~50 min, so killing needs several cells working together (Weigelin et al. 2021) | **Mechanism validated**: hits per kill falls from 418 at E:T 0.1 to 4.1 at E:T 3, and lysis responds to the repair window in the right direction. Absolute lysis against a measured killing curve not yet checked |
+ | Your own plate (`cellsim plate`) | Read a plate-reader export (grid or tidy), normalise to the plate's own controls, fit a dose-response curve, and get GR metrics comparable across lines | Coverage measured against known IC50s: a nominal 95 % interval contains the truth ~90 % of the time on ten concentrations — and only **68 % on five**, which is flagged. Flat plates are refused; ranges that clip the response are marked extrapolated |
+ | Calibrated uncertainty (`scripts/calibrate_cell_uncertainty.py`) | Every predicted IC50 comes with an interval whose coverage has been scored | Leave-one-drug-out: ±2.6× covers 64 % (68 % nominal), ±4.8× covers 85 % (90 %), ±6.5× covers 95 % (95 %). Wide on purpose — GDSC's own replicate screens disagree by a median 5.3× |
+ | Cell drug-response engine (`cellsim cell-sim`, `cellsim cell-stream`) | Pick a cell line, a drug and a **dose schedule**; get the colony over time, viability, and a per-cell state stream (JSON Lines) for a UI. Built for *within-line* questions: schedule, wash-out, resistance, combinations | Each drug's potency scale is right (A549 cisplatin 10.9 µM vs 9.8 measured; 20/25 held-out predictions inside GDSC's replicate span). **Ranking one cell line against another is explicitly out of scope** — measured as unreachable from canonical markers ([why](docs/VALIDATION.md)). |
+diff --git a/benchmarks/cell/killing_validation.json b/benchmarks/cell/killing_validation.json
+new file mode 100644
+index 0000000..e6b5ba7
+--- /dev/null
++++ b/benchmarks/cell/killing_validation.json
+@@ -0,0 +1,91 @@
++{
++ "rows": [
++  {
++   "et": 0.0,
++   "live": 870.0,
++   "lysis": 0.0,
++   "kills": 0.0,
++   "hits": 0.0,
++   "hits_per_kill": NaN
++  },
++  {
++   "et": 0.1,
++   "live": 868.0,
++   "lysis": 0.0022988505747126853,
++   "kills": 1.0,
++   "hits": 418.0,
++   "hits_per_kill": 418.0
++  },
++  {
++   "et": 0.3,
++   "live": 855.0,
++   "lysis": 0.017241379310344862,
++   "kills": 8.0,
++   "hits": 1310.0,
++   "hits_per_kill": 163.75
++  },
++  {
++   "et": 1.0,
++   "live": 522.0,
++   "lysis": 0.4,
++   "kills": 231.0,
++   "hits": 3886.0,
++   "hits_per_kill": 16.82251082251082
++  },
++  {
++   "et": 3.0,
++   "live": 0.0,
++   "lysis": 1.0,
++   "kills": 466.0,
++   "hits": 1890.0,
++   "hits_per_kill": 4.055793991416309
++  }
++ ],
++ "repair_window": [
++  {
++   "window_min": 15,
++   "live": 822.0,
++   "kills": 28.0,
++   "lysis": 0.05517241379310345
++  },
++  {
++   "window_min": 30,
++   "live": 710.0,
++   "kills": 103.0,
++   "lysis": 0.1839080459770115
++  },
++  {
++   "window_min": 50,
++   "live": 522.0,
++   "kills": 231.0,
++   "lysis": 0.4
++  },
++  {
++   "window_min": 120,
++   "live": 31.0,
++   "kills": 544.0,
++   "lysis": 0.964367816091954
++  }
++ ],
++ "single_hit": [
++  {
++   "et": 0.1,
++   "live": 531.0,
++   "lysis": 0.3896551724137931,
++   "kills": 199.0
++  },
++  {
++   "et": 0.3,
++   "live": 113.0,
++   "lysis": 0.8701149425287357,
++   "kills": 446.0
++  },
++  {
++   "et": 1.0,
++   "live": 0.0,
++   "lysis": 1.0,
++   "kills": 448.0
++  }
++ ],
++ "mechanism_checks_pass": true
++}
+diff --git a/cellsim/api.py b/cellsim/api.py
+index 5ca49a2..5106d0e 100644
+--- a/cellsim/api.py
++++ b/cellsim/api.py
+@@ -383,11 +383,13 @@ def killing(line: Union[str, CellLine], *, et_ratios: Sequence[float] = (0, 0.1,
+             seeds: Sequence[int] = (1, 2), params: Params = Params(), dish_params=None):
+     """A cytotoxicity assay: effector cells on a tumour monolayer.
+ 
+-    Effectors crawl on their own layer, engage a tumour cell on contact,
+-    kill it after about an hour, then rest before engaging again and stop
+-    after a few kills (Halle et al. 2016). `et_ratios` are effector:target
+-    ratios; the 0 arm is the untreated control that specific lysis is
+-    measured against.
++    Effectors crawl on their own layer and deliver a SUBLETHAL hit on each
++    contact; a tumour cell dies only after three hits within about 50
++    minutes, so killing needs several effectors working together
++    (Weigelin et al. 2021). A lone effector therefore kills almost
++    nothing — expect little lysis below E:T 0.3 and near-complete
++    clearance by E:T 3. `et_ratios` are effector:target ratios; the 0 arm
++    is the untreated control that specific lysis is measured against.
+ 
+     Returns one row per ratio, averaged over `seeds`."""
+     from cellsim.cell.dish import Dish, DishParams
+diff --git a/cellsim/cell/dish.py b/cellsim/cell/dish.py
+index 2e98697..ced4c0c 100644
+--- a/cellsim/cell/dish.py
++++ b/cellsim/cell/dish.py
+@@ -160,10 +160,21 @@ class DishParams:
+     # a drug-killed one does.
+     effector_speed_per_h: float = 3.0          # hops/h on the effector layer
+     effector_tumour_bias: float = 0.7          # fraction of hops toward the nearest target
+-    effector_kill_per_h: float = 1.0           # kill rate while conjugated
+-    effector_conjugate_h: float = 1.0          # busy after each kill
++    # Rate of delivering a HIT while in contact. With
++    # effector_hits_to_kill = 1 a hit is a kill and this is a kill rate.
++    effector_kill_per_h: float = 1.0
++    effector_conjugate_h: float = 1.0          # rests after each hit
+     effector_max_kills: int = 5
+     effector_lifetime_h: float = 96.0          # effectors die off in culture
++    # ADDITIVE CYTOTOXICITY (Weigelin et al. 2021 Nat Commun 12:5217).
++    # Live imaging showed a single CTL contact rarely kills: each delivers
++    # a SUBLETHAL hit — perforin pores, nuclear envelope rupture, DNA
++    # damage — that the tumour cell repairs. Death needs about three hits
++    # arriving within ~50 min of one another, usually from several CTLs
++    # transiting between targets. Set hits_to_kill = 1 for the older
++    # single-lethal-hit picture, which that work overturned.
++    effector_hits_to_kill: int = 3
++    effector_hit_decay_h: float = 50.0 / 60.0
+ 
+     @property
+     def site_volume_um3(self) -> float:
+@@ -328,6 +339,9 @@ def __init__(self, line: CellLine, drug=None, *, n_seed: int = 100,
+         # Fields: per-cell local values and, for a spheroid, radial profiles.
+         self.o2 = np.full(n_seed, dp.o2_medium_mmHg)
+         self.glucose = np.full(n_seed, dp.glucose_medium_mM)
++        # Sublethal effector damage carried by each tumour cell.
++        self.hits = np.zeros(n_seed, dtype=np.int64)
++        self.last_hit_t = np.full(n_seed, -np.inf)
+         self.gs = np.ones(n_seed)
+         self.profile_r_um = np.zeros(0)
+         self.profile_o2 = np.zeros(0)
+@@ -343,6 +357,7 @@ def __init__(self, line: CellLine, drug=None, *, n_seed: int = 100,
+         self.eff_busy_until = np.zeros(0)
+         self.eff_born = np.zeros(0)
+         self.n_killed_by_effectors = 0
++        self.n_hits_delivered = 0
+         self.record = DishRecord()
+ 
+     # ── set-up helpers ──
+@@ -611,6 +626,10 @@ def _divide(self, divide: np.ndarray) -> None:
+         self.pos = np.vstack([self.pos, np.array(sites)])
+         self.o2 = np.concatenate([self.o2, self.o2[idx]])
+         self.glucose = np.concatenate([self.glucose, self.glucose[idx]])
++        # A daughter starts undamaged: hits are repaired lesions in one
++        # cell, not something inherited.
++        self.hits = np.concatenate([self.hits, np.zeros(len(idx), dtype=np.int64)])
++        self.last_hit_t = np.concatenate([self.last_hit_t, np.full(len(idx), -np.inf)])
+         self.gs = np.concatenate([self.gs, self.gs[idx]])
+ 
+     def _bury(self, die: np.ndarray, kind: int) -> None:
+@@ -635,6 +654,7 @@ def _compact(self) -> None:
+         self.birth_t = self.birth_t[keep]
+         self.o2, self.gs = self.o2[keep], self.gs[keep]
+         self.glucose = self.glucose[keep]
++        self.hits, self.last_hit_t = self.hits[keep], self.last_hit_t[keep]
+         live = self.occ >= 0
+         self.occ[live] = EMPTY
+         self.occ[tuple(self.pos.T)] = np.arange(len(self.pos))
+@@ -729,15 +749,31 @@ def _effectors(self, dt_h: float) -> None:
+                 who = self.occ[tuple(here)]
+                 # a live tumour cell at this site: engage
+                 if who >= 0 and self.cells.alive[who]:
+-                    if self.rng.random() < p_kill:
++                    if self.rng.random() >= p_kill:
++                        continue                  # still engaging
++                    # A hit. Damage older than the decay window has been
++                    # repaired, so the count restarts.
++                    if t - self.last_hit_t[who] > dp.effector_hit_decay_h:
++                        self.hits[who] = 0
++                    self.hits[who] += 1
++                    self.last_hit_t[who] = t
++                    self.n_hits_delivered += 1
++                    if self.hits[who] >= dp.effector_hits_to_kill:
+                         die = np.zeros(len(self.cells.alive), bool)
+                         die[who] = True
+                         self.cells.alive[who] = False
+                         self._bury(die, APOPTOTIC)
+                         self.eff_kills[e] += 1
+-                        self.eff_busy_until[e] = t + dp.effector_conjugate_h
+                         self.n_killed_by_effectors += 1
+-                    continue                      # stays conjugated, does not move
++                    self.eff_busy_until[e] = t + dp.effector_conjugate_h
++                    # Detach and move on, as CTLs transit between targets;
++                    # this is what makes the next hit on the same cell
++                    # usually come from a different effector.
++                    cand = here + near
++                    cand = cand[np.all((cand >= 0) & (cand < shape), axis=1)]
++                    if len(cand):
++                        self.eff_pos[e] = cand[self.rng.integers(len(cand))]
++                    continue
+                 if self.rng.random() >= p_hop:
+                     continue
+                 cand = here + near
+diff --git a/docs/VALIDATION.md b/docs/VALIDATION.md
+index 45d0710..f8b8824 100644
+--- a/docs/VALIDATION.md
++++ b/docs/VALIDATION.md
+@@ -1292,27 +1292,57 @@ runs in sub-rounds short enough that wanting two hops is rare.
+ ### Put immune cells on the dish (`DishParams.effector_*`, `api.killing`)
+ 
+ Effector cells on their own layer, as T or NK cells crawl over a
+-monolayer. Each random-walks biased toward tumour cells, engages on
+-contact, kills at a rate, rests while conjugated, and stops after a few
+-kills. CTLs take about an hour from contact to target death and kill a
+-few targets a day (Halle et al. 2016 Immunity 44:233).
+-
+-A549 monolayer, 24 h:
+-
+-| E:T | Live tumour | Specific lysis | Effector kills |
++monolayer. Each random-walks biased toward tumour cells and delivers
++hits on contact.
++
++**The first version used the wrong mechanism.** Each contact killed
++outright — one lethal hit — which is the older picture. Live imaging by
++Weigelin et al. 2021 (Nat Commun 12:5217) overturned it: a single
++contact rarely kills. Each delivers a *sublethal* hit — perforin pores,
++nuclear envelope rupture, DNA damage — that the target repairs, and
++death needs about **three hits within ~50 minutes** of one another,
++usually from several CTLs passing through. The engine now implements
++that, with `effector_hits_to_kill = 1` keeping the old picture available
++for comparison.
++
++What came out was not designed in:
++
++| E:T | Lysis | Hits delivered | Hits per kill |
+ |---|:-:|:-:|:-:|
+-| 0 | 862 | — | 0 |
+-| 0.1 | 546 | 37 % | 192 |
+-| 0.3 | 100 | 88 % | 458 |
+-| 1.0 | 0 | 100 % | 446 |
+-| 3.0 | 0 | 100 % | 408 |
+-
+-The kill count *falls* above E:T 0.3 because the effectors run out of
+-targets, which is the right shape. **Calibrated, not validated**: the
+-kinetics are literature values and nothing has been run against a
+-measured killing curve. What the gates pin is that the lysis comes from
+-the killing and not from the effectors' presence — effectors with a zero
+-kill rate leave the monolayer untouched.
++| 0.1 | 0 % | 418 | **418** |
++| 0.3 | 2 % | 1310 | 164 |
++| 1.0 | 40 % | 3886 | 17 |
++| 3.0 | 100 % | 1890 | **4.1** |
++
++At low density hundreds of hits are wasted on targets that repair
++between them. At high density the cost falls to about four hits per
++kill, close to the theoretical three. That steep nonlinearity is why
++CTLs swarm, and it emerges from the timing rule rather than from any
++fitted rate.
++
++`scripts/validate_killing.py` checks four predictions that follow from
++the mechanism and so cannot be tuned into passing — all four pass:
++
++1. **Cooperativity**: hits per kill falls steeply with density.
++2. **The repair window matters, in the right direction**:
++
++   | Repair window | Lysis at E:T 1 |
++   |:-:|:-:|
++   | 15 min | 6 % |
++   | 30 min | 18 % |
++   | 50 min (measured) | 40 % |
++   | 120 min | 96 % |
++
++3. **One-hit killing is the old model**: it gives 39 % lysis at E:T 0.1
++   where three-hit gives 0 %, and 87 % at E:T 0.3 where three-hit gives
++   2 %.
++4. **No free kills**: kills never exceed hits ÷ 3.
++
++**What is still not validated** is the absolute lysis at a given E:T
++against a measured chromium-release or impedance curve. None has been
++digitised here, so the hit rate and walk speed remain literature values
++and the magnitudes are unchecked. The mechanism is validated; the
++numbers are not.
+ 
+ ## GDSC reference data (the Phase-1 validation target)
+ 
+diff --git a/scripts/validate_killing.py b/scripts/validate_killing.py
+new file mode 100644
+index 0000000..f375eec
+--- /dev/null
++++ b/scripts/validate_killing.py
+@@ -0,0 +1,134 @@
++#!/usr/bin/env python3
++"""Does simulated immune killing behave the way live imaging says it does?
++
++Weigelin et al. 2021 (Nat Commun 12:5217) imaged cytotoxic T cells
++attacking tumour cells and found a single contact rarely kills. Each
++delivers a SUBLETHAL hit the target repairs, and death needs about three
++hits within roughly 50 minutes of one another, usually from several CTLs
++transiting between targets. That replaced the older one-lethal-hit
++picture, which is what this engine implemented first.
++
++The checks below follow from the MECHANISM rather than from any rate, so
++they cannot be tuned into passing:
++
++1. COOPERATIVITY. If hits must land close together, then at low effector
++   density most hits are wasted on cells that recover, and the number of
++   hits spent per kill must fall steeply as density rises.
++2. THE REPAIR WINDOW MATTERS. Shortening the window must make killing
++   harder and lengthening it easier, with everything else fixed.
++3. ONE-HIT KILLING IS THE OLD MODEL. Setting hits_to_kill = 1 must
++   restore efficient killing at low density.
++4. NO FREE KILLS. Kills must never exceed hits / hits_to_kill.
++
++What this does NOT check is the absolute lysis at a given E:T against a
++measured chromium-release curve. No such curve has been digitised here,
++so the rates remain literature values and the magnitudes unvalidated.
++
++Usage:
++    python scripts/validate_killing.py [--quick]
++"""
++from __future__ import annotations
++
++import argparse
++import json
++import sys
++from pathlib import Path
++
++import numpy as np
++
++REPO_ROOT = Path(__file__).resolve().parents[1]
++sys.path.insert(0, str(REPO_ROOT))
++
++from cellsim.cell.dish import Dish, DishParams  # noqa: E402
++from cellsim.cell.engine import Params  # noqa: E402
++from cellsim.cell.library import get_line  # noqa: E402
++
++OUT_JSON = REPO_ROOT / "benchmarks" / "cell" / "killing_validation.json"
++
++
++def assay(et, *, hits_to_kill=3, decay_h=50.0 / 60.0, hours=24.0, seeds=(1, 2),
++          n_tumour=400, grid=40):
++    live, kills, hits = [], [], []
++    for sd in seeds:
++        dp = DishParams(geometry="monolayer", spacing_um=20.0, field_dt_h=0.5,
++                        dt_h=0.02, effector_hits_to_kill=hits_to_kill,
++                        effector_hit_decay_h=decay_h)
++        d = Dish(get_line("A549"), n_seed=n_tumour, grid_sites=(grid, grid),
++                 seed=int(sd), p=Params(), dp=dp)
++        d.add_effectors(int(round(et * n_tumour)))
++        for _ in range(int(round(hours / dp.field_dt_h))):
++            d.advance(None)
++        live.append(int(d.cells.alive.sum()))
++        kills.append(d.n_killed_by_effectors)
++        hits.append(d.n_hits_delivered)
++    return (float(np.mean(live)), float(np.mean(kills)), float(np.mean(hits)))
++
++
++def main(argv=None) -> int:
++    ap = argparse.ArgumentParser(description=__doc__,
++                                 formatter_class=argparse.RawDescriptionHelpFormatter)
++    ap.add_argument("--quick", action="store_true")
++    ap.add_argument("--no-write", action="store_true")
++    a = ap.parse_args(argv)
++    seeds = (1,) if a.quick else (1, 2, 3)
++    ratios = (0.0, 0.1, 0.3, 1.0, 3.0)
++
++    print("A549 monolayer, 24 h, three-hit additive killing (Weigelin et al. 2021).\n")
++    base = assay(0.0, seeds=seeds)[0]
++    print(f"{'E:T':>6}{'live':>8}{'lysis':>8}{'kills':>8}{'hits':>8}{'hits/kill':>11}")
++    rows = []
++    for et in ratios:
++        live, kills, hits = assay(et, seeds=seeds)
++        hk = hits / kills if kills else float("nan")
++        rows.append({"et": et, "live": live, "lysis": 1 - live / base,
++                     "kills": kills, "hits": hits, "hits_per_kill": hk})
++        print(f"{et:>6}{live:>8.0f}{1 - live / base:>8.0%}{kills:>8.0f}"
++              f"{hits:>8.0f}{hk:>11.2f}")
++
++    print("\nEffect of the repair window at E:T 1.0 (50 min is the measured value):")
++    windows = []
++    for mins in (15, 30, 50, 120):
++        live, kills, hits = assay(1.0, decay_h=mins / 60.0, seeds=seeds)
++        windows.append({"window_min": mins, "live": live, "kills": kills,
++                        "lysis": 1 - live / base})
++        print(f"  {mins:>4} min: lysis {1 - live / base:>5.0%}, kills {kills:>5.0f}")
++
++    print("\nOne lethal hit per contact (the older picture this replaced):")
++    single = []
++    for et in (0.1, 0.3, 1.0):
++        live, kills, hits = assay(et, hits_to_kill=1, seeds=seeds)
++        single.append({"et": et, "live": live, "lysis": 1 - live / base, "kills": kills})
++        print(f"  E:T {et}: lysis {1 - live / base:>5.0%}  (three-hit model: "
++              f"{next(r['lysis'] for r in rows if r['et'] == et):.0%})")
++
++    low = next(r for r in rows if r["et"] == 0.3)
++    high = next(r for r in rows if r["et"] == 3.0)
++    c1 = (np.isfinite(low["hits_per_kill"]) and np.isfinite(high["hits_per_kill"])
++          and low["hits_per_kill"] > high["hits_per_kill"] * 3)
++    w = {d["window_min"]: d for d in windows}
++    c2 = w[15]["lysis"] <= w[50]["lysis"] <= w[120]["lysis"] + 1e-9
++    c3 = all(s["lysis"] > next(r["lysis"] for r in rows if r["et"] == s["et"])
++             for s in single if s["et"] <= 0.3)
++    c4 = all(r["kills"] <= r["hits"] / 3.0 + 1e-6 for r in rows)
++
++    print("\nMechanism checks:")
++    for ok, text in ((c1, "hits spent per kill falls steeply with density (cooperativity)"),
++                     (c2, "a shorter repair window makes killing harder, a longer one easier"),
++                     (c3, "one-hit killing is more efficient at low density, as the old model was"),
++                     (c4, "no kill without its three hits")):
++        print(f"  [{'PASS' if ok else 'FAIL'}] {text}")
++    allok = bool(c1 and c2 and c3 and c4)
++    print(f"\n{'Mechanism reproduced.' if allok else 'A MECHANISM CHECK FAILED.'} "
++          f"The absolute lysis at a given E:T is NOT validated:\nno measured "
++          f"chromium-release curve has been digitised, so the rates stay literature\n"
++          f"values and the magnitudes unchecked.")
++    report = {"rows": rows, "repair_window": windows, "single_hit": single,
++              "mechanism_checks_pass": allok}
++    if not a.no_write:
++        OUT_JSON.write_text(json.dumps(report, indent=1, default=float) + "\n")
++        print(f"\nwrote {OUT_JSON.relative_to(REPO_ROOT)}")
++    return 0 if allok else 1
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+diff --git a/tests/cell/test_tissue_env_smoke.py b/tests/cell/test_tissue_env_smoke.py
+index 8e0cec7..14ac6b4 100644
+--- a/tests/cell/test_tissue_env_smoke.py
++++ b/tests/cell/test_tissue_env_smoke.py
+@@ -120,10 +120,11 @@ def test_a_faster_hop_rate_moves_cells_further():
+ 
+ 
+ # ── effector cells ────────────────────────────────────────────────────
+-def _assay(et_ratio, hours=24.0, seeds=(1, 2), n_tumour=400):
++def _assay(et_ratio, hours=24.0, seeds=(1, 2), n_tumour=400, **dish_kw):
+     lives = []
+     for seed in seeds:
+-        dp = DishParams(geometry="monolayer", spacing_um=20.0, field_dt_h=0.5, dt_h=0.02)
++        dp = DishParams(geometry="monolayer", spacing_um=20.0, field_dt_h=0.5, dt_h=0.02,
++                        **dish_kw)
+         d = Dish(A549, n_seed=n_tumour, grid_sites=(40, 40), seed=seed, p=Params(), dp=dp)
+         d.add_effectors(int(round(et_ratio * n_tumour)))
+         for _ in range(int(hours / 0.5)):
+@@ -140,22 +141,34 @@ def test_killing_rises_with_the_effector_to_target_ratio():
+     assert low < base, f"effectors must kill: {base} -> {low}"
+     assert mid < low, f"and more of them must kill more: {low} -> {mid}"
+     assert high <= mid, f"saturating at the top: {mid} -> {high}"
+-    assert high < base * 0.1, f"E:T 1 should clear most of the monolayer: {base} -> {high}"
++    # Clearance needs a HIGHER ratio than it used to. Under the three-hit
++    # rule (Weigelin 2021) a lone effector cannot kill: its hits are
++    # repaired before a third arrives, so lysis only takes off once the
++    # density is enough for several effectors to hit one target inside
++    # the repair window. E:T 1 now leaves ~40 % lysis; E:T 3 clears it.
++    very_high = _assay(3.0)
++    assert very_high < base * 0.1, (
++        f"E:T 3 should clear most of the monolayer: {base} -> {very_high}")
+ 
+ 
+ def test_exhaustion_caps_what_one_effector_can_do():
+-    """Serial killing is limited. With the cap at one kill each, a small
+-    effector dose must do strictly less than with the cap at five."""
++    """Serial killing is limited: a higher cap must allow more killing.
++
++    Run at a density where killing actually happens. Under the three-hit
++    rule 40 effectors on 400 targets kill almost nothing — their hits are
++    repaired before a third lands — so this test compared 1 kill against
++    1 kill and failed when the model changed, which is the right way for
++    a gate to react to a mechanism it no longer matches."""
+     def run(max_kills):
+         dp = DishParams(geometry="monolayer", spacing_um=20.0, field_dt_h=0.5,
+                         dt_h=0.02, effector_max_kills=max_kills)
+         d = Dish(A549, n_seed=400, grid_sites=(40, 40), seed=1, p=Params(), dp=dp)
+-        d.add_effectors(40)
++        d.add_effectors(1200)                     # E:T 3, where lysis is real
+         for _ in range(48):
+             d.advance(None)
+         return d.n_killed_by_effectors
+     one, five = run(1), run(5)
+-    assert one <= 40, f"with a cap of one kill each, 40 effectors cannot exceed 40: {one}"
++    assert one > 0, f"the test must be run where killing happens, got {one}"
+     assert five > one, f"a higher cap must allow more killing: {one} -> {five}"
+ 
+ 

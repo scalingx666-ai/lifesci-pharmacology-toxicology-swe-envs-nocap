@@ -1,0 +1,66 @@
+version = "1.0"
+
+[task]
+name = "default/Global-Chem__global-chem-8"
+description = "Mackerell patch 1"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "global-chem",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "Global-Chem/global-chem"
+ref = "b1b7c675f1111651c553ce15c7cb5c8394ed89ab"
+reference = "https://github.com/Global-Chem/global-chem/pull/8"
+source_access = "auto"
+built_at = "2026-11-16T09:54:35.989895+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:63e5f61d70d958a64cdff4641c1b03774ae589c503cf51ba6707694012a82cee"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2021-12-19T15:24:37Z"
+diff_format = "unified"
+context_files = [
+    "images/figures/figure_1.png",
+    "images/figures/figure_3.png",
+    "images/figures/figure_5.png",
+    "images/figures/figure_6.png",
+    "paper.md",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 112
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

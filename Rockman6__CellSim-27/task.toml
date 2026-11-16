@@ -1,0 +1,68 @@
+version = "1.0"
+
+[task]
+name = "default/Rockman6__CellSim-27"
+description = "Immune killing: the measured three-hit mechanism, validated"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "CellSim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "Rockman6/CellSim"
+ref = "b42bd11c7db5c9018ca2f91f32d8dbc08304d26f"
+reference = "https://github.com/Rockman6/CellSim/pull/27"
+source_access = "auto"
+built_at = "2026-11-16T11:04:25.843454+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:84ef041977689e78ba7ba06205dce5f7d7d8695b6cb4fc72f44353e5eedcfc3e"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2026-10-07T07:06:39Z"
+diff_format = "unified"
+context_files = [
+    "README.md",
+    "benchmarks/cell/killing_validation.json",
+    "cellsim/api.py",
+    "cellsim/cell/dish.py",
+    "docs/VALIDATION.md",
+    "scripts/validate_killing.py",
+    "tests/cell/test_tissue_env_smoke.py",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 382
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

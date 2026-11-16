@@ -1,0 +1,337 @@
+diff --git a/README.md b/README.md
+index d20ce35..8bb27de 100755
+--- a/README.md
++++ b/README.md
+@@ -64,7 +64,7 @@ flag; it is not the product on its own.
+ | ADMET descriptors (`cellsim admet`, `profile`) | Lipinski, TPSA, QED, ESOL logS, BBB / hERG / Ames rule flags, one-page profile PNG | Published formulae, cited at the point of use in `cellsim/chem/admet.py` |
+ | CYP3A4 site of metabolism (`cellsim som`) | xTB C–H bond-dissociation ranking with a heme-accessibility re-rank | 2/3 on the bundled literature set; blind to N-dealkylation. **Advisory only.** |
+ | Knock a gene out (`api.knockout`) | 13 pathway genes — knockout, knockdown or overexpression — and what the rest of the network does without them | TP53 loss lands where the p53-mutant lines are; PUMA/BAX/CASP3 knockouts are identical because they are one pathway; ABCB1 protects doxorubicin and **not** cisplatin, which it does not transport |
+-| Starve a tumour (`api.starve`) | Glucose as a second diffusing nutrient; whichever of it and oxygen is scarcer sets the viable rim | Lowering medium glucose stalls growth before it starts killing. Thresholds are literature values — calibrated, not validated |
++| Starve a tumour (`api.starve`) | Glucose as a second diffusing nutrient; whichever of it and oxygen is scarcer sets the viable rim | **Fails its validation and is labelled so**: across the published 0.8–16.5 mM range the model gives identical answers, because the centre never falls below its viability threshold at reachable spheroid sizes ([details](docs/VALIDATION.md)) |
+ | Cells that crawl (`DishParams.migration_*`) | A random walk on the lattice, optionally up the oxygen gradient | Matches D = k·h²/4 to within 1 % at 2 hops/h |
+ | Immune killing (`api.killing`) | Effector cells that crawl, engage, kill and tire, on a tumour monolayer | Specific lysis 0 → 37 → 88 → 100 % across E:T ratios; kill counts fall at high E:T as targets run out. Kinetics are literature values — calibrated, not validated |
+ | Your own plate (`cellsim plate`) | Read a plate-reader export (grid or tidy), normalise to the plate's own controls, fit a dose-response curve, and get GR metrics comparable across lines | Coverage measured against known IC50s: a nominal 95 % interval contains the truth ~90 % of the time on ten concentrations — and only **68 % on five**, which is flagged. Flat plates are refused; ranges that clip the response are marked extrapolated |
+diff --git a/benchmarks/cell/glucose_validation.json b/benchmarks/cell/glucose_validation.json
+new file mode 100644
+index 0000000..647ec6e
+--- /dev/null
++++ b/benchmarks/cell/glucose_validation.json
+@@ -0,0 +1,98 @@
++{
++ "days": 4.0,
++ "n_seed": 30000,
++ "seeds": [
++  1
++ ],
++ "rows": [
++  {
++   "live": 42309.0,
++   "necrotic": 5242.0,
++   "radius_um": 337.1177405264458,
++   "necrotic_um": 161.64442405348163,
++   "viable_rim_um": 175.47331647296417,
++   "quiescent": 0.8562244439717318,
++   "glucose_mM": 16.5,
++   "o2_mmHg": 152.0,
++   "o2_label": "20 %"
++  },
++  {
++   "live": 42309.0,
++   "necrotic": 5242.0,
++   "radius_um": 337.1177405264458,
++   "necrotic_um": 161.64442405348163,
++   "viable_rim_um": 175.47331647296417,
++   "quiescent": 0.8562244439717318,
++   "glucose_mM": 5.5,
++   "o2_mmHg": 152.0,
++   "o2_label": "20 %"
++  },
++  {
++   "live": 42309.0,
++   "necrotic": 5242.0,
++   "radius_um": 337.1177405264458,
++   "necrotic_um": 161.64442405348163,
++   "viable_rim_um": 175.47331647296417,
++   "quiescent": 0.8562244439717318,
++   "glucose_mM": 1.65,
++   "o2_mmHg": 152.0,
++   "o2_label": "20 %"
++  },
++  {
++   "live": 42309.0,
++   "necrotic": 5242.0,
++   "radius_um": 337.1177405264458,
++   "necrotic_um": 161.64442405348163,
++   "viable_rim_um": 175.47331647296417,
++   "quiescent": 0.8562244439717318,
++   "glucose_mM": 0.8,
++   "o2_mmHg": 152.0,
++   "o2_label": "20 %"
++  },
++  {
++   "live": 17884.0,
++   "necrotic": 21135.0,
++   "radius_um": 315.612189134055,
++   "necrotic_um": 257.2739454182041,
++   "viable_rim_um": 58.338243715850865,
++   "quiescent": 0.7482666070230374,
++   "glucose_mM": 16.5,
++   "o2_mmHg": 38.0,
++   "o2_label": "5 %"
++  },
++  {
++   "live": 17884.0,
++   "necrotic": 21135.0,
++   "radius_um": 315.612189134055,
++   "necrotic_um": 257.2739454182041,
++   "viable_rim_um": 58.338243715850865,
++   "quiescent": 0.7482666070230374,
++   "glucose_mM": 5.5,
++   "o2_mmHg": 38.0,
++   "o2_label": "5 %"
++  },
++  {
++   "live": 17884.0,
++   "necrotic": 21135.0,
++   "radius_um": 315.612189134055,
++   "necrotic_um": 257.2739454182041,
++   "viable_rim_um": 58.338243715850865,
++   "quiescent": 0.7482666070230374,
++   "glucose_mM": 1.65,
++   "o2_mmHg": 38.0,
++   "o2_label": "5 %"
++  },
++  {
++   "live": 17884.0,
++   "necrotic": 21135.0,
++   "radius_um": 315.612189134055,
++   "necrotic_um": 257.2739454182041,
++   "viable_rim_um": 58.338243715850865,
++   "quiescent": 0.7482666070230374,
++   "glucose_mM": 0.8,
++   "o2_mmHg": 38.0,
++   "o2_label": "5 %"
++  }
++ ],
++ "directional_claims_pass": false
++}
+diff --git a/docs/VALIDATION.md b/docs/VALIDATION.md
+index 45d0710..f5c1ab0 100644
+--- a/docs/VALIDATION.md
++++ b/docs/VALIDATION.md
+@@ -1269,9 +1269,51 @@ DLD-1 spheroid, 6 days from 3000 cells:
+ | 0.1 mM | 3 488 | 615 | 149 µm |
+ 
+ Growth stalls before killing starts, which is the ordering starvation
+-should have. **Calibrated, not validated**: the thresholds are literature
+-values, not fitted to a measured rim, and no held-out dataset has been
+-run against this yet.
++should have.
++
++#### It does NOT reproduce the published glucose effect
++
++`scripts/validate_glucose.py` tests the directional claims of
++Mueller-Klieser, Freyer & Sutherland (1986) — that lowering medium
++glucose from 16.5 to 0.8 mM substantially thins the viable rim, and that
++a lack of glucose alone can produce necrosis. **Two of the five claims
++fail.** Across the entire published range the model gives identical
++answers:
++
++| Medium glucose | Live | Radius | Viable rim | Necrotic core |
++|---|:-:|:-:|:-:|:-:|
++| 16.5 mM | 42 309 | 337 µm | 175 µm | 162 µm |
++| 5.5 mM | 42 309 | 337 µm | 175 µm | 162 µm |
++| 1.65 mM | 42 309 | 337 µm | 175 µm | 162 µm |
++| 0.8 mM | 42 309 | 337 µm | 175 µm | 162 µm |
++
++The oxygen claims pass; the glucose ones do not.
++
++The cause is arithmetic rather than mysterious. Glucose penetrates to
++L = √(2DC/q) — about 260 µm at 0.8 mM — so at a 311 µm radius the centre
++falls to **0.470 mM**, while the engine's quiescence threshold is
++0.30 mM and its death threshold 0.06 mM. **Not one cell of 29 685 is
++below either.** For 0.8 mM medium to bite at this size the consumption
++would have to be higher, the thresholds higher, or the spheroid larger —
++and their spheroids were roughly 1000 µm across, three times what these
++runs reach.
++
++So one of three things is wrong and the data to say which is not in
++hand: the consumption rate, the viability thresholds, or the comparison
++itself. **The feature stays, labelled as failing this test.** Tuning any
++of the three until the test passed would be fitting to the answer, and
++the constants are literature values rather than something fitted, which
++is the only reason the failure is informative at all.
++
++*A first version of this test reported 5/5 passing.* It reached down to
++0.1 mM — far below anything measured — and was satisfied by a difference
++there, on 160 µm spheroids too small for any gradient to form. A test
++that goes outside the experimental range to find an effect is
++manufacturing a pass, not checking a claim.
++
++**Also missing, from the same papers:** as glucose falls, cellular
++respiration RISES. Oxygen consumption here is fixed, so a starved
++spheroid's oxygen profile is wrong regardless of what the glucose does.
+ 
+ ### Let cells crawl (`DishParams.migration_*`)
+ 
+diff --git a/scripts/validate_glucose.py b/scripts/validate_glucose.py
+new file mode 100644
+index 0000000..6b0b2f5
+--- /dev/null
++++ b/scripts/validate_glucose.py
+@@ -0,0 +1,155 @@
++#!/usr/bin/env python3
++"""Does lowering medium glucose do to a simulated spheroid what it does
++to a real one?
++
++WHAT CAN AND CANNOT BE CHECKED HERE. Mueller-Klieser, Freyer and
++Sutherland grew EMT6/Ro spheroids in 0.8-16.5 mM glucose at 5 % and 20 %
++oxygen and measured the viable rim (Br J Cancer 1986; Cancer Res 46:3504
++and 46:3513). Their quantitative tables are images in the scanned
++originals and could not be extracted, so the rim thickness in micrometres
++at each glucose concentration is NOT available to compare against. What
++the abstracts state unambiguously, and what this script therefore tests,
++is the set of DIRECTIONAL claims:
++
++  1. lowering medium glucose substantially reduces the viable rim;
++  2. restricting oxygen reduces it too, at a given glucose;
++  3. necrosis can develop from a lack of either.
++
++A direction is a weaker claim than a number, and a model that gets the
++direction right can still have the magnitude badly wrong. This script is
++therefore a FALSIFICATION test, not a calibration: it can show the
++glucose coupling is backwards or absent, and it cannot show it is
++quantitatively right.
++
++THE SPHEROID HAS TO BE BIG ENOUGH, which the first version of this
++script got wrong and is worth recording. Glucose penetrates to a depth
++L = sqrt(2 D C / q): about 1170 um at 16.5 mM, 680 um at 5.5 mM and
++260 um at 0.8 mM. A spheroid much smaller than L has no gradient to
++speak of however right the constants are, so the first run — on 160 um
++spheroids — found glucose made no difference anywhere in the published
++range and "passed" only because it also tested 0.1 mM, far below what
++anyone measured. At a 310 um radius the same code depletes the centre by
++41 % at 0.8 mM and 2 % at 16.5 mM, which is the selectivity the papers
++describe. The runs below are therefore seeded large.
++
++A KNOWN MISSING MECHANISM, which the same papers report and this engine
++does not have: as glucose falls, cellular RESPIRATION RISES — the cells
++compensate by burning more oxygen. Here oxygen consumption is fixed, so
++a simulated spheroid starved of glucose does not consume oxygen faster,
++and its oxygen profile is unchanged. That is a real gap and the reason
++the two fields here are coupled only through growth and death rather
++than through each other's consumption.
++
++Usage:
++    python scripts/validate_glucose.py            # ~10 min
++    python scripts/validate_glucose.py --quick    # ~3 min
++"""
++from __future__ import annotations
++
++import argparse
++import json
++import sys
++from pathlib import Path
++
++import numpy as np
++
++REPO_ROOT = Path(__file__).resolve().parents[1]
++sys.path.insert(0, str(REPO_ROOT))
++
++from cellsim.cell.dish import DishParams, run_dish  # noqa: E402
++from cellsim.cell.engine import Params  # noqa: E402
++from cellsim.cell.library import get_line  # noqa: E402
++
++OUT_JSON = REPO_ROOT / "benchmarks" / "cell" / "glucose_validation.json"
++# The concentrations Mueller-Klieser et al. used, plus the two lower ones
++# where this engine's thresholds bite.
++GLUCOSE_mM = (16.5, 5.5, 1.65, 0.8)
++# 20 % and 5 % oxygen, as partial pressures in the medium.
++O2_mmHg = {"20 %": 152.0, "5 %": 38.0}
++
++
++def run(line, glucose, o2_mmHg, *, days, n_seed, grid, seeds):
++    out = []
++    for sd in seeds:
++        dp = DishParams(geometry="spheroid", glucose_medium_mM=glucose,
++                        o2_medium_mmHg=o2_mmHg)
++        r = run_dish(line, t_end_h=days * 24.0, n_seed=n_seed, grid_sites=grid,
++                     record_every_h=24.0, seed=int(sd), p=Params(cycle_cv=0.25), dp=dp)
++        rec = r.record
++        viable = float(rec.radius_um[-1] - rec.necrotic_radius_um[-1])
++        out.append({"live": int(rec.n_live[-1]), "necrotic": int(rec.n_necrotic[-1]),
++                    "radius_um": float(rec.radius_um[-1]),
++                    "necrotic_um": float(rec.necrotic_radius_um[-1]),
++                    "viable_rim_um": viable,
++                    "quiescent": float(rec.quiescent_frac[-1])})
++    return {k: float(np.mean([o[k] for o in out])) for k in out[0]}
++
++
++def main(argv=None) -> int:
++    ap = argparse.ArgumentParser(description=__doc__,
++                                 formatter_class=argparse.RawDescriptionHelpFormatter)
++    ap.add_argument("--quick", action="store_true")
++    ap.add_argument("--no-write", action="store_true")
++    a = ap.parse_args(argv)
++    # Seeded large on purpose: see the note above about penetration depth.
++    days, n_seed, grid = (4.0, 30000, 90) if a.quick else (6.0, 40000, 100)
++    seeds = (1,) if a.quick else (1, 2)
++    line = get_line("DLD-1")
++
++    print(f"DLD-1 spheroid, {days:g} days from {n_seed} cells, mean of {len(seeds)} seeds.")
++    print("Testing the DIRECTION of three published claims; the magnitudes in the\n"
++          "1986 papers are image-only tables and are not available to compare against.\n")
++    report = {"days": days, "n_seed": n_seed, "seeds": list(seeds), "rows": []}
++    for o2_label, o2 in O2_mmHg.items():
++        print(f"  oxygen {o2_label} ({o2:.0f} mmHg)")
++        print(f"{'glucose':>10}{'live':>8}{'radius':>9}{'viable rim':>12}"
++              f"{'necrotic core':>15}{'quiescent':>11}")
++        for g in GLUCOSE_mM:
++            r = run(line, g, o2, days=days, n_seed=n_seed, grid=grid, seeds=seeds)
++            r.update({"glucose_mM": g, "o2_mmHg": o2, "o2_label": o2_label})
++            report["rows"].append(r)
++            print(f"{g:>9.2f} {r['live']:>8.0f}{r['radius_um']:>9.0f}"
++                  f"{r['viable_rim_um']:>12.0f}{r['necrotic_um']:>15.0f}"
++                  f"{r['quiescent']:>11.2f}")
++        print()
++
++    rows = report["rows"]
++
++    def at(g, lab):
++        return next(r for r in rows if r["glucose_mM"] == g and r["o2_label"] == lab)
++
++    # Claim 1, tested WITHIN the published range (16.5 -> 0.8 mM), not by
++    # reaching for a concentration below anything anyone measured.
++    hi, lo = at(16.5, "20 %"), at(0.8, "20 %")
++    c1 = lo["viable_rim_um"] < hi["viable_rim_um"] * 0.95
++    # Claim 2: restricting oxygen reduces it too, at a given glucose.
++    c2 = at(5.5, "5 %")["viable_rim_um"] < at(5.5, "20 %")["viable_rim_um"] * 0.98
++    # Claim 3: necrosis develops from a lack of either.
++    c3_glc = at(0.8, "20 %")["necrotic"] > at(16.5, "20 %")["necrotic"]
++    c3_o2 = at(16.5, "5 %")["necrotic"] > at(16.5, "20 %")["necrotic"]
++    # Monotonicity: the response should not reverse as glucose falls.
++    rim20 = [at(g, "20 %")["viable_rim_um"] for g in GLUCOSE_mM]
++    c4 = all(rim20[i] >= rim20[i + 1] * 0.98 for i in range(len(rim20) - 1))
++
++    print("Directional claims (Mueller-Klieser, Freyer & Sutherland 1986):")
++    for ok, text in ((c1, "lowering glucose reduces growth / the viable rim"),
++                     (c2, "restricting oxygen reduces it too, at a given glucose"),
++                     (c3_glc, "lack of GLUCOSE alone can produce necrosis"),
++                     (c3_o2, "lack of OXYGEN alone can produce necrosis"),
++                     (c4, "the response is monotone in glucose (no reversal)")):
++        print(f"  [{'PASS' if ok else 'FAIL'}] {text}")
++    allok = all((c1, c2, c3_glc, c3_o2, c4))
++    report["directional_claims_pass"] = bool(allok)
++    print(f"\n{'All directions reproduced.' if allok else 'A DIRECTION IS WRONG.'} This is "
++          f"falsification, not calibration:\nthe magnitudes remain unchecked, and the "
++          f"missing respiration-compensation\nmechanism (cells burn more oxygen as "
++          f"glucose falls) means the oxygen profile\nof a starved spheroid is wrong here "
++          f"whatever the glucose numbers do.")
++    if not a.no_write:
++        OUT_JSON.write_text(json.dumps(report, indent=1, default=float) + "\n")
++        print(f"\nwrote {OUT_JSON.relative_to(REPO_ROOT)}")
++    return 0 if allok else 1
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())

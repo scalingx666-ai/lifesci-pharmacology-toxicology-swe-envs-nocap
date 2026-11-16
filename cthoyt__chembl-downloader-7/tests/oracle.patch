@@ -1,0 +1,826 @@
+diff --git a/.bumpversion.cfg b/.bumpversion.cfg
+index 3db107d..eb4b574 100644
+--- a/.bumpversion.cfg
++++ b/.bumpversion.cfg
+@@ -19,6 +19,10 @@ values =
+ [bumpverion:part:build]
+ values = [0-9A-Za-z-]+
+ 
++[bumpversion:file:docs/source/conf.py]
++search = release = "{current_version}"
++replace = release = "{new_version}"
++
+ [bumpversion:file:setup.cfg]
+ search = version = {current_version}
+ replace = version = {new_version}
+diff --git a/.github/workflows/tests.yml b/.github/workflows/tests.yml
+new file mode 100644
+index 0000000..c270262
+--- /dev/null
++++ b/.github/workflows/tests.yml
+@@ -0,0 +1,76 @@
++name: Tests
++
++on:
++  push:
++    branches: [ main ]
++  pull_request:
++    branches: [ main ]
++
++jobs:
++  lint:
++    name: Lint
++    runs-on: ubuntu-latest
++    strategy:
++      matrix:
++        python-version: [ "3.7", "3.11" ]
++    steps:
++      - uses: actions/checkout@v2
++      - name: Set up Python ${{ matrix.python-version }}
++        uses: actions/setup-python@v2
++        with:
++          python-version: ${{ matrix.python-version }}
++      - name: Install dependencies
++        run: pip install tox
++      - name: Check manifest
++        run: tox -e manifest
++      - name: Check code quality with flake8
++        run: tox -e flake8
++      - name: Check package metadata with Pyroma
++        run: tox -e pyroma
++      - name: Check static typing with MyPy
++        run: tox -e mypy
++  docs:
++    name: Documentation
++    runs-on: ubuntu-latest
++    strategy:
++      matrix:
++        python-version: [ "3.9" ]
++    steps:
++      - uses: actions/checkout@v2
++      - name: Set up Python ${{ matrix.python-version }}
++        uses: actions/setup-python@v2
++        with:
++          python-version: ${{ matrix.python-version }}
++      - name: Install dependencies
++        run: |
++          pip install tox
++          sudo apt-get install graphviz
++      - name: Check RST conformity with doc8
++        run: tox -e doc8
++      - name: Check docstring coverage
++        run: tox -e docstr-coverage
++      - name: Check documentation build with Sphinx
++        run: tox -e docs-test
++  tests:
++    name: Tests
++    runs-on: ${{ matrix.os }}
++    strategy:
++      matrix:
++        os: [ ubuntu-latest ]
++        python-version: [ "3.7", "3.11" ]
++    steps:
++      - uses: actions/checkout@v2
++      - name: Set up Python ${{ matrix.python-version }}
++        uses: actions/setup-python@v2
++        with:
++          python-version: ${{ matrix.python-version }}
++      - name: Install dependencies
++        run: pip install tox
++      - name: Test with pytest and generate coverage file
++        run:
++          tox -e py
++      - name: Upload coverage report to codecov
++        uses: codecov/codecov-action@v1
++        if: success()
++        with:
++          file: coverage.xml
+diff --git a/.readthedocs.yml b/.readthedocs.yml
+new file mode 100644
+index 0000000..15a941f
+--- /dev/null
++++ b/.readthedocs.yml
+@@ -0,0 +1,18 @@
++# .readthedocs.yaml
++# Read the Docs configuration file
++# See https://docs.readthedocs.io/en/stable/config-file/v2.html for details
++
++version: 2
++
++# Set the version of Python and other tools you might need
++build:
++  os: ubuntu-20.04
++  tools:
++    python: "3.9"
++
++python:
++  install:
++    - method: pip
++      path: .
++      extra_requirements:
++        - docs
+diff --git a/MANIFEST.in b/MANIFEST.in
+index 9b31d94..e80bb3d 100644
+--- a/MANIFEST.in
++++ b/MANIFEST.in
+@@ -1,12 +1,17 @@
+ graft src
+ graft tests
++prune scripts
++prune notebooks
++prune tests/.pytest_cache
++
++prune docs/build
++prune docs/source/api
+ 
+ recursive-include docs/source *.py
+ recursive-include docs/source *.rst
+ recursive-include docs/source *.png
+-include docs/Makefile
+ 
+ global-exclude *.py[cod] __pycache__ *.so *.dylib .DS_Store *.gpickle
+ 
+-exclude .bumpversion.cfg Dockerfile docker-compose.yml
+-include *.rst *.txt *.yml LICENSE tox.ini .flake8 doc8.ini .coveragerc
++include README.md LICENSE
++exclude tox.ini .flake8 .bumpversion.cfg .readthedocs.yml
+diff --git a/docs/source/conf.py b/docs/source/conf.py
+new file mode 100644
+index 0000000..a47c75b
+--- /dev/null
++++ b/docs/source/conf.py
+@@ -0,0 +1,239 @@
++# -*- coding: utf-8 -*-
++#
++# Configuration file for the Sphinx documentation builder.
++#
++# This file does only contain a selection of the most common options. For a
++# full list see the documentation:
++# http://www.sphinx-doc.org/en/master/config
++
++# -- Path setup --------------------------------------------------------------
++
++# If extensions (or modules to document with autodoc) are in another directory,
++# add these directories to sys.path here. If the directory is relative to the
++# documentation root, use os.path.abspath to make it absolute, like shown here.
++#
++
++import os
++import re
++import sys
++from datetime import date
++
++sys.path.insert(0, os.path.abspath("../../src"))
++
++# -- Project information -----------------------------------------------------
++
++project = "chembl_downloader"
++copyright = f"{date.today().year}, Charles Tapley Hoyt"
++author = "Charles Tapley Hoyt"
++
++# The full version, including alpha/beta/rc tags.
++release = "0.3.1-dev"
++
++# The short X.Y version.
++parsed_version = re.match(
++    "(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)(?:-(?P<release>[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+(?P<build>[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?",
++    release,
++)
++version = parsed_version.expand("\g<major>.\g<minor>.\g<patch>")
++
++if parsed_version.group("release"):
++    tags.add("prerelease")
++
++# -- General configuration ---------------------------------------------------
++
++# If your documentation needs a minimal Sphinx version, state it here.
++#
++# needs_sphinx = '1.0'
++
++# If true, the current module name will be prepended to all description
++# unit titles (such as .. function::).
++add_module_names = False
++
++# A list of prefixes that are ignored when creating the module index. (new in Sphinx 0.6)
++modindex_common_prefix = ["chembl_downloader."]
++
++# Add any Sphinx extension module names here, as strings. They can be
++# extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
++# ones.
++extensions = [
++    "sphinx.ext.autosummary",
++    "sphinx.ext.autodoc",
++    "sphinx.ext.coverage",
++    "sphinx.ext.intersphinx",
++    "sphinx.ext.todo",
++    "sphinx.ext.mathjax",
++    "sphinx.ext.viewcode",
++    "sphinx_autodoc_typehints",
++    "sphinx_automodapi.automodapi",
++    "sphinx_automodapi.smart_resolver",
++    # 'texext',
++]
++
++
++extensions.append("sphinx_click.ext")
++
++
++# generate autosummary pages
++autosummary_generate = True
++
++# Add any paths that contain templates here, relative to this directory.
++templates_path = ["_templates"]
++
++# The suffix(es) of source filenames.
++# You can specify multiple suffix as a list of string:
++#
++# source_suffix = ['.rst', '.md']
++source_suffix = ".rst"
++
++# The master toctree document.
++master_doc = "index"
++
++# The language for content autogenerated by Sphinx. Refer to documentation
++# for a list of supported languages.
++#
++# This is also used if you do content translation via gettext catalogs.
++# Usually you set "language" from the command line for these cases.
++language = "en"
++
++# List of patterns, relative to source directory, that match files and
++# directories to ignore when looking for source files.
++# This pattern also affects html_static_path and html_extra_path.
++exclude_patterns = []
++
++# The name of the Pygments (syntax highlighting) style to use.
++pygments_style = "sphinx"
++
++# -- Options for HTML output -------------------------------------------------
++
++# The theme to use for HTML and HTML Help pages.  See the documentation for
++# a list of builtin themes.
++#
++html_theme = "sphinx_rtd_theme"
++
++# Theme options are theme-specific and customize the look and feel of a theme
++# further.  For a list of options available for each theme, see the
++# documentation.
++#
++# html_theme_options = {}
++
++# Add any paths that contain custom static files (such as style sheets) here,
++# relative to this directory. They are copied after the builtin static files,
++# so a file named "default.css" will overwrite the builtin "default.css".
++# html_static_path = ['_static']
++
++# Custom sidebar templates, must be a dictionary that maps document names
++# to template names.
++#
++# The default sidebars (for documents that don't match any pattern) are
++# defined by theme itself.  Builtin themes are using these templates by
++# default: ``['localtoc.html', 'relations.html', 'sourcelink.html',
++# 'searchbox.html']``.
++#
++# html_sidebars = {}
++
++# The name of an image file (relative to this directory) to place at the top
++# of the sidebar.
++#
++if os.path.exists("logo.png"):
++    html_logo = "logo.png"
++
++# -- Options for HTMLHelp output ---------------------------------------------
++
++# Output file base name for HTML help builder.
++htmlhelp_basename = "ChEMBL Downloaderdoc"
++
++# -- Options for LaTeX output ------------------------------------------------
++
++# latex_elements = {
++#     The paper size ('letterpaper' or 'a4paper').
++#
++#     'papersize': 'letterpaper',
++#
++#     The font size ('10pt', '11pt' or '12pt').
++#
++#     'pointsize': '10pt',
++#
++#     Additional stuff for the LaTeX preamble.
++#
++#     'preamble': '',
++#
++#     Latex figure (float) alignment
++#
++#     'figure_align': 'htbp',
++# }
++
++# Grouping the document tree into LaTeX files. List of tuples
++# (source start file, target name, title,
++#  author, documentclass [howto, manual, or own class]).
++# latex_documents = [
++#     (
++#         master_doc,
++#         'chembl_downloader.tex',
++#         'ChEMBL Downloader Documentation',
++#         author,
++#         'manual',
++#     ),
++# ]
++
++# -- Options for manual page output ------------------------------------------
++
++# One entry per manual page. List of tuples
++# (source start file, name, description, authors, manual section).
++man_pages = [
++    (
++        master_doc,
++        "chembl_downloader",
++        "ChEMBL Downloader Documentation",
++        [author],
++        1,
++    ),
++]
++
++# -- Options for Texinfo output ----------------------------------------------
++
++# Grouping the document tree into Texinfo files. List of tuples
++# (source start file, target name, title, author,
++#  dir menu entry, description, category)
++texinfo_documents = [
++    (
++        master_doc,
++        "chembl_downloader",
++        "ChEMBL Downloader Documentation",
++        author,
++        "Charles Tapley Hoyt",
++        "Reproducible downloading, extraction, and access to ChEMBL.",
++        "Miscellaneous",
++    ),
++]
++
++# -- Options for Epub output -------------------------------------------------
++
++# Bibliographic Dublin Core info.
++# epub_title = project
++
++# The unique identifier of the text. This can be a ISBN number
++# or the project homepage.
++#
++# epub_identifier = ''
++
++# A unique identification for the text.
++#
++# epub_uid = ''
++
++# A list of files that should not be packed into the epub file.
++# epub_exclude_files = ['search.html']
++
++# -- Extension configuration -------------------------------------------------
++
++# -- Options for intersphinx extension ---------------------------------------
++
++# Example configuration for intersphinx: refer to the Python standard library.
++intersphinx_mapping = {
++    "https://docs.python.org/3/": None,
++}
++
++autoclass_content = "both"
++
++# Don't sort alphabetically, explained at:
++# https://stackoverflow.com/questions/37209921/python-how-not-to-sort-sphinx-output-in-alphabetical-order
++autodoc_member_order = "bysource"
+diff --git a/docs/source/index.rst b/docs/source/index.rst
+new file mode 100644
+index 0000000..f44110d
+--- /dev/null
++++ b/docs/source/index.rst
+@@ -0,0 +1,35 @@
++ChEMBL Downloader |release| Documentation
++=========================================
++Installation
++------------
++The most recent release can be installed from
++`PyPI <https://pypi.org/project/chembl_downloader>`_ with:
++
++.. code-block:: shell
++
++    $ pip install chembl_downloader
++
++The most recent code and data can be installed directly from GitHub with:
++
++.. code-block:: shell
++
++    $ pip install git+https://github.com/cthoyt/chembl-downloader.git
++
++To install in development mode, use the following:
++
++.. code-block:: shell
++
++    $ git clone git+https://github.com/cthoyt/chembl-downloader.git
++    $ cd chembl-downloader
++    $ pip install -e .
++
++Usage
++-----
++.. automodule:: chembl_downloader
++    :members:
++
++Indices and Tables
++------------------
++* :ref:`genindex`
++* :ref:`modindex`
++* :ref:`search`
+diff --git a/setup.cfg b/setup.cfg
+index ebba01c..26ad529 100644
+--- a/setup.cfg
++++ b/setup.cfg
+@@ -35,6 +35,7 @@ classifiers =
+     License :: OSI Approved :: MIT License
+     Operating System :: OS Independent
+     Programming Language :: Python
++    Programming Language :: Python :: 3.11
+     Programming Language :: Python :: 3.10
+     Programming Language :: Python :: 3.9
+     Programming Language :: Python :: 3.8
+@@ -68,11 +69,53 @@ pandas =
+     pandas
+ rdkit =
+     rdkit-pypi
++tests =
++    pytest
++    coverage
++docs =
++    sphinx
++    sphinx-rtd-theme
++    sphinx-click
++    sphinx-autodoc-typehints
++    sphinx_automodapi
+ 
+ [options.entry_points]
+ console_scripts =
+     chembl_downloader = chembl_downloader.cli:main
+ 
++##########################
++# Coverage Configuration #
++# (.coveragerc)          #
++##########################
++[coverage:run]
++branch = True
++source = chembl_downloader
++omit =
++    tests/*
++    docs/*
++
++[coverage:paths]
++source =
++    src/chembl_downloader
++    .tox/*/lib/python*/site-packages/chembl_downloader
++
++[coverage:report]
++show_missing = True
++exclude_lines =
++    pragma: no cover
++    raise NotImplementedError
++    if __name__ == __main__:
++    if TYPE_CHECKING:
++    def __str__
++    def __repr__
++
++##########################
++# Darglint Configuration #
++##########################
++[darglint]
++docstring_style = sphinx
++strictness = short
++
+ #########################
+ # Flake8 Configuration  #
+ # (.flake8)             #
+diff --git a/src/chembl_downloader/api.py b/src/chembl_downloader/api.py
+index 7f6f159..045d1f0 100644
+--- a/src/chembl_downloader/api.py
++++ b/src/chembl_downloader/api.py
+@@ -52,9 +52,10 @@
+ #: The default path inside the :mod:`pystow` directory
+ PYSTOW_PARTS = ["chembl"]
+ RELEASE_PREFIX = "* Release:"
++DATE_PREFIX = "* Date:"
+ 
+ 
+-def _removeprefix(s, prefix):
++def _removeprefix(s: str, prefix: str) -> str:
+     if s.startswith(prefix):
+         return s[len(prefix) :]
+     return s
+@@ -106,6 +107,8 @@ def _download_helper(
+         to allow downloading arbitrarily named files.
+     :return: If ``return_version`` is true, return a pair of the version and the
+         local file path to the downloaded file. Otherwise, just return the path.
++    :raises ValueError:
++        If file could not be downloaded
+     """
+     if version is None:
+         version = latest()
+@@ -308,6 +311,7 @@ def chemfp_load_fps(
+         :func:`latest` to look up the latest.
+     :param prefix: The directory inside :mod:`pystow` to use
+     :param kwargs: Remaining keyword arguments are passed into :func:`chemfp.load_fingerprints`.
++    :return: A fingerpring arena object
+     :rtype: chemfp.arena.FingerprintArena
+     """
+     import chemfp
+@@ -440,6 +444,7 @@ def supplier(
+     :param prefix: The directory inside :mod:`pystow` to use
+     :param kwargs: keyword arguments to pass through to :class:`rdkit.Chem.ForwardSDMolSupplier`, such as
+         ``sanitize`` and ``removeHs``.
++    :yields: A supplier to be used in a context manager
+ 
+     Example:
+     .. code-block:: python
+@@ -547,13 +552,12 @@ def download_readme(
+ 
+ def get_date(version: str, **kwargs) -> str:
+     """Get the date of a given version."""
+-    path = download_readme(version=version, **kwargs)
++    path = cast(Path, download_readme(version=version, **kwargs))
+     try:
+-        date_p = (
+-            next(line for line in path.read_text().splitlines() if line.startswith("* Date:"))
+-            .removeprefix("* Date:")
+-            .lstrip()
+-        )
++        date_p = _removeprefix(
++            next(line for line in path.read_text().splitlines() if line.startswith("* Date:")),
++            DATE_PREFIX,
++        ).lstrip()
+     except StopIteration:
+         return ""  # happens on 22.1 and 24.1
+     else:
+diff --git a/src/chembl_downloader/history.py b/src/chembl_downloader/history.py
+index aafd096..ac088ce 100644
+--- a/src/chembl_downloader/history.py
++++ b/src/chembl_downloader/history.py
+@@ -4,7 +4,7 @@
+ from tabulate import tabulate
+ from tqdm import tqdm
+ 
+-from chembl_downloader.api import download_readme, get_date, versions
++from chembl_downloader.api import get_date, versions
+ 
+ 
+ @click.command()
+diff --git a/tests/__init__.py b/tests/__init__.py
+new file mode 100644
+index 0000000..555c941
+--- /dev/null
++++ b/tests/__init__.py
+@@ -0,0 +1 @@
++"""Tests for chembl-downloader."""
+diff --git a/tests/test_api.py b/tests/test_api.py
+new file mode 100644
+index 0000000..95415e7
+--- /dev/null
++++ b/tests/test_api.py
+@@ -0,0 +1,14 @@
++"""Tests for the API."""
++
++import unittest
++
++import chembl_downloader
++
++
++class TestApi(unittest.TestCase):
++    """Tests for the API."""
++
++    def test_latest_version(self):
++        """Test getting the latest version."""
++        latest_version = chembl_downloader.latest()
++        self.assertIsInstance(latest_version, str)
+diff --git a/tox.ini b/tox.ini
+index 29ad8c4..f407a34 100644
+--- a/tox.ini
++++ b/tox.ini
+@@ -4,47 +4,83 @@
+ # and then run "tox" from this directory.
+ 
+ [tox]
+-isolated_build = true
++# To use a PEP 517 build-backend you are required to configure tox to use an isolated_build:
++# https://tox.readthedocs.io/en/latest/example/package.html
++isolated_build = True
++
++# These environments are run in order if you just use `tox`:
+ envlist =
+     # always keep coverage-clean first
+     # coverage-clean
+     # code linters/stylers
++    lint
+     manifest
+     pyroma
+-    lint
+     flake8
+     mypy
+     # documentation linters/checkers
+-    # doc8
+-    # readme
+-    # docs
++    doc8
++    docstr-coverage
++    docs-test
+     # the actual tests
+     py
+     # always keep coverage-report last
+     # coverage-report
+ 
+ [testenv]
+-commands = coverage run -p -m pytest --durations=20 {posargs:tests}
++# Runs on the "tests" directory by default, or passes the positional
++# arguments from `tox -e py <posargs_1> ... <posargs_n>
++commands =
++    coverage run -p -m pytest --durations=20 {posargs:tests}
++    coverage combine
++    coverage xml
++extras =
++    # See the [options.extras_require] entry in setup.cfg for "tests"
++    tests
++    
++[testenv:doctests]
++commands =
++    xdoctest -m src
+ deps =
+-    coverage
+-    pytest
++    xdoctest
++    pygments
+ 
+ [testenv:coverage-clean]
+ deps = coverage
+ skip_install = true
+ commands = coverage erase
+ 
++[testenv:lint]
++deps =
++    black[jupyter]
++    isort
++skip_install = true
++commands =
++    black .
++    isort .
++description = Run linters.
++
++[testenv:doclint]
++deps =
++    rstfmt
++skip_install = true
++commands =
++    rstfmt docs/source/
++description = Run documentation linters.
++
+ [testenv:manifest]
+ deps = check-manifest
+ skip_install = true
+ commands = check-manifest
++description = Check that the MANIFEST.in is written properly and give feedback on how to fix it.
+ 
+ [testenv:flake8]
+ skip_install = true
+ deps =
++    darglint
+     flake8
+-    flake8-bandit
+     flake8-black
++    flake8-bandit
+     flake8-bugbear
+     flake8-colors
+     flake8-docstrings
+@@ -53,18 +89,8 @@ deps =
+     pep8-naming
+     pydocstyle
+ commands =
+-    flake8 src/
+-description = Run the flake8 tool with several plugins (bandit, docstrings, import order, pep8 naming).
+-
+-[testenv:lint]
+-deps =
+-    black[jupyter]
+-    isort
+-skip_install = true
+-commands =
+-    black src/ notebooks/
+-    isort src/ notebooks/
+-description = Run linters to keep the code looking spiffy
++    flake8 .
++description = Run the flake8 tool with several plugins (bandit, docstrings, import order, pep8 naming). See https://cthoyt.com/2020/04/25/how-to-code-with-me-flake8.html for more information.
+ 
+ [testenv:pyroma]
+ deps =
+@@ -77,7 +103,7 @@ description = Run the pyroma tool to check the package friendliness of the proje
+ [testenv:mypy]
+ deps = mypy
+ skip_install = true
+-commands = mypy --install-types --non-interactive --ignore-missing-imports src/chembl_downloader/
++commands = mypy --install-types --non-interactive --ignore-missing-imports src/
+ description = Run the mypy tool to check static typing on the project.
+ 
+ [testenv:doc8]
+@@ -86,32 +112,46 @@ deps =
+     sphinx
+     doc8
+ commands =
+-    doc8 docs/source/ README.rst
++    doc8 docs/source/
+ description = Run the doc8 tool to check the style of the RST files in the project docs.
+ 
+-[testenv:readme]
+-commands = rst-lint README.rst
++[testenv:docstr-coverage]
+ skip_install = true
+ deps =
+-    restructuredtext_lint
+-    pygments
+-description = Run the rst-lint tool to check the style of the README.
++    docstr-coverage
++commands =
++    docstr-coverage src/ --skip-private --skip-magic
++description = Run the docstr-coverage tool to check documentation coverage
+ 
+ [testenv:docs]
+-changedir = docs
++description = Build the documentation locally.
+ extras =
++    # See the [options.extras_require] entry in setup.cfg for "docs"
+     docs
++    # You might need to add additional extras if your documentation covers it
++commands =
++    python -m sphinx -W -b html -d docs/build/doctrees docs/source docs/build/html
++
++[testenv:docs-test]
++description = Test building the documentation in an isolated environment.
++changedir = docs
++extras =
++    {[testenv:docs]extras}
+ commands =
+     mkdir -p {envtmpdir}
+     cp -r source {envtmpdir}/source
+-    sphinx-build -W -b html -d {envtmpdir}/build/doctrees {envtmpdir}/source {envtmpdir}/build/html
+-    sphinx-build -W -b coverage -d {envtmpdir}/build/doctrees {envtmpdir}/source {envtmpdir}/build/coverage
++    python -m sphinx -W -b html     -d {envtmpdir}/build/doctrees {envtmpdir}/source {envtmpdir}/build/html
++    python -m sphinx -W -b coverage -d {envtmpdir}/build/doctrees {envtmpdir}/source {envtmpdir}/build/coverage
+     cat {envtmpdir}/build/coverage/c.txt
+     cat {envtmpdir}/build/coverage/python.txt
+ whitelist_externals =
+     /bin/cp
+     /bin/cat
+     /bin/mkdir
++    # for compatibility on GitHub actions
++    /usr/bin/cp
++    /usr/bin/cat
++    /usr/bin/mkdir
+ 
+ [testenv:coverage-report]
+ deps = coverage
+@@ -140,6 +180,7 @@ commands =
+     python -m build --sdist --wheel --no-isolation
+ 
+ [testenv:release]
++description = Release the code to PyPI so users can pip install it
+ skip_install = true
+ deps =
+     {[testenv:build]deps}
+@@ -148,18 +189,30 @@ commands =
+     {[testenv:build]commands}
+     twine upload --skip-existing dist/*
+ 
+-[testenv:finish]
++[testenv:testrelease]
++description = Release the code to the test PyPI site
+ skip_install = true
+-passenv = HOME
+ deps =
+     {[testenv:build]deps}
++    twine >= 1.5.0
++commands =
++    {[testenv:build]commands}
++    twine upload --skip-existing --repository-url https://test.pypi.org/simple/ dist/*
++
++[testenv:finish]
++skip_install = true
++passenv =
++    HOME
++    TWINE_USERNAME
++    TWINE_PASSWORD
++deps =
+     {[testenv:release]deps}
+-    bumpversion
++    bump2version
+ commands =
+-    bumpversion release
++    bump2version release --tag
+     {[testenv:release]commands}
+-    git push
+-    bumpversion patch
++    git push --tags
++    bump2version patch
+     git push
+ whitelist_externals =
+     /usr/bin/git

@@ -1,0 +1,62 @@
+version = "1.0"
+
+[task]
+name = "default/FreedomIntelligence__OpenClaw-Medical-Skills-37"
+description = "fix: remove Git LFS tracking from .gitattributes (closes #26)"
+
+[metadata]
+difficulty = "medium"
+category = "bugfix"
+keywords = [
+    "OpenClaw-Medical-Skills",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "FreedomIntelligence/OpenClaw-Medical-Skills"
+ref = "2aa60d4d86d3a028358f4505684a24efe745a8ea"
+reference = "https://github.com/FreedomIntelligence/OpenClaw-Medical-Skills/pull/37"
+source_access = "auto"
+built_at = "2026-11-15T10:17:29.300238+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:e04f8cc717a34ca928b5809b0a266663017fd9d523f9ada70ca96cabcf3e8aab"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2026-06-18T02:42:43Z"
+diff_format = "unified"
+context_files = [
+    ".gitattributes",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 24
+difficulty = "medium"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

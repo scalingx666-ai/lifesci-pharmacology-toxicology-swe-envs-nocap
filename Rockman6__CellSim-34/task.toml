@@ -1,0 +1,63 @@
+version = "1.0"
+
+[task]
+name = "default/Rockman6__CellSim-34"
+description = "Lab: state the real first-visit start-up time"
+
+[metadata]
+difficulty = "small"
+category = "bugfix"
+keywords = [
+    "CellSim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "Rockman6/CellSim"
+ref = "b5d603ca42e21e12dd56c29e7adb503ce71b5004"
+reference = "https://github.com/Rockman6/CellSim/pull/34"
+source_access = "auto"
+built_at = "2026-11-16T11:04:15.327987+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:41889877e7db64f88e203321115a0127849f9c31fbe626152338af1754193d5f"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2026-10-07T17:02:16Z"
+diff_format = "unified"
+context_files = [
+    "web/index.html",
+    "web/lab/index.html",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 8
+difficulty = "small"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

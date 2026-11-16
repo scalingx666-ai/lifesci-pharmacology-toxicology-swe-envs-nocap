@@ -1,0 +1,66 @@
+version = "1.0"
+
+[task]
+name = "default/NVIDIA-BioNeMo__KERMT-5"
+description = "Disallow inconsistent usage of finetune and predict workflows"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "KERMT",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "NVIDIA-BioNeMo/KERMT"
+ref = "918c5c144763d074181a983dbf5b8abca0dc8d16"
+reference = "https://github.com/NVIDIA-BioNeMo/KERMT/pull/5"
+source_access = "auto"
+built_at = "2026-11-16T11:12:58.462234+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:2f6ae666a5c46ae6639f4a86e0631f78d2b0703e6495f1b18e5171f7136904be"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2026-03-16T19:05:57Z"
+diff_format = "unified"
+context_files = [
+    "README.md",
+    "environment.yml",
+    "kermt/util/parsing.py",
+    "kermt/util/utils.py",
+    "task/predict.py",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 97
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

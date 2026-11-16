@@ -1,0 +1,13 @@
+diff --git a/src/chembl_downloader/api.py b/src/chembl_downloader/api.py
+index 31d4379..0b6e899 100644
+--- a/src/chembl_downloader/api.py
++++ b/src/chembl_downloader/api.py
+@@ -142,7 +142,7 @@ def _download_helper(
+     else:
+         filename = suffix
+ 
+-    base = f"ftp://{_CHEMBL_HOST}/chembl_{version_info.fmt_version}"
++    base = f"https://{_CHEMBL_HOST}/chembl_{version_info.fmt_version}"
+     urls = [
+         f"{base}/{filename}",
+         f"{base}/archived/{filename}",

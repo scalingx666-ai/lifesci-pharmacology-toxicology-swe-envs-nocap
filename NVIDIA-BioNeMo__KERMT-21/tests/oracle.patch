@@ -1,0 +1,1037 @@
+diff --git a/agent/config/defaults_finetune.json b/agent/config/defaults_finetune.json
+index 4e0f5b8..031c124 100644
+--- a/agent/config/defaults_finetune.json
++++ b/agent/config/defaults_finetune.json
+@@ -37,5 +37,5 @@
+ 
+   "_about_mtl": "Per-target task-specific FFN heads are exposed via ffn_num_task_specific_layers (default 0 == off) and ffn_task_specific_hidden_size (default null; required when ffn_num_task_specific_layers > 0). When >0, each target column gets its own N-layer FFN stacked on the shared trunk; useful for heterogeneous multi-target finetunes (e.g. solubility + permeability + metabolic stability together). Override via --ffn-num-task-specific-layers N --ffn-task-specific-hidden-size H.",
+ 
+-  "_about_gpu_selection": "GPU selection is auto-detected at runtime, not a default here. Finetune defaults to GPU 0; override with --gpus 0,2 etc."
++  "_about_gpu_selection": "GPU selection is auto-detected at runtime, not a default here. Finetune defaults to GPU 0. Use --gpus <id> to pick a single device for single-GPU finetune; use --num-gpus N for multi-GPU data-parallel (DDP)."
+ }
+diff --git a/agent/scripts/run_finetune_local.py b/agent/scripts/run_finetune_local.py
+index ddafc46..e447dd8 100644
+--- a/agent/scripts/run_finetune_local.py
++++ b/agent/scripts/run_finetune_local.py
+@@ -19,9 +19,10 @@
+ User-supplied arch flags are not exposed; the runner refuses to override what
+ the ckpt dictates so the FFN heads attach to a consistent encoder.
+ 
+-Single-GPU is the default for finetune (per agent/README's hardware table —
+-multi-GPU finetune is not currently supported and main.py's finetune path
+-doesn't DDP). `--gpus N` picks a specific device id; defaults to GPU 0.
++Single-GPU is the default for finetune. `--gpus N` picks a specific device id
++(defaults to GPU 0). For data-parallel multi-GPU finetuning, pass `--num-gpus N`
++(N>1): the runner sets `WORLD_SIZE=N` and `main.py finetune` spawns one process
++per GPU, and `--batch-size` is interpreted per-GPU.
+ 
+ CLI
+ ---
+@@ -189,8 +190,16 @@ def _validate_mtl_consistency(applied: dict[str, dict[str, Any]]) -> None:
+ def _build_argv(
+     *, gpu: int, out_dir: Path, manifest: dict[str, Any], ckpt: Path,
+     arch: dict[str, Any], applied: dict[str, dict[str, Any]],
++    num_gpus: int = 1,
+ ) -> list[str]:
+-    """Constructs the full `main.py finetune` argv as a list of strings."""
++    """Constructs the full finetune argv as a list of strings.
++
++    Single-process and multi-GPU (DDP) finetune share one entrypoint,
++    `main.py finetune ...`. DDP is selected at runtime by the WORLD_SIZE env var
++    (this runner sets it to num_gpus when num_gpus > 1; main.py then spawns one
++    process per GPU). The argv is therefore identical for both; num_gpus is kept
++    only to document that --batch_size is per-GPU under DDP.
++    """
+     outputs = manifest["outputs"]
+     method = manifest["split_method"]
+ 
+@@ -273,8 +282,11 @@ def _build_argv(
+     if applied.get("show_individual_scores", {}).get("value"):
+         argv += ["--show_individual_scores"]
+ 
+-    # GPU + save_dir
+-    argv += ["--gpu", str(gpu)]
++    # GPU + save_dir. Under DDP (num_gpus>1) gpu is None: main.py finetune pins
++    # each rank to its own device, and run_training ignores args.gpu when
++    # distributed, so no --gpu flag is passed.
++    if gpu is not None:
++        argv += ["--gpu", str(gpu)]
+     argv += ["--save_dir", str(out_dir / "ckpt")]
+ 
+     return argv
+@@ -309,25 +321,33 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
+     arch = _arch_from_validator(validator_out)
+     model_type = validator_out.get("model_type")
+ 
+-    # 3. GPU selection (single-GPU only).
+-    gpu = resolve_single_gpu(args.gpus, workflow="finetune")
++    # 3. GPU selection.
++    num_gpus = max(1, int(getattr(args, "num_gpus", 1) or 1))
++    distributed = num_gpus > 1
++    if distributed:
++        # Data-parallel DDP: main.py finetune uses GPUs 0..num_gpus-1 (one rank
++        # each) via WORLD_SIZE; a single-device pin does not apply.
++        gpu = None
++    else:
++        gpu = resolve_single_gpu(args.gpus, workflow="finetune")
+ 
+     # 4. Apply defaults + collect args_applied.
+     applied = _apply_defaults(args, defaults)
+     # MTL FFN consistency
+     _validate_mtl_consistency(applied)
+ 
+-    # 5. Build the main.py finetune argv.
++    # 5. Build the finetune argv (always main.py finetune; DDP selected via WORLD_SIZE).
+     argv = _build_argv(
+         gpu=gpu, out_dir=out_dir, manifest=manifest, ckpt=ckpt,
+-        arch=arch, applied=applied,
++        arch=arch, applied=applied, num_gpus=num_gpus,
+     )
+ 
+     # 6. Build the run.json manifest.
+     commit, dirty = git_commit_with_env_override(REPO_ROOT)
+     image_tag = os.environ.get("KERMT_IMAGE", "kermt:latest")
+     image_digest = docker_image_digest(image_tag)
+-    cmd_replay = format_cmd_replay(argv, env={"CUDA_VISIBLE_DEVICES": gpu})
++    replay_env = {"WORLD_SIZE": str(num_gpus)} if distributed else {"CUDA_VISIBLE_DEVICES": gpu}
++    cmd_replay = format_cmd_replay(argv, env=replay_env)
+     targets = manifest.get("targets")
+     run_manifest: dict[str, Any] = {
+         "workflow": "finetune",
+@@ -344,6 +364,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
+         },
+         "model_type": model_type,
+         "gpu": gpu,
++        "num_gpus": num_gpus,
++        "distributed": distributed,
+         "args_applied": applied,
+         "arch": arch,
+         "save_dir": str(out_dir / "ckpt"),
+@@ -362,10 +384,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
+         return run_manifest
+ 
+     env = os.environ.copy()
+-    env["CUDA_VISIBLE_DEVICES"] = str(gpu)
++    if distributed:
++        # DDP: main.py finetune reads WORLD_SIZE and spawns one process per GPU.
++        # Do not pin CUDA_VISIBLE_DEVICES to a single device.
++        env["WORLD_SIZE"] = str(num_gpus)
++    else:
++        env["CUDA_VISIBLE_DEVICES"] = str(gpu)
+     # main.py enables strict deterministic algorithms via
+-    # `torch.use_deterministic_algorithms(True)` (kermt/main.py:23); CuBLAS
+-    # then requires this env var to be set.
++    # `torch.use_deterministic_algorithms(True)`; CuBLAS then requires this env var.
+     env.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+ 
+     log_file = out_dir / "logs" / "finetune.log"
+@@ -389,8 +415,13 @@ def main(argv: list[str] | None = None) -> int:
+     p.add_argument("--ckpt-validator-out", default=None,
+                    help="Optional cached check_checkpoint.py JSON; computed if absent.")
+     p.add_argument("--gpus", default=None,
+-                   help="Single GPU id (default 0). Finetune is single-GPU only; "
+-                        "passing '0,1' is rejected with a clear error.")
++                   help="Single GPU id for single-process finetune (default 0). "
++                        "Ignored when --num-gpus > 1 (DDP uses ranks 0..N-1).")
++    p.add_argument("--num-gpus", type=int, default=1,
++                   help="Number of GPUs for data-parallel (DDP) finetune. Default 1 "
++                        "(single-process main.py finetune, unchanged). N>1 runs "
++                        "main.py finetune with WORLD_SIZE=N (one process per GPU); "
++                        "--batch-size is per-GPU.")
+     p.add_argument("--dry-run", action="store_true",
+                    help="Write run.json + print the command without executing.")
+ 
+diff --git a/agent/skills/kermt-finetune/SKILL.md b/agent/skills/kermt-finetune/SKILL.md
+index ae2aaa0..9850096 100644
+--- a/agent/skills/kermt-finetune/SKILL.md
++++ b/agent/skills/kermt-finetune/SKILL.md
+@@ -19,9 +19,10 @@ launch the runner detached, return a run directory + container name.
+ 
+ ## Hardware requirements
+ 
+-- **GPUs**: 1 (single-GPU). Finetune does not DDP; if you have multiple
+-  GPUs visible, pass `--gpus 0` (or whichever id) to select one. Multi-GPU
+-  finetune is not currently supported.
++- **GPUs**: 1 by default (single-GPU); pass `--gpus 0` (or whichever id) to
++  select one. For faster training on a multi-GPU host, pass `--num-gpus N`
++  (N>1) to run data-parallel DDP across N GPUs — `--batch-size` is then
++  per-GPU (effective global batch = batch_size × N).
+ - **VRAM**: ≥ 8 GB for the default `batch_size 32` configuration. Lower VRAM
+   works at smaller batch sizes — pass `--batch-size N` to override.
+ - **Disk**: a few GB per run (checkpoint + features + logs).
+@@ -84,7 +85,11 @@ Optional:
+   finetunes). Both must be set together when N > 0.
+ - `--ensemble-size N` / `--num-folds N` — multi-model / k-fold CV. Default 1
+   each.
+-- `--gpus 0` — single GPU id (default 0). Passing more than one is rejected.
++- `--gpus 0` — single GPU id for single-process finetune (default 0). Ignored
++  when `--num-gpus > 1`.
++- `--num-gpus N` — number of GPUs for data-parallel DDP finetune. Default 1
++  (single-process, unchanged). N>1 runs `main.py finetune` with `WORLD_SIZE=N`
++  (one process per GPU); `--batch-size` is per-GPU.
+ - `--from-prepare <dir>` — skip the prepare step and reuse an existing
+   `prepare_data.json` in `<dir>`. Useful when iterating on hyperparameters.
+ 
+@@ -224,6 +229,7 @@ helper bind-mounts them at known container paths.
+             --dataset-type <type> \\
+             --out /runs \\
+             [--gpus 0] \\
++            [--num-gpus N] \\
+             [--epochs N --batch-size N --init-lr F ...] \\
+             [--ffn-num-task-specific-layers N --ffn-task-specific-hidden-size H]"
+    ```
+@@ -279,8 +285,8 @@ helper bind-mounts them at known container paths.
+   step (typically clean_smiles or save_features). Fix and re-run.
+ - `ffn_num_task_specific_layers=N>0 but ffn_task_specific_hidden_size is unset`
+   → MTL heads need an explicit hidden size. Pass `--ffn-task-specific-hidden-size H`.
+-- `finetune is single-GPU` → multi-GPU finetune is not currently supported;
+-  pick a single id.
++- `finetune is single-GPU` (from `--gpus 0,1`) → `--gpus` selects one device
++  for single-process finetune. For multi-GPU, use `--num-gpus N` (DDP) instead.
+ 
+ ## Replayability
+ 
+diff --git a/agent/tests/test_run_finetune_local.py b/agent/tests/test_run_finetune_local.py
+index f9fc39b..ce5f403 100644
+--- a/agent/tests/test_run_finetune_local.py
++++ b/agent/tests/test_run_finetune_local.py
+@@ -457,6 +457,28 @@ def test_gpu_id_propagates(tmp_path: Path) -> None:
+     assert argv[argv.index("--gpu") + 1] == "2"
+ 
+ 
++def test_multi_gpu_uses_main_entrypoint(tmp_path: Path) -> None:
++    """DDP finetune (--num-gpus > 1) uses the same `main.py finetune` entrypoint
++    (the finetune_ddp.py launcher was removed); DDP is selected via WORLD_SIZE."""
++    ckpt, prep, val = _setup(tmp_path)
++    code, m = _run(
++        "--ckpt", str(ckpt), "--prepare-manifest", str(prep),
++        "--ckpt-validator-out", str(val), "--out", str(tmp_path / "run"),
++        "--dataset-type", "regression",
++        "--num-gpus", "2", "--dry-run",
++    )
++    assert code == 0, m
++    manifest = m["manifest"]
++    assert manifest["num_gpus"] == 2
++    assert manifest["gpu"] is None  # DDP: no single-device pin
++    argv = manifest["argv"]
++    assert "main.py" in argv[2]
++    assert argv[3] == "finetune"
++    assert all("finetune_ddp" not in str(a) for a in argv)
++    # DDP is selected at runtime via WORLD_SIZE in the replay command.
++    assert "WORLD_SIZE" in manifest["cmd_replay"]
++
++
+ # ---------------------------------------------------------------------------
+ # Manifest schema
+ # ---------------------------------------------------------------------------
+diff --git a/kermt/util/ddp_utils.py b/kermt/util/ddp_utils.py
+new file mode 100644
+index 0000000..06061aa
+--- /dev/null
++++ b/kermt/util/ddp_utils.py
+@@ -0,0 +1,77 @@
++# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++# SPDX-License-Identifier: Apache-2.0
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++# http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++"""
++Shared DistributedDataParallel (DDP) helpers for KERMT.
++
++Used by the pretraining and finetuning DDP launchers so both share a single,
++proven single-node DDP bootstrap. The logic here matches what pretraining has
++used in production (localhost rendezvous, NCCL backend, per-process GPU pinning
++by rank, and topology-aware NCCL P2P configuration).
++"""
++import os
++import subprocess
++
++import torch
++from torch.distributed import init_process_group
++
++
++def configure_nccl_for_topology():
++    """
++    Auto-configure NCCL settings based on GPU topology.
++    This handles cases where P2P (peer-to-peer) GPU communication is not available.
++    Must be called BEFORE spawning processes (in main process).
++    """
++    # Check if user has already set NCCL settings (don't override)
++    if "NCCL_P2P_DISABLE" in os.environ:
++        print(f"[INFO] Using user-provided NCCL settings: NCCL_P2P_DISABLE={os.environ['NCCL_P2P_DISABLE']}")
++        return
++
++    # Try to detect GPU topology
++    try:
++        result = subprocess.run(['nvidia-smi', 'topo', '-m'],
++                                capture_output=True, text=True, timeout=5)
++        topo_output = result.stdout
++
++        # Check for poor GPU connectivity (SYS or NODE topology)
++        # These topologies typically don't support P2P well
++        if 'SYS' in topo_output or 'NODE' in topo_output:
++            print("[INFO] Detected cross-NUMA or system-level GPU topology (SYS/NODE).")
++            print("[INFO] Disabling P2P for stability. This is normal for multi-socket systems.")
++            os.environ["NCCL_P2P_DISABLE"] = "1"
++            os.environ["NCCL_IB_DISABLE"] = "1"
++            os.environ["NCCL_SHM_DISABLE"] = "0"
++        else:
++            print("[INFO] GPU topology appears to support P2P. Enabling P2P communication.")
++    except Exception as e:
++        # If detection fails, use safe defaults (disable P2P)
++        print(f"[WARNING] Could not detect GPU topology: {e}")
++        print("[INFO] Using safe default: P2P disabled. Set NCCL_P2P_DISABLE=0 to enable if your system supports it.")
++        os.environ["NCCL_P2P_DISABLE"] = "1"
++        os.environ["NCCL_IB_DISABLE"] = "1"
++        os.environ["NCCL_SHM_DISABLE"] = "0"
++
++
++def ddp_setup(rank: int, world_size: int):
++    """
++    Initialize the process group for single-node DDP and pin this process to its GPU.
++
++    Args:
++        rank: Unique identifier of each process (also the GPU index it is pinned to).
++        world_size: Total number of processes.
++    """
++    os.environ["MASTER_ADDR"] = "localhost"
++    os.environ["MASTER_PORT"] = "12355"
++    torch.cuda.set_device(rank)
++    init_process_group(backend="nccl", rank=rank, world_size=world_size)
+diff --git a/kermt/util/utils.py b/kermt/util/utils.py
+index 77d8489..b3f333c 100644
+--- a/kermt/util/utils.py
++++ b/kermt/util/utils.py
+@@ -63,6 +63,28 @@
+ from kermt.util.scheduler import NoamLR
+ 
+ 
++def seed_rngs(seed: int) -> None:
++    """Seed the torch (CPU + CUDA), numpy, and python RNGs."""
++    torch.manual_seed(seed)
++    torch.cuda.manual_seed_all(seed)
++    np.random.seed(seed)
++    random.seed(seed)
++
++
++def setup_determinism(seed: int) -> None:
++    """Seed all RNGs and enable deterministic algorithms.
++
++    Shared by the finetune / HPO entry points (main.py -- single-process and DDP
++    finetune -- and main_hpo.py) so their determinism setup stays in lockstep. Also sets
++    CUBLAS_WORKSPACE_CONFIG, which torch.use_deterministic_algorithms requires
++    for cuBLAS on CUDA >= 10.2.
++    """
++    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
++    seed_rngs(seed)
++    torch.backends.cudnn.deterministic = True
++    torch.use_deterministic_algorithms(mode=True)
++
++
+ def get_model_args():
+     """
+     Get model structure related parameters.
+@@ -673,13 +695,18 @@ def build_optimizer(model: nn.Module, args: Namespace):
+     return optimizer
+ 
+ 
+-def build_lr_scheduler(optimizer, args: Namespace, total_epochs: List[int] = None):
++def build_lr_scheduler(optimizer, args: Namespace, total_epochs: List[int] = None,
++                       world_size: int = 1):
+     """
+     Builds a learning rate scheduler.
+ 
+     :param optimizer: The Optimizer whose learning rate will be scheduled.
+     :param args: Arguments.
+     :param total_epochs: The total number of epochs for which the model will be task.
++    :param world_size: number of DDP processes. Under DDP each rank sees
++        1/world_size of the data (via DistributedSampler), so the number of
++        optimizer steps per epoch is divided by world_size (matches the effective
++        global batch of batch_size * world_size, as in pretrain_ddp.py).
+     :return: An initialized learning rate scheduler.
+     """
+ 
+@@ -688,12 +715,12 @@ def build_lr_scheduler(optimizer, args: Namespace, total_epochs: List[int] = Non
+     # so we only have task params (1 group) with full LR (fine_tune_coff=1.0)
+     # When fine_tune_coff > 0, we have 2 groups: encoder (index 0) and task (index 1)
+     scheduler_fine_tune_coff = 1.0 if args.fine_tune_coff == 0 else args.fine_tune_coff
+-    
++
+     return NoamLR(
+         optimizer=optimizer,
+         warmup_epochs=args.warmup_epochs,
+         total_epochs=args.epochs,
+-        steps_per_epoch=args.train_data_size // args.batch_size,
++        steps_per_epoch=args.train_data_size // (args.batch_size * world_size),
+         init_lr=args.init_lr,
+         max_lr=args.max_lr,
+         final_lr=args.final_lr,
+diff --git a/main.py b/main.py
+index c0c9455..5b096b3 100644
+--- a/main.py
++++ b/main.py
+@@ -1,27 +1,21 @@
+-import random
++import os
+ import subprocess
+ 
+ import numpy as np
+ import torch
++import torch.multiprocessing as mp
+ from rdkit import RDLogger
++from torch.distributed import destroy_process_group
+ 
++from kermt.data.torchvocab import MolVocab
++from kermt.util.ddp_utils import configure_nccl_for_topology, ddp_setup
+ from kermt.util.parsing import parse_args, get_newest_train_args
+-from kermt.util.utils import create_logger
++from kermt.util.utils import create_logger, setup_determinism
+ from task.cross_validate import cross_validate
+ from task.fingerprint import generate_fingerprints
+ from task.predict import make_predictions, write_prediction
+-from kermt.data.torchvocab import MolVocab
+ 
+ 
+-def setup(seed):
+-    # frozen random seed
+-    torch.manual_seed(seed)
+-    torch.cuda.manual_seed_all(seed)
+-    np.random.seed(seed)
+-    random.seed(seed)
+-    torch.backends.cudnn.deterministic = True
+-    torch.use_deterministic_algorithms(mode=True)
+-
+ def get_git_branch_commit():
+     try:
+         branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], stderr=subprocess.STDOUT).decode().strip()
+@@ -33,6 +27,22 @@ def get_git_branch_commit():
+ class UserError(Exception):
+     pass
+ 
++
++def _finetune_ddp_worker(rank, world_size, args):
++    """One data-parallel finetune process, spawned per GPU by the finetune
++    entrypoint. Mirrors the single-process finetune path but pins the process to
++    ``rank`` and runs cross_validate with the DDP ``world_size``.
++    """
++    ddp_setup(rank, world_size)
++    RDLogger.logger().setLevel(RDLogger.CRITICAL)
++    _ = MolVocab  # keep vocab class imported for checkpoint (un)pickling in every worker
++    setup_determinism(args.seed)
++    # Only rank 0 writes logs; other ranks stay quiet.
++    logger = create_logger(name='train', save_dir=args.save_dir, quiet=False) if rank == 0 else None
++    cross_validate(args, logger, rank=rank, world_size=world_size)
++    destroy_process_group()
++
++
+ if __name__ == '__main__':
+     # Avoid the pylint warning.
+     a = MolVocab
+@@ -47,15 +57,35 @@ class UserError(Exception):
+ 
+     # setup random seed
+     print(f"Setting up with random seed: {args.seed}")
+-    setup(seed=args.seed)
++    setup_determinism(args.seed)
+     print(f"args: {args}")
+ 
+     branch, commit = get_git_branch_commit()
+     print(f"Git branch: {branch}, Commit: {commit}")
+     
+     if args.parser_name == 'finetune':
+-        logger = create_logger(name='train', save_dir=args.save_dir, quiet=False)
+-        cross_validate(args, logger)
++        # Single entrypoint for both single-process and multi-GPU (DDP) finetune.
++        # If WORLD_SIZE is set in the environment, run data-parallel across that many
++        # GPUs (one spawned process per GPU); otherwise run the single-process path.
++        # WORLD_SIZE=1 exercises the DDP path on a single GPU. --batch_size is per-GPU
++        # under DDP, matching pretrain_ddp.py.
++        ws_env = os.environ.get('WORLD_SIZE')
++        if ws_env is not None:
++            world_size = int(ws_env)
++            available_gpus = torch.cuda.device_count()
++            if available_gpus == 0:
++                raise UserError('No GPUs found; DDP finetuning requires at least 1 GPU.')
++            if world_size > available_gpus:
++                raise UserError(
++                    f'WORLD_SIZE={world_size} but only {available_gpus} GPU(s) visible. '
++                    f'Set WORLD_SIZE<={available_gpus} or unset it.'
++                )
++            configure_nccl_for_topology()
++            print(f'Launching DDP finetuning on {world_size}/{available_gpus} GPU(s)')
++            mp.spawn(_finetune_ddp_worker, args=(world_size, args), nprocs=world_size)
++        else:
++            logger = create_logger(name='train', save_dir=args.save_dir, quiet=False)
++            cross_validate(args, logger)
+     elif args.parser_name == 'pretrain':
+         logger = create_logger(name='pretrain', save_dir=args.save_dir)
+         raise UserError("Run pretraining using pretrain_ddp.py")
+diff --git a/main_hpo.py b/main_hpo.py
+index 318d3bc..153cf0a 100644
+--- a/main_hpo.py
++++ b/main_hpo.py
+@@ -23,7 +23,6 @@
+ # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ # SOFTWARE.
+ 
+-import random
+ import shutil
+ from functools import partial
+ import os
+@@ -33,7 +32,7 @@
+ import json
+ 
+ from kermt.util.parsing import parse_args, get_newest_train_args
+-from kermt.util.utils import create_logger
++from kermt.util.utils import create_logger, setup_determinism
+ from task.cross_validate import cross_validate
+ from task.fingerprint import generate_fingerprints
+ from task.predict import make_predictions, write_prediction
+@@ -47,15 +46,6 @@
+ 
+ INIT_LR_FACTOR = 10
+ 
+-def setup(seed):
+-    # frozen random seed
+-    torch.manual_seed(seed)
+-    torch.cuda.manual_seed_all(seed)
+-    np.random.seed(seed)
+-    random.seed(seed)
+-    torch.backends.cudnn.deterministic = True
+-    torch.use_deterministic_algorithms(mode=True)
+-
+ def objective_all(trial, args, logger):
+     """
+     HPO objective for general finetuning with full model (attention, multi-layer FFN).
+@@ -216,7 +206,7 @@ def objective_openadmet(trial, args, logger):
+     args = parse_args()
+     print(f"args: {args}")
+     # setup random seed
+-    setup(seed=args.seed)
++    setup_determinism(args.seed)
+ 
+     # Set up Optuna storage
+     storage = optuna.storages.RDBStorage(
+diff --git a/pretrain_ddp.py b/pretrain_ddp.py
+index 11c7c38..fc99c60 100644
+--- a/pretrain_ddp.py
++++ b/pretrain_ddp.py
+@@ -28,7 +28,7 @@
+ 
+ import torch.multiprocessing as mp
+ from torch.utils.data.distributed import DistributedSampler
+-from torch.distributed import init_process_group, destroy_process_group
++from torch.distributed import destroy_process_group
+ import os
+ import signal
+ import threading
+@@ -129,6 +129,7 @@ def __len__(self):
+     KermtVocabPreTokenizedCollator
+ )
+ from kermt.util.utils import create_logger
++from kermt.util.ddp_utils import configure_nccl_for_topology, ddp_setup
+ from kermt.model.models import KERMTEmbedding
+ from task.kermttrainer import KERMTTrainer, KERMTCMIMTrainer, KERMTHybridTrainer
+ from kermt.util.scheduler import NoamLR
+@@ -141,54 +142,6 @@ def pre_load_data_ddp(dataset: BatchMolDataset, dataset_size: int, samples_per_f
+     for i in range(1, dataset_size, samples_per_file):
+         dataset.load_data(i)
+ 
+-def configure_nccl_for_topology():
+-    """
+-    Auto-configure NCCL settings based on GPU topology.
+-    This handles cases where P2P (peer-to-peer) GPU communication is not available.
+-    Must be called BEFORE spawning processes (in main process).
+-    """
+-    # Check if user has already set NCCL settings (don't override)
+-    if "NCCL_P2P_DISABLE" in os.environ:
+-        print(f"[INFO] Using user-provided NCCL settings: NCCL_P2P_DISABLE={os.environ['NCCL_P2P_DISABLE']}")
+-        return
+-    
+-    # Try to detect GPU topology
+-    try:
+-        import subprocess
+-        result = subprocess.run(['nvidia-smi', 'topo', '-m'], 
+-                              capture_output=True, text=True, timeout=5)
+-        topo_output = result.stdout
+-        
+-        # Check for poor GPU connectivity (SYS or NODE topology)
+-        # These topologies typically don't support P2P well
+-        if 'SYS' in topo_output or 'NODE' in topo_output:
+-            print("[INFO] Detected cross-NUMA or system-level GPU topology (SYS/NODE).")
+-            print("[INFO] Disabling P2P for stability. This is normal for multi-socket systems.")
+-            os.environ["NCCL_P2P_DISABLE"] = "1"
+-            os.environ["NCCL_IB_DISABLE"] = "1"
+-            os.environ["NCCL_SHM_DISABLE"] = "0"
+-        else:
+-            print("[INFO] GPU topology appears to support P2P. Enabling P2P communication.")
+-    except Exception as e:
+-        # If detection fails, use safe defaults (disable P2P)
+-        print(f"[WARNING] Could not detect GPU topology: {e}")
+-        print("[INFO] Using safe default: P2P disabled. Set NCCL_P2P_DISABLE=0 to enable if your system supports it.")
+-        os.environ["NCCL_P2P_DISABLE"] = "1"
+-        os.environ["NCCL_IB_DISABLE"] = "1"
+-        os.environ["NCCL_SHM_DISABLE"] = "0"
+-
+-def ddp_setup(rank, world_size):
+-    """
+-    Args:
+-        rank: Unique identifier of each process
+-        world_size: Total number of processes
+-    """
+-    os.environ["MASTER_ADDR"] = "localhost"
+-    os.environ["MASTER_PORT"] = "12355"
+-    torch.cuda.set_device(rank)
+-    init_process_group(backend="nccl", rank=rank, world_size=world_size)
+-
+-
+ def main(rank: int, world_size: int):
+     ddp_setup(rank, world_size)
+     
+diff --git a/task/cross_validate.py b/task/cross_validate.py
+index 9ff9bb8..8f25b09 100644
+--- a/task/cross_validate.py
++++ b/task/cross_validate.py
+@@ -40,7 +40,6 @@
+ https://github.com/chemprop/chemprop/blob/master/chemprop/train/cross_validate.py
+ """
+ import os
+-import random
+ import time
+ from argparse import Namespace
+ from logging import Logger
+@@ -51,6 +50,7 @@
+ 
+ from kermt.util.utils import get_task_names
+ from kermt.util.utils import makedirs
++from kermt.util.utils import seed_rngs
+ from task.run_evaluation import run_evaluation
+ from task.train import run_training
+ try:
+@@ -58,20 +58,27 @@
+ except ImportError:
+     wandb = None
+ 
+-def cross_validate(args: Namespace, logger: Logger = None) -> Tuple[float, float]:
++def cross_validate(args: Namespace, logger: Logger = None,
++                   rank: int = 0, world_size: int = 1) -> Tuple[float, float]:
+     """
+     k-fold cross validation.
+ 
++    :param rank: DDP process rank (0 for single-process / non-DDP runs).
++    :param world_size: total number of DDP processes (1 for non-DDP runs).
+     :return: A tuple of mean_score and std_score.
+     """
+-    info = logger.info if logger is not None else print
++    # Only rank 0 logs/reports under DDP; other ranks stay silent.
++    if rank == 0:
++        info = logger.info if logger is not None else print
++    else:
++        info = lambda *a, **k: None
+ 
+     # Initialize relevant variables
+     init_seed = args.seed
+     save_dir = args.save_dir
+     task_names = get_task_names(args.data_path)
+ 
+-    if args.wandb_project:
++    if args.wandb_project and rank == 0:
+         wandb.login()
+         wandb.init(
+             project=getattr(args, "wandb_project", "grover"),
+@@ -90,15 +97,12 @@ def cross_validate(args: Namespace, logger: Logger = None) -> Tuple[float, float
+         # Reset random seeds for this fold to ensure different model initialization
+         # This is important when using separate train/val/test paths (no data splitting)
+         # so that each fold produces a model with different random weight initialization
+-        torch.manual_seed(args.seed)
+-        torch.cuda.manual_seed_all(args.seed)
+-        np.random.seed(args.seed)
+-        random.seed(args.seed)
++        seed_rngs(args.seed)
+         
+         args.save_dir = os.path.join(save_dir, f'fold_{fold_num}')
+         makedirs(args.save_dir)
+         if args.parser_name == "finetune":
+-            model_scores = run_training(args, logger)
++            model_scores = run_training(args, logger, rank=rank, world_size=world_size)
+         else:
+             model_scores = run_evaluation(args, logger)
+         all_scores.append(model_scores)
+diff --git a/task/train.py b/task/train.py
+index 4941762..c020dd2 100644
+--- a/task/train.py
++++ b/task/train.py
+@@ -54,8 +54,11 @@
+ except ImportError:
+     wandb = None
+ import torch
++import torch.distributed as dist
++from torch.nn.parallel import DistributedDataParallel as DDP
+ from torch.optim.lr_scheduler import ExponentialLR
+ from torch.utils.data import DataLoader
++from torch.utils.data.distributed import DistributedSampler
+ from torch.utils.tensorboard import SummaryWriter
+ 
+ from kermt.data import MolCollator
+@@ -73,7 +76,7 @@
+ 
+ def train(epoch, model, data, loss_func, mtl_loss, optimizer, scheduler,
+           shared_dict, args: Namespace, n_iter: int = 0,
+-          logger: logging.Logger = None):
++          logger: logging.Logger = None, world_size: int = 1):
+     """
+     Trains a model for an epoch.
+ 
+@@ -123,13 +126,27 @@ def train(epoch, model, data, loss_func, mtl_loss, optimizer, scheduler,
+         loss = loss_func(preds, targets) * class_weights * mask
+ 
+         if mtl_loss is not None:
+-            # Compute per-task mean losses, handling division by zero for tasks with no valid samples
++            # Per-task mean loss. Under DDP the normalization must use the GLOBAL per-task
++            # valid-label count, not each rank's local count: DDP averages the per-rank
++            # gradients (1/world_size), so dividing by a local count weights ranks equally
++            # rather than per-label and systematically down-weights tasks whose labels land on
++            # only a subset of ranks. So all-reduce the count (not the loss sum, which stays
++            # local so each rank differentiates only its own samples), then scale by world_size
++            # to cancel DDP's 1/world_size average -> the net normalization is the true global
++            # per-label mean, matching a single-GPU run. Reduces to the old local mean when
++            # world_size == 1 or per-rank counts are equal.
+             task_mask_sum = mask.sum(axis=0)
++            if world_size > 1 and dist.is_initialized():
++                dist.all_reduce(task_mask_sum, op=dist.ReduceOp.SUM)
+             task_mask_sum = torch.clamp(task_mask_sum, min=1.0)  # Avoid division by zero
+-            task_losses = loss.sum(axis=0) / task_mask_sum
++            task_losses = world_size * loss.sum(axis=0) / task_mask_sum
+             loss = mtl_loss(task_losses)
+         else:
+-            loss = loss.sum() / mask.sum()
++            # Same global-count normalization for the single pooled loss (see the MTL branch).
++            mask_sum = mask.sum()
++            if world_size > 1 and dist.is_initialized():
++                dist.all_reduce(mask_sum, op=dist.ReduceOp.SUM)
++            loss = world_size * loss.sum() / torch.clamp(mask_sum, min=1.0)
+ 
+         loss_sum += loss.item()
+         iter_count += args.batch_size
+@@ -138,6 +155,17 @@ def train(epoch, model, data, loss_func, mtl_loss, optimizer, scheduler,
+         cum_iter_count += 1
+ 
+         loss.backward()
++
++        # Under DDP, the model's gradients are all-reduced automatically by the
++        # DDP wrapper. mtl_loss is a separate module (not DDP-wrapped) whose
++        # log_sigma is registered in the optimizer, so its gradient must be
++        # averaged across ranks manually to keep the learned task weights in sync.
++        if world_size > 1 and mtl_loss is not None and dist.is_initialized():
++            for p in mtl_loss.parameters():
++                if p.grad is not None:
++                    dist.all_reduce(p.grad, op=dist.ReduceOp.SUM)
++                    p.grad /= world_size
++
+         optimizer.step()
+ 
+         if isinstance(scheduler, NoamLR):
+@@ -157,27 +185,41 @@ def train(epoch, model, data, loss_func, mtl_loss, optimizer, scheduler,
+     return n_iter, cum_loss_sum / cum_iter_count
+ 
+ 
+-def run_training(args: Namespace, logger: Logger = None, return_val=False) -> List[float]:
++def run_training(args: Namespace, logger: Logger = None, return_val=False,
++                 rank: int = 0, world_size: int = 1) -> List[float]:
+     """
+     Trains a model and returns test scores on the model checkpoint with the highest validation score.
+ 
+     :param args: Arguments.
+     :param logger: Logger.
++    :param rank: DDP process rank (0 for single-process / non-DDP runs).
++    :param world_size: number of DDP processes (1 for non-DDP runs).
+     :return: A list of ensemble scores for each task.
+     """
+-    if logger is not None:
++    # DDP is active only when a process group has been initialized (i.e. launched
++    # with WORLD_SIZE>1 via `main.py finetune`, which spawns one process per GPU).
++    # `python main.py finetune ...` without WORLD_SIZE keeps world_size=1,
++    # is_distributed=False, and behaves exactly as before.
++    is_distributed = dist.is_available() and dist.is_initialized()
++    is_main = (rank == 0)
++
++    if logger is not None and is_main:
+         debug, info = logger.debug, logger.info
+     else:
+-        debug = info = print
++        # Non-rank-0 processes stay silent; single-process runs without a logger print.
++        debug = info = (print if is_main else (lambda *a, **k: None))
+ 
+ 
+-    # pin GPU to local rank.
+-    idx = args.gpu
+-    if args.gpu is not None:
+-        torch.cuda.set_device(idx)
++    # pin GPU. Under DDP the device was already pinned to `rank` in ddp_setup;
++    # only honor args.gpu for single-process runs.
++    if not is_distributed and args.gpu is not None:
++        torch.cuda.set_device(args.gpu)
+ 
+     features_scaler, scaler, shared_dict, test_data, train_data, val_data = load_data(args, debug, logger)
+ 
++    # Default return value; overwritten with real scores on rank 0 after test eval.
++    ensemble_scores = [float('nan')] * args.num_tasks
++
+     metric_func = get_metric_func(metric=args.metric)
+ 
+     # Set up test set evaluation
+@@ -192,8 +234,8 @@ def run_training(args: Namespace, logger: Logger = None, return_val=False) -> Li
+         save_dir = os.path.join(args.save_dir, f'model_{model_idx}')
+         makedirs(save_dir)
+         
+-        # Initialize TensorBoard writer if enabled
+-        if args.tensorboard:
++        # Initialize TensorBoard writer if enabled (rank 0 only under DDP)
++        if args.tensorboard and is_main:
+             writer = SummaryWriter(save_dir)
+ 
+         # Load/build model
+@@ -246,10 +288,12 @@ def run_training(args: Namespace, logger: Logger = None, return_val=False) -> Li
+                 print("Starting fresh finetuning from epoch 0.")
+ 
+         # Ensure that model is saved in correct location for evaluation if 0 epochs
+-        save_checkpoint(os.path.join(save_dir, 'model.pt'), model, scaler, features_scaler, args)
++        if is_main:
++            save_checkpoint(os.path.join(save_dir, 'model.pt'), model, scaler, features_scaler, args)
+ 
+-        # Learning rate schedulers
+-        scheduler = build_lr_scheduler(optimizer, args)
++        # Learning rate schedulers. Pass world_size so steps-per-epoch accounts
++        # for the DistributedSampler sharding the data across ranks.
++        scheduler = build_lr_scheduler(optimizer, args, world_size=world_size)
+         # Only load scheduler state if we're resuming (start_epoch > 0 means optimizer loaded successfully)
+         if start_epoch > 0 and "scheduler" in loaded_ckpt_state:
+             try:
+@@ -259,17 +303,45 @@ def run_training(args: Namespace, logger: Logger = None, return_val=False) -> Li
+                 print(f"Could not load scheduler state: {e}")
+                 print("Starting with fresh scheduler state.")
+ 
+-        # Bulid data_loader
++        # Wrap in DDP for data-parallel training (optimizer was built on the
++        # unwrapped model above, so its encoder/FFN param-group split is intact).
++        # find_unused_parameters=True: the finetune model can carry parameters
++        # not exercised by every forward (e.g. encoder sub-paths / heads retained
++        # from the loaded pretrain checkpoint that the FFN task head does not use).
++        # DDP would otherwise error ("expected to have finished reduction ...").
++        if is_distributed:
++            model = DDP(model, device_ids=[rank], find_unused_parameters=True)
++        # Unwrapped handle for eval and checkpoint saving (portable, non-DDP state dict).
++        core_model = model.module if is_distributed else model
++
++        # Build data_loader. Under DDP, a DistributedSampler shards the train set
++        # across ranks and owns the shuffling (loader shuffle must be False).
+         shuffle = True
+         mol_collator = MolCollator(shared_dict={}, args=args)
+-        # Use a separate name so train_data stays the underlying dataset across
+-        # ensemble iterations; reassigning it would double-wrap the DataLoader
+-        # (DataLoader(DataLoader(...))) on the second and later ensemble models.
+-        train_loader = DataLoader(train_data,
+-                                  batch_size=args.batch_size,
+-                                  shuffle=shuffle,
+-                                  num_workers=0,
+-                                  collate_fn=mol_collator)
++        # Use a separate name (train_loader) so train_data stays the underlying
++        # dataset across ensemble iterations; reassigning it would double-wrap
++        # the DataLoader (DataLoader(DataLoader(...))) on later ensemble models.
++        if is_distributed:
++            train_sampler = DistributedSampler(train_data, num_replicas=world_size,
++                                               rank=rank, shuffle=True)
++            # drop_last=False: DistributedSampler pads to an equal sample count per rank, so
++            # every rank has the same number of batches and DDP stays in sync without dropping
++            # data. drop_last=True would discard up to world_size*(batch_size-1) samples -- a
++            # large fraction for small finetune sets on many GPUs -- and diverge from single-GPU.
++            train_loader = DataLoader(train_data,
++                                      batch_size=args.batch_size,
++                                      shuffle=False,
++                                      num_workers=0,
++                                      collate_fn=mol_collator,
++                                      sampler=train_sampler,
++                                      drop_last=False)
++        else:
++            train_sampler = None
++            train_loader = DataLoader(train_data,
++                                      batch_size=args.batch_size,
++                                      shuffle=shuffle,
++                                      num_workers=0,
++                                      collate_fn=mol_collator)
+         # Run training
+         if args.task_wise_checkpoint:
+             best_score = {task: float('inf') if args.minimize_score else -float('inf') for task in args.task_names}
+@@ -286,6 +358,9 @@ def run_training(args: Namespace, logger: Logger = None, return_val=False) -> Li
+             min_val_loss = float('inf')
+         for epoch in range(start_epoch, args.epochs):
+             s_time = time.time()
++            # Reshuffle the sharded train data differently each epoch (DDP).
++            if is_distributed:
++                train_sampler.set_epoch(epoch)
+             n_iter, train_loss = train(
+                 epoch=epoch,
+                 model=model,
+@@ -297,23 +372,37 @@ def run_training(args: Namespace, logger: Logger = None, return_val=False) -> Li
+                 args=args,
+                 n_iter=n_iter,
+                 shared_dict=shared_dict,
+-                logger=logger
++                logger=logger,
++                world_size=world_size
+             )
+             t_time = time.time() - s_time
+             s_time = time.time()
+-            val_scores, val_loss = evaluate(
+-                model=model,
+-                data=val_data,
+-                loss_func=loss_func,
+-                num_tasks=args.num_tasks,
+-                metric_func=metric_func,
+-                batch_size=args.batch_size,
+-                dataset_type=args.dataset_type,
+-                scaler=scaler,
+-                shared_dict=shared_dict,
+-                logger=logger,
+-                args=args
+-            )
++            # Evaluate on the unwrapped model over the FULL val set. Under DDP, only rank 0
++            # scores (evaluate() runs a plain, non-DDP forward on core_model, so it involves no
++            # collectives and is safe to run on a single rank) -- this avoids every rank
++            # redundantly scoring the whole val set, which is wasteful for large val sets. The
++            # scores are then broadcast so every rank makes the same best-model / early-stop
++            # decisions; only rank 0 writes checkpoints.
++            if is_main:
++                val_scores, val_loss = evaluate(
++                    model=core_model,
++                    data=val_data,
++                    loss_func=loss_func,
++                    num_tasks=args.num_tasks,
++                    metric_func=metric_func,
++                    batch_size=args.batch_size,
++                    dataset_type=args.dataset_type,
++                    scaler=scaler,
++                    shared_dict=shared_dict,
++                    logger=logger,
++                    args=args
++                )
++            else:
++                val_scores, val_loss = None, None
++            if is_distributed:
++                payload = [val_scores, val_loss]
++                dist.broadcast_object_list(payload, src=0, device=torch.device(f"cuda:{rank}"))
++                val_scores, val_loss = payload
+             avg_val_loss = np.nanmean(val_loss)
+             v_time = time.time() - s_time
+             # Average validation score
+@@ -326,15 +415,16 @@ def run_training(args: Namespace, logger: Logger = None, return_val=False) -> Li
+                 # Individual validation scores
+                 for task_name, val_score in zip(args.task_names, val_scores):
+                     debug(f'Validation {task_name} {args.metric} = {val_score:.6f}')
+-            print('Epoch: {:04d}'.format(epoch),
+-                  'loss_train: {:.6f}'.format(train_loss),
+-                  'loss_val: {:.6f}'.format(avg_val_loss),
+-                  f'{args.metric}_val: {avg_val_score:.4f}',
+-                  'cur_lr: {:.5f}'.format(scheduler.get_lr()[-1]),
+-                  't_time: {:.4f}s'.format(t_time),
+-                  'v_time: {:.4f}s'.format(v_time),
+-                  flush=True)
+-            if args.wandb_project:
++            if is_main:
++                print('Epoch: {:04d}'.format(epoch),
++                      'loss_train: {:.6f}'.format(train_loss),
++                      'loss_val: {:.6f}'.format(avg_val_loss),
++                      f'{args.metric}_val: {avg_val_score:.4f}',
++                      'cur_lr: {:.5f}'.format(scheduler.get_lr()[-1]),
++                      't_time: {:.4f}s'.format(t_time),
++                      'v_time: {:.4f}s'.format(v_time),
++                      flush=True)
++            if args.wandb_project and is_main:
+                 log_dict = {
+                     "epoch": epoch,
+                     "train/loss": train_loss,
+@@ -349,7 +439,7 @@ def run_training(args: Namespace, logger: Logger = None, return_val=False) -> Li
+                         log_dict[f"val/{task_name}_{args.metric}"] = val_score
+                 wandb.log(log_dict)
+ 
+-            if args.tensorboard:
++            if args.tensorboard and is_main:
+                 writer.add_scalar('loss/train', train_loss, epoch)
+                 writer.add_scalar('loss/val', avg_val_loss, epoch)
+                 writer.add_scalar(f'{args.metric}_val', avg_val_score, epoch)
+@@ -370,39 +460,54 @@ def run_training(args: Namespace, logger: Logger = None, return_val=False) -> Li
+                 else:
+                     curr_epoch_best_by_loss = False
+ 
+-            save_model_for_restart(os.path.join(save_dir, 'last_checkpoint.pt'), model, optimizer, scheduler, scaler, features_scaler, args, 
+-            epoch+1 # save with +1 so that loaded checkpoint will start from the next epoch
+-            )
+-            # Save model checkpoint if improved validation score
++            if is_main:
++                save_model_for_restart(os.path.join(save_dir, 'last_checkpoint.pt'), core_model, optimizer, scheduler, scaler, features_scaler, args,
++                epoch+1 # save with +1 so that loaded checkpoint will start from the next epoch
++                )
++            # Save model checkpoint if improved validation score.
++            # Best-score tracking runs on all ranks (identical val metrics keep it
++            # in sync); only rank 0 writes the checkpoint files (using core_model,
++            # the unwrapped module, so the saved state dict is DDP-agnostic).
+             if args.task_wise_checkpoint:
+                 if args.select_by_loss:
+                     for task_name in args.task_names:
+-                        if curr_epoch_best_by_loss[task_name]:
++                        if curr_epoch_best_by_loss[task_name] and is_main:
+                             print(f"Saving model {task_name} at epoch {epoch} with validation loss {min_val_loss[task_name]:.4f}")
+-                            save_checkpoint(os.path.join(save_dir, f'model_{task_name}.pt'), model, scaler, features_scaler, args)
++                            save_checkpoint(os.path.join(save_dir, f'model_{task_name}.pt'), core_model, scaler, features_scaler, args)
+                 else:
+                     for itask, task_name in enumerate(args.task_names):
+                         task_val_score = val_scores[itask] if itask < len(val_scores) else avg_val_score
+                         if args.minimize_score and task_val_score < best_score[task_name] or \
+                                 not args.minimize_score and task_val_score > best_score[task_name]:
+                             best_score[task_name], best_epoch[task_name] = task_val_score, epoch
+-                            print(f"Saving model {task_name} at epoch {epoch} with validation score {best_score[task_name]:.4f}")
+-                            save_checkpoint(os.path.join(save_dir, f'model_{task_name}.pt'), model, scaler, features_scaler, args)
++                            if is_main:
++                                print(f"Saving model {task_name} at epoch {epoch} with validation score {best_score[task_name]:.4f}")
++                                save_checkpoint(os.path.join(save_dir, f'model_{task_name}.pt'), core_model, scaler, features_scaler, args)
+             else:
+                 if args.select_by_loss:
+-                    if curr_epoch_best_by_loss:
++                    if curr_epoch_best_by_loss and is_main:
+                         print(f"Saving model at epoch {epoch} with validation loss {min_val_loss:.4f}")
+-                        save_checkpoint(os.path.join(save_dir, 'model.pt'), model, scaler, features_scaler, args)
++                        save_checkpoint(os.path.join(save_dir, 'model.pt'), core_model, scaler, features_scaler, args)
+                 else:
+                     if args.minimize_score and avg_val_score < best_score or \
+                             not args.minimize_score and avg_val_score > best_score:
+                         best_score, best_epoch = avg_val_score, epoch
+-                        print(f"Saving model at epoch {epoch} with validation score {best_score:.4f}")
+-                        save_checkpoint(os.path.join(save_dir, 'model.pt'), model, scaler, features_scaler, args)
++                        if is_main:
++                            print(f"Saving model at epoch {epoch} with validation score {best_score:.4f}")
++                            save_checkpoint(os.path.join(save_dir, 'model.pt'), core_model, scaler, features_scaler, args)
+             # TODO: Reimplement this
+             # if epoch - best_epoch > args.early_stop_epoch:
+             #     break
+ 
++        # Test-set evaluation + result writing happen on rank 0 only. All ranks
++        # synchronize first; non-zero ranks then skip to the next ensemble member
++        # (or fall out of the loop). Model weights are identical across ranks, so
++        # rank 0's test scores are representative.
++        if is_distributed:
++            dist.barrier()
++        if not is_main:
++            continue
++
+         ensemble_scores = 0.0
+ 
+         # Evaluate on test set using model with best validation score

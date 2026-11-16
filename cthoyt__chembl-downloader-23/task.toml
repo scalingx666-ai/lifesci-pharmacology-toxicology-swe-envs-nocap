@@ -1,0 +1,69 @@
+version = "1.0"
+
+[task]
+name = "default/cthoyt__chembl-downloader-23"
+description = "Add shortcut for querying for a scalar"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "chembl-downloader",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "cthoyt/chembl-downloader"
+ref = "ff58799c4f84170a5c6059143a54185a4f46d428"
+reference = "https://github.com/cthoyt/chembl-downloader/pull/23"
+source_access = "auto"
+built_at = "2026-11-16T11:23:13.524169+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:62e38f62e79050d5285806d4327192ce723c58e5901d2531525bd6fc91a31877"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2025-08-23T07:08:17Z"
+diff_format = "unified"
+context_files = [
+    "docs/source/sql.rst",
+    "pyproject.toml",
+    "src/chembl_downloader/__init__.py",
+    "src/chembl_downloader/api.py",
+    "src/chembl_downloader/cli.py",
+    "src/chembl_downloader/queries.py",
+    "tests/test_api.py",
+    "tox.ini",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 172
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

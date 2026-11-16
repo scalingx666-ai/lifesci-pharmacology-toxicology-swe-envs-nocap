@@ -1,0 +1,68 @@
+version = "1.0"
+
+[task]
+name = "default/Rockman6__CellSim-35"
+description = "Inside a cell: watch every molecule the engine tracks"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "CellSim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "Rockman6/CellSim"
+ref = "b5d603ca42e21e12dd56c29e7adb503ce71b5004"
+reference = "https://github.com/Rockman6/CellSim/pull/35"
+source_access = "auto"
+built_at = "2026-11-16T11:04:13.425397+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:34d7e059bc104054d1ef782bfd8b5430c5604c5dad3e02a4ecb383064648ac21"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2026-10-07T16:48:17Z"
+diff_format = "unified"
+context_files = [
+    "cellsim/cell/trace.py",
+    "docs/VALIDATION.md",
+    "tests/cell/test_trace_smoke.py",
+    "web/lab/cell.css",
+    "web/lab/cell.html",
+    "web/lab/cell.js",
+    "web/lab/index.html",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 890
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

@@ -1,0 +1,817 @@
+diff --git a/.github/workflows/pages.yml b/.github/workflows/pages.yml
+index 5a988eb..853c291 100644
+--- a/.github/workflows/pages.yml
++++ b/.github/workflows/pages.yml
+@@ -57,6 +57,22 @@ jobs:
+             node tests/web/viewer_stream_check.js "$f"
+           done
+ 
++      # The Lab runs the engine in the visitor's browser. It installs this
++      # wheel, built from the commit being deployed, rather than whatever
++      # is on PyPI — so the browser runs exactly the code on main, the
++      # same principle as simulating the demos at deploy time. Installing
++      # from PyPI instead would have shipped v1.4.0, from before every
++      # engine fix made in October 2026.
++      - name: build the wheel the Lab installs in the browser
++        run: |
++          pip install build
++          python -m build --wheel --outdir web/lab/wheel .
++          # The wheel keeps its real name, because micropip parses the
++          # version out of it and "latest" is not one. The page reads this
++          # pointer to learn which file to install.
++          cd web/lab/wheel && ls cellsim-*-py3-none-any.whl | head -1 > LATEST
++          echo "Lab will install: $(cat LATEST)"
++
+       - uses: actions/upload-pages-artifact@v3
+         with:
+           path: web
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index bd0e51a..9849db5 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,5 +1,34 @@
+ # CellSim — Changelog
+ 
++## 1.5.0 — engine corrections, four new experiments, a browser Lab
++
++Version 1.4.0 on PyPI predates everything below. The two are different
++engines and should not be confused.
++
++**Engine corrections** — each found by checking the engine against a
++measurement, or against what its own constants imply:
++
++- Paclitaxel 24 h exposure was 240x too potent; now 3.4x. Drug retained
++  after wash-out (`Drug.tau_efflux_h`), and a mitotic death rate the GDSC
++  fit had never constrained.
++- Glucose did nothing across its published range. It acts through
++  respiration, not starvation (Casciari 1992): starved cells burn more
++  oxygen. `DishParams.respiration_boost`.
++- The necrotic core was a solver bug: the medium's oxygen was applied at
++  the outermost stray cell, up to 159 um beyond the spheroid. Now at the
++  equivalent-sphere radius; the diffusion limit matches the engine's own
++  constants (240 vs 233 um analytic) and no longer depends on mechanics.
++- Immune killing rebuilt on the measured three-hit mechanism (Weigelin
++  2021): each contact is a sublethal hit; death needs three within ~50 min.
++- `ic50()` is a median over three seeds by default; pass `n_seeds=1` when
++  iterating seeds yourself.
++
++**New experiments:** gene knockouts (`api.knockout`), glucose starvation
++(`api.starve`), cell migration, and immune killing assays (`api.killing`).
++
++**Validation:** a held-out HeLa movie (DIC-C2DH-HeLa) supports the 19 h
++cycle and rejects the old 31 h one.
++
+ ## Unreleased — Phase 3: ten drugs, calibrated intervals, evolved resistance
+ 
+ ### Added
+diff --git a/README.md b/README.md
+index 3ed58a6..16d1e38 100755
+--- a/README.md
++++ b/README.md
+@@ -4,7 +4,11 @@
+ simulator in Python. Open source, Apple-silicon and Linux, no GPU
+ required.**
+ 
+-**[Open a simulated spheroid in your browser →](https://rockman6.github.io/CellSim-3D-Multicellular-Biology-Drug-Testing-Simulator/)**
++**[Run an experiment in your browser →](https://rockman6.github.io/CellSim-3D-Multicellular-Biology-Drug-Testing-Simulator/lab/)**
++— pick cells, a drug and a schedule, press Run. The real engine runs on
++your own machine; nothing to install.
++
++**[Open a simulated spheroid →](https://rockman6.github.io/CellSim-3D-Multicellular-Biology-Drug-Testing-Simulator/)**
+ (no install; the demo runs are simulated fresh on every deploy, so they
+ show what the current code produces)
+ 
+diff --git a/docs/PLAN.md b/docs/PLAN.md
+index f3b2d9f..68b9fd2 100644
+--- a/docs/PLAN.md
++++ b/docs/PLAN.md
+@@ -274,17 +274,78 @@ serve the user rather than a referee.
+ What that ordering implies, shortest path first:
+ 
+ 1. **Someone hears about it and sees it work** — the hosted demo, live
+-   and self-updating. Done.
+-2. **They install it in one line** — `pip install cellsim`. Needs the
+-   package published; everything else is ready.
+-3. **They get an answer to their own question** — the notebook API and
+-   the tutorial. Done.
++   and self-updating. **Done.**
++2. **They install it in one line** — `pip install cellsim`. **Done**
++   (PyPI, October 2026).
++3. **They run their own experiment without writing code** — **THE GAP.**
++   The site can only replay runs made in advance. A biologist who does
++   not write Python cannot ask it anything, and that is most biologists.
+ 4. **They use it on THEIR cells** — plate import and calibration. Done.
+ 5. **They trust the answer** — measured error bars and published misses.
+-   Done.
+-
+-Step 2 is the only gap, and it is a five-minute account signup rather
+-than engineering.
++   Partly done; see the honesty table below.
++
++### Stage 3: an experiment anyone can run
++
++The target user types no code. They open a link, choose from menus, press
++Run, and get an answer with its error bar.
++
++**It runs in the browser, with no server.** Small runs take 1.5 s
++natively and Pyodide is a few times slower, so ten seconds for a
++dose-response is realistic — fast enough to feel interactive. A server
++would be faster and would also mean hosting bills, an attack surface and
++something to maintain; a page that is just files on GitHub Pages will
++still work in five years with nobody tending it.
++
++**The design is borrowed; the code is not.** PhysiCell Studio is the
++closest thing to this — a GUI over an agent-based cell simulator — and
++its layout is worth learning from: tabs that separate *what the cells
++are* from *what you do to them* from *what came out*. But it is **GPL
++v3**, and copying its code would drag CellSim from MIT to GPL v3,
++deciding our licence by way of a UI choice and shutting out commercial
++users. So: study the interaction design, write our own code, keep MIT.
++Where we do take code it must be MIT, BSD or Apache — Three.js (already
++in the viewer) and Plotly are both fine.
++
++Four screens, in the order a person actually thinks:
++
++| Screen | What the user does | Non-scientist wording |
++|---|---|---|
++| **1. Cells** | pick a line, optionally knock out a gene | "Which cells?" |
++| **2. Treatment** | pick a drug, dose, and schedule | "What do you do to them?" |
++| **3. Run** | press one button, watch progress | "Run the experiment" |
++| **4. Results** | 3-D view, curves, IC50 with its band, CSV | "What happened?" |
++
++Plus **presets** — one click for "does pulsing beat continuous dosing?",
++"what if these cells lose p53?", "how deep does the drug reach in a
++tumour?" — because a new user does not know what to ask yet, and a blank
++form is the commonest reason a tool goes unused.
++
++Rules that keep it honest rather than merely pretty:
++
++* every number comes with its band, and the UI never shows a bare point
++  estimate;
++* anything the engine is known to get wrong is labelled *in the result*,
++  not in a document the user will not read;
++* the preset that produced a figure is shareable as a URL, so a result
++  can be checked by someone else.
++
++### Stage 4: finish the honesty work
++
++| Feature | State |
++|---|---|
++| Drug response, schedules, combinations | validated against GDSC and the published schedule literature |
++| Spheroid O₂ and necrosis | calibrated on DLD-1, one documented miss |
++| Gene knockouts | validated on four independent right answers |
++| Migration | validated against random-walk theory |
++| Immune killing | mechanism validated; absolute lysis unchecked |
++| **Glucose** | **fails its validation and is labelled so** — fix or remove |
++| Calibration to a user's plate | hold-out tested, 80 % band coverage |
++
++### Stage 5: real users
++
++Two or three biologists, their own questions, and a record of what
++confused them. This cannot be compressed by writing code faster, and it
++is the only stage that can tell us whether any of the rest worked.
+ 
+ ## After Phase 3: what makes this useful to a working cell biologist
+ 
+diff --git a/pyproject.toml b/pyproject.toml
+index 0aec8e4..f6799eb 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
+ 
+ [project]
+ name = "cellsim"
+-version = "1.4.0"
++version = "1.5.0"
+ description = "Physics-first, uncertainty-honest in-silico cell and drug-response simulator"
+ readme = "README.md"
+ requires-python = ">=3.11"
+diff --git a/web/index.html b/web/index.html
+index eb07487..a8dc499 100644
+--- a/web/index.html
++++ b/web/index.html
+@@ -46,6 +46,13 @@ <h1>CellSim</h1>
+     inside it. Run them well-mixed and a dose-response curve is one simulation; run
+     them on a lattice and a spheroid grows a hypoxic rim and a necrotic core.</p>
+ 
++    <h2>Run an experiment in your browser</h2>
++    <p><a class="demo" href="lab/" style="display:block;max-width:560px">
++      <b>Open the Lab →</b>
++      <span>Pick cells and a drug, knock out a gene, change the schedule, press Run.
++      The real engine runs on your own machine — nothing to install, nothing uploaded.
++      About 20 seconds to start, half a minute per experiment.</span></a></p>
++
+     <h2>Open a run in the viewer</h2>
+     <div class="demos" id="demos">
+       <a class="demo" href="viewer/"><b>Empty viewer</b><span>drop your own .jsonl or .jsonl.gz</span></a>
+diff --git a/web/lab/.gitignore b/web/lab/.gitignore
+new file mode 100644
+index 0000000..844f692
+--- /dev/null
++++ b/web/lab/.gitignore
+@@ -0,0 +1 @@
++wheel/
+diff --git a/web/lab/app.js b/web/lab/app.js
+new file mode 100644
+index 0000000..0f6dc64
+--- /dev/null
++++ b/web/lab/app.js
+@@ -0,0 +1,293 @@
++/* CellSim Lab — the real engine, running in the browser.
++ *
++ * Pyodide loads CPython with numpy and scipy, then micropip installs the
++ * published `cellsim` wheel from PyPI. Nothing is simulated twice and
++ * nothing is faked: the dose-response below is the same `dose_response`
++ * that `pip install cellsim` gives you at a terminal.
++ *
++ * Nothing is uploaded. The page is static files; the computation happens
++ * on the viewer's own machine.
++ */
++const $ = (id) => document.getElementById(id);
++const state = { py: null, lines: [], drugs: [], genes: [], busy: false };
++
++function setBusy(on, label) {
++  state.busy = on;
++  $("run").disabled = on || !state.py;
++  $("bar").classList.toggle("indet", on);
++  $("bar").querySelector("i").style.width = on ? "" : "0";
++  if (label) $("engine-state").textContent = label;
++}
++
++/* ── boot ──────────────────────────────────────────────────────── */
++async function boot() {
++  setBusy(true, "downloading Python…");
++  state.py = await loadPyodide({
++    indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.2/full/",
++  });
++  $("engine-state").textContent = "loading numpy and scipy…";
++  await state.py.loadPackage(["numpy", "scipy", "micropip"]);
++  $("engine-state").textContent = "installing cellsim…";
++  // Install the wheel built from this very deployment, not PyPI's — so the
++  // browser runs exactly the engine on main. LATEST names the file.
++  const wheel = (await (await fetch("wheel/LATEST")).text()).trim();
++  if (!wheel.endsWith(".whl")) throw new Error(`no wheel found (LATEST = "${wheel}")`);
++  const url = new URL(`wheel/${wheel}`, location.href).href;
++  await state.py.runPythonAsync(`
++import micropip
++await micropip.install(${JSON.stringify(url)})
++`);
++  const meta = JSON.parse(await state.py.runPythonAsync(`
++import json
++from cellsim.cell.library import CELL_LINES, DRUGS
++from cellsim.cell.perturb import GENES
++json.dumps({
++  "lines": [{"name": n, "tissue": c.tissue, "p53": c.p53_functional,
++             "doubling": c.doubling_time_h} for n, c in CELL_LINES.items()],
++  "drugs": [{"name": n, "mechanism": d.mechanism} for n, d in DRUGS.items()],
++  "genes": [{"name": g, "note": v["note"]} for g, v in GENES.items()],
++})
++`));
++  Object.assign(state, meta);
++  fillMenus();
++  setBusy(false, "engine ready");
++  $("run").disabled = false;
++}
++
++const MECHANISM = {
++  dna_adduct: "crosslinks DNA; damage accumulates whatever the cell is doing",
++  topo2: "poisons topoisomerase II; worst during DNA replication",
++  tubulin: "freezes the spindle, so it only bites cells entering mitosis",
++  s_phase: "only damages cells that are actively copying their DNA",
++  mdm2: "frees p53 — works only where p53 is intact",
++};
++
++function fillMenus() {
++  const ls = $("line");
++  state.lines.forEach((l) => ls.add(new Option(`${l.name} — ${l.tissue}`, l.name)));
++  const ds = $("drug");
++  state.drugs.forEach((d) => ds.add(new Option(d.name, d.name)));
++  const gs = $("gene");
++  state.genes.forEach((g) => gs.add(new Option(g.name, g.name)));
++  ls.value = "A549"; ds.value = "cisplatin";
++  describeLine(); describeDrug(); describeGene();
++}
++
++function describeLine() {
++  const l = state.lines.find((x) => x.name === $("line").value);
++  $("line-hint").innerHTML = l
++    ? `${l.tissue}. p53 is <b>${l.p53 ? "intact" : "mutated"}</b>, and one cell
++       takes about ${l.doubling} h to divide.`
++    : "";
++}
++function describeDrug() {
++  const d = state.drugs.find((x) => x.name === $("drug").value);
++  $("drug-hint").textContent = d ? (MECHANISM[d.mechanism] || d.mechanism) : "";
++}
++function describeGene() {
++  const g = state.genes.find((x) => x.name === $("gene").value);
++  $("gene-hint").textContent = g ? g.note : "Leave this alone for normal cells.";
++}
++
++/* ── run ───────────────────────────────────────────────────────── */
++async function run() {
++  if (state.busy) return;
++  setBusy(true, "simulating…");
++  $("placeholder").hidden = true;
++  const cfg = {
++    line: $("line").value,
++    drug: $("drug").value,
++    gene: $("gene").value || null,
++    hours: Number($("hours").value),
++    exposure: $("exposure").value ? Number($("exposure").value) : null,
++  };
++  try {
++    const out = JSON.parse(await state.py.runPythonAsync(`
++import json, numpy as np
++from cellsim.cell.engine import Params, calibrate_cycle_scale, dose_response, ic50
++from cellsim.cell.library import get_drug, get_line
++cfg = ${JSON.stringify(JSON.stringify(cfg))}
++cfg = json.loads(cfg)
++line, drug = get_line(cfg["line"]), get_drug(cfg["drug"])
++pert = None
++if cfg["gene"]:
++    from cellsim.cell.perturb import Perturbation
++    pert = [Perturbation(cfg["gene"])]
++p = Params()
++k = calibrate_cycle_scale(line, p)
++guess = {"paclitaxel":0.03,"docetaxel":0.03,"vinorelbine":0.05,"doxorubicin":0.05,
++         "etoposide":1.0,"sn-38":0.03,"gemcitabine":0.05,"5-fluorouracil":5.0,
++         "nutlin-3a":5.0}.get(drug.name, 10.0)
++centre = ic50(line, drug, guess_uM=guess, n_cells_per_conc=16, k_cyc=k, p=p,
++              n_seeds=1, exposure_h=cfg["exposure"], perturbations=pert)
++if not np.isfinite(centre):
++    centre = guess * 50
++conc = centre * np.logspace(-1.5, 1.5, 8)
++viab, _ = dose_response(line, drug, conc, t_end_h=cfg["hours"], n_cells_per_conc=24,
++                        k_cyc=k, p=p, exposure_h=cfg["exposure"], perturbations=pert)
++# the band: repeat under different seeds, because the engine is stochastic
++runs = []
++for sd in (1, 2, 3):
++    v, _ = dose_response(line, drug, conc, t_end_h=cfg["hours"], n_cells_per_conc=24,
++                         seed=sd, k_cyc=k, p=p, exposure_h=cfg["exposure"],
++                         perturbations=pert)
++    runs.append(v[1:])
++runs = np.array(runs)
++# With a gene perturbed, the question is always a comparison, so the
++# unperturbed arm is run too and plotted beside it.
++wt = None
++if pert is not None:
++    w, _ = dose_response(line, drug, conc, t_end_h=cfg["hours"], n_cells_per_conc=24,
++                         k_cyc=k, p=p, exposure_h=cfg["exposure"])
++    wt = w[1:].tolist()
++ics = [ic50(line, drug, guess_uM=guess, n_cells_per_conc=16, k_cyc=k, p=p, seed=sd,
++            n_seeds=1, exposure_h=cfg["exposure"], perturbations=pert) for sd in (1,2,3)]
++fin = [x for x in ics if np.isfinite(x)]
++json.dumps({
++  "conc": conc.tolist(),
++  "mid": np.median(runs, axis=0).tolist(),
++  "lo": runs.min(axis=0).tolist(),
++  "hi": runs.max(axis=0).tolist(),
++  "ic50": float(np.median(fin)) if fin else None,
++  "ic50_lo": float(min(fin)) if fin else None,
++  "ic50_hi": float(max(fin)) if fin else None,
++  "reached": len(fin) > 1,
++  "wt": wt,
++})
++`));
++    draw(out, cfg);
++    setBusy(false, "engine ready");
++  } catch (e) {
++    setBusy(false, "engine ready");
++    $("result").innerHTML =
++      `<div class="note warn"><b>That run did not complete.</b><br>${String(e).slice(0, 400)}</div>`;
++  }
++}
++
++/* ── results ───────────────────────────────────────────────────── */
++function draw(o, cfg) {
++  const band = {
++    x: o.conc.concat([...o.conc].reverse()),
++    y: o.hi.concat([...o.lo].reverse()),
++    fill: "toself", fillcolor: "rgba(53,179,162,.16)",
++    // mode must be explicit: Plotly adds markers by default under 20
++    // points, which scattered stray dots over the band's outline.
++    mode: "lines", line: { width: 0 },
++    hoverinfo: "skip", showlegend: false, type: "scatter",
++  };
++  const mid = {
++    x: o.conc, y: o.mid, mode: "lines+markers", type: "scatter",
++    line: { color: "#35b3a2", width: 2 },
++    marker: { size: 7, color: "#35b3a2" },
++    name: cfg.gene ? `${cfg.gene} knocked out` : "these cells",
++    hovertemplate: "%{x:.3g} µM → %{y:.0%}<extra></extra>",
++  };
++  const traces = [band, mid];
++  if (o.wt) {
++    traces.unshift({
++      x: o.conc, y: o.wt, mode: "lines+markers", type: "scatter",
++      line: { color: "#8d9cab", width: 1.6, dash: "dot" },
++      marker: { size: 5, color: "#8d9cab" }, name: "normal cells",
++      hovertemplate: "normal: %{x:.3g} µM → %{y:.0%}<extra></extra>",
++    });
++  }
++  Plotly.newPlot("stage", traces, {
++    paper_bgcolor: "#090d10", plot_bgcolor: "#090d10",
++    font: { color: "#8d9cab", family: "ui-monospace, Menlo, monospace", size: 11 },
++    margin: { l: 58, r: 22, t: 46, b: 52 },
++    title: {
++      text: `${cfg.line}${cfg.gene ? " · " + cfg.gene + " knocked out" : ""} · ${cfg.drug}`,
++      font: { color: "#e4ebf2", size: 13.5 }, x: 0.02,
++    },
++    xaxis: {
++      title: "concentration (µM)", type: "log",
++      gridcolor: "#1d262e", zerolinecolor: "#2a3540",
++    },
++    yaxis: {
++      title: "cells, relative to untreated", range: [0, 1.15], tickformat: ".0%",
++      gridcolor: "#1d262e", zerolinecolor: "#2a3540",
++    },
++    showlegend: Boolean(o.wt),
++    legend: { x: 0.02, y: 0.12, bgcolor: "rgba(14,19,23,.7)",
++              font: { size: 11 }, orientation: "h" },
++  }, { displayModeBar: false, responsive: true });
++
++  const pct = (v) => (v * 100).toFixed(0) + "%";
++  const ic = o.ic50;
++  $("result").innerHTML = `
++    <div class="metric">
++      <div class="k">Concentration that halves the colony</div>
++      <div class="v">${ic ? ic.toPrecision(3) + " µM" : "not reached"}</div>
++      ${ic ? `<div class="band">range over repeats
++         ${o.ic50_lo.toPrecision(3)} – ${o.ic50_hi.toPrecision(3)} µM</div>` : ""}
++    </div>
++    ${ic ? "" : `<div class="note warn">No concentration tested halved the
++       colony. For a spindle poison that is the expected answer below about
++       24 h of exposure — the drug can only act on cells that reach mitosis
++       while it is present.</div>`}
++    <div class="metric">
++      <div class="k">At the highest dose tested</div>
++      <div class="v">${pct(o.mid[o.mid.length - 1])}</div>
++      <div class="band">of the untreated count</div>
++    </div>
++    ${o.wt ? `<div class="metric">
++      <div class="k">Normal cells, same drug and dose</div>
++      <div class="v">${pct(o.wt[o.wt.length - 1])}</div>
++      <div class="band">at the highest dose — compare with above</div>
++    </div>` : ""}
++    <div class="note">
++      The shaded band is three repeats of the same experiment. The engine
++      draws a finite sample of cell lineages and survival is set by the
++      resistant few, so repeats move by 10–20 %. <b>Two numbers closer
++      than the band are not different.</b> That is also why a low dose can
++      read slightly above 100 %: those cells grew a little more than the
++      untreated ones, by chance, not because the drug helped.
++    </div>
++    <table class="data">
++      <tr><th>µM</th><th>vs untreated</th><th>range</th></tr>
++      ${o.conc.map((c, i) => `<tr>
++        <td>${c.toPrecision(3)}</td><td>${pct(o.mid[i])}</td>
++        <td>${pct(o.lo[i])}–${pct(o.hi[i])}</td></tr>`).join("")}
++    </table>`;
++  $("overlay").hidden = false;
++  $("overlay").innerHTML =
++    `<b>${cfg.line}</b> · ${cfg.drug} · ${cfg.hours} h` +
++    (cfg.exposure ? ` · drug present ${cfg.exposure} h` : " · drug present throughout");
++}
++
++/* ── presets ───────────────────────────────────────────────────── */
++// Every preset must be something this page can actually run. Two of the
++// first four were not: one promised a spheroid with drug penetration and
++// hypoxia, which the Lab does not simulate, and one promised effector
++// cells, for which there is no control here yet. Both ran a plain
++// dose-response under a label describing something else.
++const PRESETS = {
++  pulse:  { line: "A549", drug: "paclitaxel", exposure: "12", hours: 72, gene: "" },
++  p53:    { line: "A549", drug: "cisplatin", exposure: "", hours: 72, gene: "TP53" },
++  efflux: { line: "A549", drug: "doxorubicin", exposure: "", hours: 72, gene: "ABCB1" },
++  death:  { line: "A549", drug: "cisplatin", exposure: "", hours: 72, gene: "BAX" },
++};
++
++document.addEventListener("DOMContentLoaded", () => {
++  $("hours").oninput = () => ($("hours-val").textContent = $("hours").value + " h");
++  $("line").onchange = describeLine;
++  $("drug").onchange = describeDrug;
++  $("gene").onchange = describeGene;
++  $("run").onclick = run;
++  document.querySelectorAll(".preset").forEach((b) => {
++    b.onclick = () => {
++      const p = PRESETS[b.dataset.preset];
++      if (!p) return;
++      $("line").value = p.line; $("drug").value = p.drug;
++      $("gene").value = p.gene; $("exposure").value = p.exposure;
++      $("hours").value = p.hours; $("hours-val").textContent = p.hours + " h";
++      describeLine(); describeDrug(); describeGene();
++      run();
++    };
++  });
++  boot().catch((e) => {
++    setBusy(false, "engine failed to start");
++    $("placeholder").innerHTML =
++      `<h2>The engine could not start</h2><div>${String(e).slice(0, 300)}</div>`;
++  });
++});
+diff --git a/web/lab/index.html b/web/lab/index.html
+new file mode 100644
+index 0000000..7436e9d
+--- /dev/null
++++ b/web/lab/index.html
+@@ -0,0 +1,126 @@
++<!doctype html>
++<html lang="en">
++<head>
++<meta charset="utf-8">
++<meta name="viewport" content="width=device-width, initial-scale=1">
++<title>CellSim Lab</title>
++<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Ccircle cx=%228%22 cy=%228%22 r=%226%22 fill=%22%2335b3a2%22/%3E%3Ccircle cx=%228%22 cy=%228%22 r=%222.5%22 fill=%22%230e1317%22/%3E%3C/svg%3E">
++<link rel="stylesheet" href="style.css">
++</head>
++<body>
++
++<header>
++  <div class="brand">Cell<span>Sim</span> Lab</div>
++  <div class="subtitle">run a cell experiment in your browser</div>
++  <div class="spacer"></div>
++  <span id="engine-state" class="subtitle">starting the engine…</span>
++  <button id="run" class="primary" disabled>Run experiment</button>
++</header>
++
++<main>
++  <!-- ── the workflow: one list, top to bottom ──────────────── -->
++  <aside>
++    <details class="step" open>
++      <summary><span class="num">1</span> Which cells?</summary>
++      <div class="step-body">
++        <label for="line">Cell line</label>
++        <select id="line"></select>
++        <div class="hint" id="line-hint"></div>
++
++        <label for="gene">Knock out a gene <span style="opacity:.7">(optional)</span></label>
++        <select id="gene"><option value="">— none, normal cells —</option></select>
++        <div class="hint" id="gene-hint"></div>
++      </div>
++    </details>
++
++    <details class="step" open>
++      <summary><span class="num">2</span> What do you do to them?</summary>
++      <div class="step-body">
++        <label for="drug">Drug</label>
++        <select id="drug"></select>
++        <div class="hint" id="drug-hint"></div>
++
++        <label for="hours">How long you watch them</label>
++        <div class="row">
++          <input type="range" id="hours" min="24" max="120" step="12" value="72">
++          <span class="val" id="hours-val">72 h</span>
++        </div>
++
++        <label for="exposure">How long the drug is present</label>
++        <select id="exposure">
++          <option value="">the whole time (continuous)</option>
++          <option value="6">6 h, then washed off</option>
++          <option value="12">12 h, then washed off</option>
++          <option value="24">24 h, then washed off</option>
++        </select>
++        <div class="hint">Washing the drug off early is how a real infusion
++          works, and the engine's clearest result is that it changes the
++          answer a lot for some drugs and barely at all for others.</div>
++      </div>
++    </details>
++
++    <details class="step">
++      <summary><span class="num">3</span> Or start from a question</summary>
++      <div class="step-body">
++        <button class="preset" data-preset="pulse">
++          <b>Does a short dose work as well as a long one?</b>
++          <small>Paclitaxel, continuous vs 12 h — the schedule question</small>
++        </button>
++        <button class="preset" data-preset="p53">
++          <b>What if these cells lose p53?</b>
++          <small>Cisplatin on A549, with and without TP53</small>
++        </button>
++        <button class="preset" data-preset="efflux">
++          <b>Can cells pump the drug back out?</b>
++          <small>Doxorubicin against cells overexpressing the P-gp pump</small>
++        </button>
++        <button class="preset" data-preset="death">
++          <b>What if the cells cannot die?</b>
++          <small>Cisplatin with BAX knocked out — killing becomes arrest</small>
++        </button>
++      </div>
++    </details>
++
++    <details class="step">
++      <summary><span class="num">4</span> What the engine gets wrong</summary>
++      <div class="step-body">
++        <div class="hint" id="honesty">
++          Every answer here carries a band, because the engine is
++          stochastic: the same run repeated moves by 10–20 %. Two numbers
++          that differ by less than that do not differ.
++        </div>
++      </div>
++    </details>
++  </aside>
++
++  <!-- ── viewport ───────────────────────────────────────────── -->
++  <section style="display:grid; grid-template-rows:3px 1fr; min-height:0;">
++    <div class="bar" id="bar"><i></i></div>
++    <div class="stage" id="stage">
++      <div class="placeholder" id="placeholder">
++        <h2>Nothing run yet</h2>
++        <div>Pick cells and a drug on the left, then press
++          <b style="color:var(--accent)">Run experiment</b>.<br>
++          Everything happens in your browser — nothing is uploaded.</div>
++      </div>
++      <div class="overlay" id="overlay" hidden></div>
++    </div>
++  </section>
++
++  <!-- ── results ────────────────────────────────────────────── -->
++  <div class="results">
++    <h3>Result</h3>
++    <div class="result-body" id="result">
++      <div class="empty">
++        The dose–response curve, the IC50 with its confidence band, and a
++        table you can copy will appear here.
++      </div>
++    </div>
++  </div>
++</main>
++
++<script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
++<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.32.0/plotly.min.js"></script>
++<script src="app.js"></script>
++</body>
++</html>
+diff --git a/web/lab/style.css b/web/lab/style.css
+new file mode 100644
+index 0000000..7219465
+--- /dev/null
++++ b/web/lab/style.css
+@@ -0,0 +1,167 @@
++/* CellSim Lab — visual language.
++ *
++ * The aesthetic follows professional CAE workbenches (SimScale, PrePoMax,
++ * COMSOL): a dark viewport that the eye treats as the specimen, quiet
++ * chrome around it, numbers in monospace so columns line up, and one
++ * accent colour reserved for actions that actually do something.
++ *
++ * Borrowed: the look and the layout grammar — a single vertical workflow
++ * on the left instead of tabs, which is the change SimScale made in 2018
++ * precisely to help newcomers, and panels that float over the viewport so
++ * the specimen keeps the space.
++ *
++ * Written here from scratch: every rule below. No third-party CSS is
++ * copied, so nothing in this project carries someone else's copyright.
++ */
++:root {
++  --bg:        #0e1317;
++  --panel:     #161d23;
++  --panel-2:   #1d262e;
++  --line:      #2a3540;
++  --text:      #e4ebf2;
++  --muted:     #8d9cab;
++  --accent:    #35b3a2;   /* actions */
++  --accent-dim:#1f6b61;
++  --warn:      #d8a23c;   /* "calibrated, not validated" */
++  --bad:       #d3604f;   /* "fails its validation" */
++  --good:      #5fb97a;
++  --radius: 6px;
++  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
++  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
++}
++* { box-sizing: border-box; }
++/* [hidden] loses to any rule that sets display, which is how the
++   'Nothing run yet' placeholder stayed on top of a finished plot.
++   The viewer hit the same bug; this is the same fix. */
++[hidden] { display: none !important; }
++html, body { height: 100%; margin: 0; }
++body {
++  background: var(--bg); color: var(--text);
++  font: 14px/1.5 var(--sans);
++  display: grid; grid-template-rows: 48px 1fr;
++  overflow: hidden;
++}
++
++/* ── top bar ─────────────────────────────────────────────────── */
++header {
++  display: flex; align-items: center; gap: 16px;
++  padding: 0 16px; background: var(--panel);
++  border-bottom: 1px solid var(--line);
++}
++.brand { font-weight: 650; letter-spacing: .2px; }
++.brand span { color: var(--accent); }
++.subtitle { color: var(--muted); font-size: 12.5px; }
++header .spacer { flex: 1; }
++
++button {
++  font: inherit; color: var(--text); cursor: pointer;
++  background: var(--panel-2); border: 1px solid var(--line);
++  border-radius: var(--radius); padding: 7px 14px;
++}
++button:hover:not(:disabled) { border-color: #3b4a58; background: #243039; }
++button:disabled { opacity: .45; cursor: not-allowed; }
++button.primary {
++  background: var(--accent); border-color: var(--accent); color: #06211d;
++  font-weight: 600;
++}
++button.primary:hover:not(:disabled) { background: #3fc7b4; border-color: #3fc7b4; }
++
++/* ── three-column workbench ──────────────────────────────────── */
++main { display: grid; grid-template-columns: 300px 1fr 340px; min-height: 0; }
++aside, .results { background: var(--panel); min-height: 0; overflow-y: auto; }
++aside { border-right: 1px solid var(--line); }
++.results { border-left: 1px solid var(--line); }
++
++/* ── the workflow: one vertical list, not tabs ───────────────── */
++.step { border-bottom: 1px solid var(--line); }
++.step > summary {
++  display: flex; align-items: center; gap: 10px;
++  padding: 13px 14px; cursor: pointer; user-select: none;
++  list-style: none; font-weight: 550;
++}
++.step > summary::-webkit-details-marker { display: none; }
++.step[open] > summary { background: var(--panel-2); }
++.num {
++  width: 21px; height: 21px; flex: none; border-radius: 50%;
++  background: var(--panel-2); border: 1px solid var(--line);
++  color: var(--muted); font: 600 11px/19px var(--mono); text-align: center;
++}
++.step[open] .num { background: var(--accent-dim); border-color: var(--accent); color: #d6fffa; }
++.step-body { padding: 4px 14px 16px; }
++
++label { display: block; margin: 12px 0 5px; color: var(--muted); font-size: 12px; }
++select, input[type=text], input[type=number] {
++  width: 100%; font: inherit; color: var(--text);
++  background: var(--bg); border: 1px solid var(--line);
++  border-radius: var(--radius); padding: 7px 9px;
++}
++select:focus, input:focus { outline: none; border-color: var(--accent); }
++input[type=range] { width: 100%; accent-color: var(--accent); }
++.row { display: flex; gap: 8px; align-items: center; }
++.row > * { flex: 1; }
++.hint { color: var(--muted); font-size: 11.5px; margin-top: 6px; line-height: 1.45; }
++.val { font: 600 13px var(--mono); color: var(--text); min-width: 68px; text-align: right; flex: none; }
++
++/* ── presets ─────────────────────────────────────────────────── */
++.preset {
++  display: block; width: 100%; text-align: left; margin-bottom: 7px;
++  padding: 10px 12px; line-height: 1.35;
++}
++.preset b { display: block; font-weight: 600; margin-bottom: 2px; }
++.preset small { color: var(--muted); font-size: 11.5px; }
++
++/* ── viewport ────────────────────────────────────────────────── */
++.stage { position: relative; background: #090d10; min-height: 0; }
++.stage canvas { display: block; width: 100%; height: 100%; }
++.overlay {
++  position: absolute; left: 66px; bottom: 58px;
++  background: rgba(14,19,23,.82); backdrop-filter: blur(6px);
++  border: 1px solid var(--line); border-radius: var(--radius);
++  padding: 9px 12px; font: 12px var(--mono); color: var(--muted);
++  pointer-events: none;
++}
++.overlay b { color: var(--text); font-weight: 600; }
++.placeholder {
++  position: absolute; inset: 0; display: grid; place-content: center;
++  text-align: center; color: var(--muted); gap: 10px; padding: 24px;
++}
++.placeholder h2 { color: var(--text); font-size: 17px; margin: 0; font-weight: 600; }
++
++/* ── progress ────────────────────────────────────────────────── */
++.bar { height: 3px; background: var(--panel-2); overflow: hidden; }
++.bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s; }
++.bar.indet > i { width: 35%; animation: slide 1.1s infinite ease-in-out; }
++@keyframes slide { 0% { margin-left: -35%; } 100% { margin-left: 100%; } }
++
++/* ── results ─────────────────────────────────────────────────── */
++.results h3 {
++  margin: 0; padding: 13px 14px; font-size: 13px; font-weight: 600;
++  border-bottom: 1px solid var(--line);
++}
++.result-body { padding: 14px; }
++.metric { margin-bottom: 16px; }
++.metric .k { color: var(--muted); font-size: 12px; }
++.metric .v { font: 600 22px/1.25 var(--mono); }
++.metric .band { color: var(--muted); font: 12px var(--mono); }
++.chip {
++  display: inline-block; padding: 2px 7px; border-radius: 99px;
++  font-size: 11px; font-weight: 600; border: 1px solid;
++}
++.chip.good { color: var(--good); border-color: #2f6b45; background: #15291d; }
++.chip.warn { color: var(--warn); border-color: #6b5520; background: #292113; }
++.chip.bad  { color: var(--bad);  border-color: #6b3028; background: #291715; }
++.note {
++  font-size: 11.5px; line-height: 1.5; color: var(--muted);
++  border-left: 2px solid var(--line); padding-left: 10px; margin: 12px 0;
++}
++.note.warn { border-color: var(--warn); }
++table.data { width: 100%; border-collapse: collapse; font: 12px var(--mono); }
++table.data th, table.data td { padding: 5px 6px; text-align: right; }
++table.data th { color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--line); }
++table.data td:first-child, table.data th:first-child { text-align: left; }
++.empty { color: var(--muted); font-size: 12.5px; line-height: 1.55; }
++
++@media (max-width: 1100px) {
++  main { grid-template-columns: 260px 1fr; }
++  .results { display: none; }
++}

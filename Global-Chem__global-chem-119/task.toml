@@ -1,0 +1,62 @@
+version = "1.0"
+
+[task]
+name = "default/Global-Chem__global-chem-119"
+description = "[pre-commit.ci] pre-commit autoupdate"
+
+[metadata]
+difficulty = "easy"
+category = "bugfix"
+keywords = [
+    "global-chem",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "Global-Chem/global-chem"
+ref = "344e43a6ea84a8284c2db778dc62494596256c9f"
+reference = "https://github.com/Global-Chem/global-chem/pull/119"
+source_access = "auto"
+built_at = "2026-11-16T09:53:54.176228+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:7f3aa43c8c566ffc5bff1fbac440447de1d1d88b7a4b0a9bd99a4df23de28af9"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2022-07-03T12:02:44Z"
+diff_format = "unified"
+context_files = [
+    ".pre-commit-config.yaml",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 2
+difficulty = "trivial"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

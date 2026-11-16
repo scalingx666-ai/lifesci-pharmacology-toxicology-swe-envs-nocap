@@ -1,0 +1,65 @@
+version = "1.0"
+
+[task]
+name = "default/cthoyt__chembl-downloader-9"
+description = "Refresh datasets from Cortés-Ciriano"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "chembl-downloader",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "cthoyt/chembl-downloader"
+ref = "0405db63f5575c0e4431b7361d29b5488fd7a787"
+reference = "https://github.com/cthoyt/chembl-downloader/pull/9"
+source_access = "auto"
+built_at = "2026-11-16T11:23:42.329955+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:3f5a54d493862424dfe39bcc88425db5659c5ce0436f27f8c2b28e4b0e357b09"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2022-11-19T21:15:54Z"
+diff_format = "unified"
+context_files = [
+    "notebooks/cortes-ciriano-refresh.ipynb",
+    "notebooks/cortes-ciriano-table-1.png",
+    "src/chembl_downloader/contrib.py",
+    "src/chembl_downloader/queries.py",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 16111
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

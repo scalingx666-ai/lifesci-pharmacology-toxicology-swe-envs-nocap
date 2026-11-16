@@ -1,0 +1,30 @@
+diff --git a/.gitattributes b/.gitattributes
+index 92bdf1a3..767264a2 100644
+--- a/.gitattributes
++++ b/.gitattributes
+@@ -1,15 +1,11 @@
+-# Track large binary and data files with Git LFS to keep clone size manageable.
+-# See https://git-lfs.com for setup instructions.
++# Git LFS tracking removed — see issue #26.
+ #
+-# Without LFS these files bloat the repo and cause checkout failures on
+-# macOS (APFS filename limits) and some Linux distros (see issue #1).
+-
+-# Databases
+-*.bin filter=lfs diff=lfs merge=lfs -text
+-*.sqlite3 filter=lfs diff=lfs merge=lfs -text
+-*.db filter=lfs diff=lfs merge=lfs -text
+-
+-# Large data files
+-*.jsonl filter=lfs diff=lfs merge=lfs -text
+-skills/trialgpt-matching/repo/dataset/**/*.json filter=lfs diff=lfs merge=lfs -text
+-skills/genome-compare/data/*.gz filter=lfs diff=lfs merge=lfs -text
++# Git LFS is disabled for this repository, so the LFS filter rules that
++# were here caused clone/checkout failures:
++#
++#   error: external filter 'git-lfs filter-process' failed
++#   fatal: smudge filter lfs failed
++#
++# All files previously tracked by LFS were already committed as full-size
++# objects (not pointer stubs), so removing the filter rules is safe and
++# allows the repository to clone and check out normally without LFS.

@@ -1,0 +1,69 @@
+version = "1.0"
+
+[task]
+name = "default/Global-Chem__global-chem-257"
+description = "SS-152: added the hot fix for checking ipython"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "global-chem",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "Global-Chem/global-chem"
+ref = "0a602daacf00b26ccde54c0771a99a5b4c79889c"
+reference = "https://github.com/Global-Chem/global-chem/pull/257"
+source_access = "auto"
+built_at = "2026-11-16T09:53:13.979232+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:6c6589789d8439268aeb9ce96716c6ccc5e77a9bf6b3b2b61b7b759ff4d772c7"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2024-03-01T07:31:40Z"
+diff_format = "unified"
+context_files = [
+    "global_chem/global_chem/food/fruits/mango/mango_amino_acids.py",
+    "global_chem/global_chem/food/fruits/mango/mango_fatty_acids.py",
+    "global_chem/global_chem/food/fruits/mango/mango_flavonoids.py",
+    "global_chem/global_chem/food/fruits/mango/mango_phenolic_acids.py",
+    "global_chem/global_chem/food/fruits/mango/mango_phytocompounds.py",
+    "global_chem/global_chem/food/fruits/mango/mango_vitamins.py",
+    "global_chem/global_chem/global_chem.py",
+    "global_chem/setup.py",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 197
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

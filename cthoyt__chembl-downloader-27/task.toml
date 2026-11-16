@@ -1,0 +1,62 @@
+version = "1.0"
+
+[task]
+name = "default/cthoyt__chembl-downloader-27"
+description = "Switch downloads to HTTPS"
+
+[metadata]
+difficulty = "easy"
+category = "bugfix"
+keywords = [
+    "chembl-downloader",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "cthoyt/chembl-downloader"
+ref = "22e6aaf3ef5208d26630d1cf347a748ac8b75285"
+reference = "https://github.com/cthoyt/chembl-downloader/pull/27"
+source_access = "auto"
+built_at = "2026-11-16T11:23:02.775074+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:cc2da84e04e43450856ab6e0f2d164226b14ee02957d5c97b2d1635d42446679"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2025-08-23T09:30:58Z"
+diff_format = "unified"
+context_files = [
+    "src/chembl_downloader/api.py",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 2
+difficulty = "trivial"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

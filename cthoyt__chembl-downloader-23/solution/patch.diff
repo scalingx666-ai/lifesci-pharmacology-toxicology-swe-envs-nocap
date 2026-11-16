@@ -1,0 +1,349 @@
+diff --git a/docs/source/sql.rst b/docs/source/sql.rst
+index c20ea0d..47db4ba 100644
+--- a/docs/source/sql.rst
++++ b/docs/source/sql.rst
+@@ -89,3 +89,17 @@ any downstream use.
+     configurations. One of the powerful but understated tools in RDKit is the
+     [rdkit.Chem.PandasTools](https://rdkit.org/docs/source/rdkit.Chem.PandasTools.html)
+     module.
++
++Querying for a Scalar
++---------------------
++
++For SQL queries that return a scalar result, you can use
++:func:`chembl_downloader.query_scalar`. In the following example, this gets a summary
++count over the number of activities in the database.
++
++.. code-block:: python
++
++    import chembl_downloader
++
++    sql = "SELECT COUNT(activity_id) FROM activities"
++    count: int = chembl_downloader.query_scalar(sql)
+diff --git a/pyproject.toml b/pyproject.toml
+index 663f63f..b4336da 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -55,7 +55,7 @@ dependencies = [
+     "tqdm", # progress bars
+     "click",
+     "more_click",
+-    "pystow",
++    "pystow>=0.7.6",
+     "typing-extensions",
+ ]
+ 
+diff --git a/src/chembl_downloader/__init__.py b/src/chembl_downloader/__init__.py
+index 92c8101..9cfa66a 100644
+--- a/src/chembl_downloader/__init__.py
++++ b/src/chembl_downloader/__init__.py
+@@ -23,6 +23,7 @@
+     iterate_smiles,
+     latest,
+     query,
++    query_scalar,
+     supplier,
+     versions,
+ )
+@@ -50,6 +51,7 @@
+     "latest",
+     "queries",
+     "query",
++    "query_scalar",
+     "supplier",
+     "versions",
+ ]
+diff --git a/src/chembl_downloader/api.py b/src/chembl_downloader/api.py
+index 0f060e7..79ce2ce 100644
+--- a/src/chembl_downloader/api.py
++++ b/src/chembl_downloader/api.py
+@@ -25,6 +25,7 @@
+     import pandas
+     import rdkit.Chem
+     import rdkit.Chem.rdSubstructLibrary
++    from numpy.typing import NDArray
+ 
+ __all__ = [
+     "VersionPathPair",
+@@ -54,6 +55,7 @@
+     "iterate_smiles",
+     "latest",
+     "query",
++    "query_scalar",
+     "supplier",
+     "versions",
+ ]
+@@ -141,19 +143,28 @@ def _download_helper(
+         filename = f"chembl_{fmt_version}{suffix}"
+     else:
+         filename = suffix
++
++    if prefix is None:
++        prefix = PYSTOW_PARTS
++
++    module = pystow.module(*prefix, fmt_version)
++
+     for url in [
+         f"{base}/{filename}",
+         f"{base}/archived/{filename}",
+     ]:
+         try:
+-            path = pystow.ensure(*(prefix or PYSTOW_PARTS), fmt_version, url=url)
++            path = module.ensure(url=url)
+         except OSError:
+             continue
+         if return_version:
+             return VersionPathPair(version, path)
+         else:
+             return path
+-    raise ValueError(f"could not find {filename} in data for ChEMBL {fmt_version} in {base}")
++    raise ValueError(
++        f"could not find {filename} in data for ChEMBL {fmt_version} in {base} "
++        f"with PyStow module at {module.base}"
++    )
+ 
+ 
+ # docstr-coverage:excused `overload`
+@@ -243,7 +254,9 @@ def download_extract_sqlite(
+         directories
+     """
+     if version is not None:
+-        _directory = pystow.join(*(prefix or PYSTOW_PARTS), version)
++        if prefix is None:
++            prefix = PYSTOW_PARTS
++        _directory = pystow.join(*prefix, version)
+         if _directory.is_dir():
+             rv = _find_sqlite_file(_directory)
+             if rv:
+@@ -355,8 +368,8 @@ def query(
+ 
+     Example: .. code-block:: python
+ 
+-        import chembl_downloader from chembl_downloader.queries import
+-        ID_NAME_QUERY_EXAMPLE
++        import chembl_downloader
++        from chembl_downloader.queries import ID_NAME_QUERY_EXAMPLE
+ 
+         df = chembl_downloader.query(ID_NAME_QUERY_EXAMPLE)
+     """
+@@ -366,6 +379,38 @@ def query(
+         return pd.read_sql(sql, con=con, **kwargs)
+ 
+ 
++def query_scalar(
++    sql: str,
++    version: str | None = None,
++    *,
++    prefix: Sequence[str] | None = None,
++    **kwargs: Any,
++) -> Any:
++    """Ensure the data is available, run the query, then extract the result.
++
++    Similar to :func:`query`, but automatically unpacks the value, assuming that only
++    one record is returned with just a single column.
++
++    :param sql: A SQL query string or table name
++    :param version: The version number of ChEMBL to get. If none specified, uses
++        :func:`latest` to look up the latest.
++    :param prefix: The directory inside :mod:`pystow` to use
++    :param kwargs: keyword arguments to pass through to :func:`pandas.read_sql`, such as
++        ``index_col``.
++
++    :returns: A value (int, str, etc.) from the database.
++
++    Example: .. code-block:: python
++
++        import chembl_downloader
++
++        sql = "SELECT COUNT(activity_id) FROM activities"
++        count: int = chembl_downloader.query_one(sql)
++    """
++    df = query(sql, version=version, prefix=prefix, **kwargs)
++    return df[df.columns[0]][0]
++
++
+ # docstr-coverage:excused `overload`
+ @overload
+ def download_fps(
+@@ -434,7 +479,7 @@ def iterate_fps(
+     *,
+     prefix: Sequence[str] | None = None,
+     identifier_format: Literal["local", "curie"] = "local",
+-) -> Iterable[tuple[str, numpy.ndarray]]:
++) -> Iterable[tuple[str, NDArray[numpy.uint8]]]:
+     """Download and open the ChEMBL fingerprints via RDKit/Numpy.
+ 
+     :param version: The version number of ChEMBL to get. If none specified, uses
+diff --git a/src/chembl_downloader/cli.py b/src/chembl_downloader/cli.py
+index 01814fa..56f5145 100644
+--- a/src/chembl_downloader/cli.py
++++ b/src/chembl_downloader/cli.py
+@@ -11,9 +11,16 @@
+     get_date,
+     get_substructure_library,
+     query,
++    query_scalar,
+     versions,
+ )
+-from .queries import ACTIVITIES_QUERY, ID_NAME_QUERY
++from .queries import (
++    ACTIVITIES_QUERY,
++    COUNT_ACTIVITIES_SQL,
++    COUNT_ASSAYS_SQL,
++    COUNT_COMPOUNDS_SQL,
++    ID_NAME_QUERY,
++)
+ 
+ __all__ = [
+     "main",
+@@ -40,11 +47,23 @@ def download(version: str | None) -> None:
+ @verbose_option  # type:ignore
+ def test(version: str | None) -> None:
+     """Run test queries."""
++    click.secho("Number of Compounds", fg="green")
++    count = query_scalar(COUNT_COMPOUNDS_SQL, version=version)
++    click.echo(f"{count:,}")
++
++    click.secho("\nNumber of Activities", fg="green")
++    count = query_scalar(COUNT_ACTIVITIES_SQL, version=version)
++    click.echo(f"{count:,}")
++
++    click.secho("\nNumber of Assays", fg="green")
++    count = query_scalar(COUNT_ASSAYS_SQL, version=version)
++    click.echo(f"{count:,}\n")
++
+     click.secho("ID to Name Query\n", fg="green")
+     df = query(ID_NAME_QUERY + "\nLIMIT 5", version=version)
+     click.echo(df.to_markdown(index=False))
+ 
+-    click.secho("\n\nActivity Query\n", fg="green")
++    click.secho("\nActivity Query\n", fg="green")
+     df = query(ACTIVITIES_QUERY + "\nLIMIT 5", version=version)
+     click.echo(df.to_markdown(index=False))
+ 
+@@ -83,7 +102,7 @@ def _count_compounds(version: str) -> str:
+     from .queries import COUNT_QUERY_SQL
+ 
+     try:
+-        total_compounds = query(COUNT_QUERY_SQL, version=version)["count"][0]
++        total_compounds = query_scalar(COUNT_QUERY_SQL, version=version)
+     except Exception:
+         return "-"
+     return f"{total_compounds:,}"
+diff --git a/src/chembl_downloader/queries.py b/src/chembl_downloader/queries.py
+index 52bfd5c..578bdc7 100644
+--- a/src/chembl_downloader/queries.py
++++ b/src/chembl_downloader/queries.py
+@@ -11,6 +11,10 @@
+ __all__ = [
+     "ACTIVITIES_QUERY",
+     "CHEBI_UNMAPPED_SQL",
++    "COUNT_ACTIVITIES_SQL",
++    "COUNT_ASSAYS_SQL",
++    "COUNT_COMPOUNDS_SQL",
++    "COUNT_QUERY_SQL",
+     "DRUG_INDICATIONS_SQL",
+     "ID_NAME_QUERY",
+     # Functions
+@@ -191,3 +195,13 @@ def get_document_molecule_sql(document_chembl_id: str) -> str:
+             WHERE DOCS.chembl_id = '{document_chembl_id}'
+         """  # noqa: S608
+     )
++
++
++#: Count the number of activity records
++COUNT_ACTIVITIES_SQL = "SELECT COUNT(*) from activities"
++
++#: Count the number of assay records
++COUNT_ASSAYS_SQL = "SELECT COUNT(*) from assays"
++
++#: Count the number of compound records
++COUNT_COMPOUNDS_SQL = "SELECT COUNT(*) from molecule_dictionary"
+diff --git a/tests/test_api.py b/tests/test_api.py
+index 05b6d8b..414a47d 100644
+--- a/tests/test_api.py
++++ b/tests/test_api.py
+@@ -1,14 +1,71 @@
+ """Tests for the API."""
+ 
++import shutil
++import sqlite3
++import tempfile
+ import unittest
++from pathlib import Path
+ from textwrap import dedent
+ 
++import pandas as pd
++from pystow.constants import PYSTOW_HOME_ENVVAR
++from pystow.utils import mock_envvar, open_tarfile
++
+ import chembl_downloader
+ 
++TV = "26"
++
+ 
+ class TestApi(unittest.TestCase):
+     """Tests for the API."""
+ 
++    def setUp(self) -> None:
++        """Set up the test case."""
++        rows = [(1,), (2,), (3,)]
++        columns = ["activity_id"]
++        self.directory_obj = tempfile.TemporaryDirectory()
++        self.directory = Path(self.directory_obj.name)
++
++        self.version_directory = self.directory.joinpath(TV)
++        self.version_directory.mkdir(exist_ok=True)
++
++        data_path = self.directory.joinpath("test.db")
++        self.tarfile_path = self.version_directory.joinpath(f"chembl_{TV}_sqlite.tar.gz")
++
++        df = pd.DataFrame(rows, columns=columns)
++        with sqlite3.connect(data_path) as conn:
++            df.to_sql("activities", conn)
++
++        inner_path = f"data/chembl_{TV}/chembl_{TV}_sqlite/chembl_{TV}.db"
++        with (
++            open_tarfile(self.tarfile_path, inner_path, operation="write") as inner_tarfile,
++            data_path.open("rb") as source_file,
++        ):
++            shutil.copyfileobj(source_file, inner_tarfile)
++
++    def tearDown(self) -> None:
++        """Tear down the test case."""
++        self.directory_obj.cleanup()
++
++    def test_query_scalar(self) -> None:
++        """Test querying."""
++        with mock_envvar(PYSTOW_HOME_ENVVAR, self.directory.as_posix()):
++            self.assertEqual(
++                3,
++                chembl_downloader.query_scalar(
++                    "SELECT COUNT(activity_id) FROM activities",
++                    prefix=[],
++                    version=TV,
++                ),
++            )
++
++    def test_cursor(self) -> None:
++        """Test querying via a cursor."""
++        with mock_envvar(PYSTOW_HOME_ENVVAR, self.directory.as_posix()):
++            with chembl_downloader.cursor(prefix=[], version=TV) as cursor:
++                cursor.execute("SELECT COUNT(activity_id) FROM activities")
++                self.assertEqual(3, cursor.fetchone()[0])
++
+     def test_latest_version(self) -> None:
+         """Test getting the latest version."""
+         latest_version = chembl_downloader.latest()
+diff --git a/tox.ini b/tox.ini
+index d97306f..0d0ce63 100644
+--- a/tox.ini
++++ b/tox.ini
+@@ -45,6 +45,7 @@ commands =
+ extras =
+     # See the [project.optional-dependencies] entry in pyproject.toml for "tests"
+     tests
++    pandas
+ set_env =
+     # this setting gets inherited into all environments, meaning
+     # that things that call uv commands don't require a --preview

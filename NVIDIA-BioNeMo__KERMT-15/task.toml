@@ -1,0 +1,63 @@
+version = "1.0"
+
+[task]
+name = "default/NVIDIA-BioNeMo__KERMT-15"
+description = "fix(data): skip SMILES that RDKit parses to None in filter_invalid_smiles"
+
+[metadata]
+difficulty = "medium"
+category = "bugfix"
+keywords = [
+    "KERMT",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "NVIDIA-BioNeMo/KERMT"
+ref = "e402473376ace30fa0092dad0578a88bf7f67287"
+reference = "https://github.com/NVIDIA-BioNeMo/KERMT/pull/15"
+source_access = "auto"
+built_at = "2026-11-16T11:12:54.294124+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:7ee631a5857482f475b9ffb960c066eb8f943dd2eeeddbe11fad42466baf0036"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2026-06-22T22:06:44Z"
+diff_format = "unified"
+context_files = [
+    "kermt/util/utils.py",
+    "tests/unit/test_data_utils.py",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 42
+difficulty = "medium"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

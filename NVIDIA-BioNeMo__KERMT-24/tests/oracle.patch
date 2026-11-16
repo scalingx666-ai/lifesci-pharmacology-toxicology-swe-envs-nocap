@@ -1,0 +1,307 @@
+diff --git a/kermt/util/parsing.py b/kermt/util/parsing.py
+index 71e6886..f6e5a02 100644
+--- a/kermt/util/parsing.py
++++ b/kermt/util/parsing.py
+@@ -86,6 +86,11 @@ def add_predict_args(parser: ArgumentParser):
+     parser.add_argument('--features_generator', type=str, nargs='*',
+                         choices=get_available_features_generators(),
+                         help='Method of generating additional features')
++    # NOTE: rdkit2D_normalization_type is deliberately NOT a predict argument. It is
++    # baked into the features the checkpoint was finetuned on, so the only correct
++    # value is the checkpoint's. make_predictions() copies it (and every other arg the
++    # predict parser does not define) out of the checkpoint, which only works while the
++    # attribute is absent here -- argparse setting a default would shadow it.
+     parser.add_argument('--features_path', type=str, nargs='*',
+                         help='Path to features to use in FNN (instead of features_generator)')
+     parser.add_argument('--use_cuikmolmaker_featurization', action='store_true', default=False,
+diff --git a/kermt/util/utils.py b/kermt/util/utils.py
+index b3f333c..4a3e354 100644
+--- a/kermt/util/utils.py
++++ b/kermt/util/utils.py
+@@ -877,11 +877,22 @@ def load_checkpoint_for_prediction(path: str,
+     # Check for consistency between finetune and predict arguments
+     # ensuring that the model is used exactly how it was finetuned.
+     finetune_predict_consistency_args = get_finetune_predict_consistency_args()
++    # features_generator describes how to build features on the fly. When the caller
++    # supplies precomputed features with --features_path it is unused -- MoleculeDatapoint
++    # refuses to accept both -- so requiring it to equal the finetune value would reject
++    # the normal inference workflow, which featurizes ahead of time and passes an .npz.
++    supplied_features = getattr(current_args, 'features_path', None)
+     for key, value in vars(current_args).items():
+-        if key in finetune_predict_consistency_args:
+-            if value != vars(loaded_args)[key]:
+-                raise ValueError(f'Argument {key} is not consistent between finetune and predict. '
+-                                 f'Finetune value: {value}, Predict value: {vars(loaded_args)[key]}')
++        if key not in finetune_predict_consistency_args:
++            continue
++        if key == 'features_generator' and supplied_features:
++            continue
++        if key not in vars(loaded_args):
++            # Checkpoint predates the argument; nothing to be inconsistent with.
++            continue
++        if value != vars(loaded_args)[key]:
++            raise ValueError(f'Argument {key} is not consistent between finetune and predict. '
++                             f'Finetune value: {vars(loaded_args)[key]}, Predict value: {value}')
+ 
+     model_related_args = get_model_args()
+     for key, value in vars(loaded_args).items():
+diff --git a/task/fingerprint.py b/task/fingerprint.py
+index bfbc8cf..92ea045 100644
+--- a/task/fingerprint.py
++++ b/task/fingerprint.py
+@@ -37,6 +37,7 @@
+ """
+ The fingerprint generation function.
+ """
++import copy
+ from argparse import Namespace
+ from logging import Logger
+ from typing import List
+@@ -63,10 +64,13 @@ def do_generate(model: nn.Module,
+     :return: A list of fingerprints.
+     """
+     model.eval()
+-    args.bond_drop_rate = 0
++    # Disable bond dropout locally without mutating the shared args (same pattern
++    # as predict(); see issue #22).
++    args_copy = copy.copy(args)
++    args_copy.bond_drop_rate = 0
+     preds = []
+ 
+-    mol_collator = MolCollator(args=args, shared_dict={})
++    mol_collator = MolCollator(args=args_copy, shared_dict={})
+ 
+     num_workers = 0
+     mol_loader = DataLoader(data,
+@@ -105,7 +109,7 @@ def generate_fingerprints(args: Namespace, logger: Logger = None) -> List[List[f
+     logger.info(f'Total size = {len(test_data):,}')
+     logger.info(f'Generating...')
+     # Load model
+-    model = load_checkpoint(checkpoint_path, cuda=args.cuda, current_args=args, logger=logger)
++    model, _ = load_checkpoint(checkpoint_path, cuda=args.cuda, current_args=args, logger=logger)
+     model_preds = do_generate(
+         model=model,
+         data=test_data,
+diff --git a/task/kermttrainer.py b/task/kermttrainer.py
+index 5fae8c2..01b19ba 100644
+--- a/task/kermttrainer.py
++++ b/task/kermttrainer.py
+@@ -215,7 +215,13 @@ def __init__(self,
+ 
+         self.model.to(self.gpu_id)
+ 
+-        self.model = DDP(self.model, device_ids=[gpu_id])
++        # find_unused_parameters is required when embedding_output_type != 'both':
++        # in atom/bond mode the encoder produces only one aggregation level, so the
++        # opposite branch's FFNs and the bond/atom vocab + FG heads receive no gradient.
++        # 'both' exercises every branch, so keep the flag off there to avoid DDP overhead.
++        # (static_graph is not an option: dynamic-depth sampling varies the graph per step.)
++        self.model = DDP(self.model, device_ids=[gpu_id],
++                         find_unused_parameters=(self.args.embedding_output_type != 'both'))
+ 
+         if self.args.tensorboard:
+             self.writer = SummaryWriter(self.args.save_dir)
+@@ -270,9 +276,9 @@ def validation(self, max_val_batches: int) -> List:
+             loss_sum += loss.item()
+             iter_count += self.args.batch_size
+ 
+-            av_loss_sum += av_loss.item()
+-            bv_loss_sum += bv_loss.item()
+-            fg_loss_sum += fg_loss.item()
++            av_loss_sum += av_loss.item() if not isinstance(av_loss, float) else av_loss
++            bv_loss_sum += bv_loss.item() if not isinstance(bv_loss, float) else bv_loss
++            fg_loss_sum += fg_loss.item() if not isinstance(fg_loss, float) else fg_loss
+             av_dist_loss_sum += av_dist_loss.item() if type(av_dist_loss) != float else av_dist_loss
+             bv_dist_loss_sum += bv_dist_loss.item() if type(bv_dist_loss) != float else bv_dist_loss
+             fg_dist_loss_sum += fg_dist_loss.item() if type(fg_dist_loss) != float else fg_dist_loss
+@@ -395,13 +401,13 @@ def iter(self, epoch, train=True) -> List:
+                 self.scheduler.step()
+             else:
+                 # For eval model, only consider the loss of three task.
+-                cum_loss_sum += av_loss.item()
+-                cum_loss_sum += bv_loss.item()
+-                cum_loss_sum += fg_loss.item()
++                cum_loss_sum += av_loss.item() if not isinstance(av_loss, float) else av_loss
++                cum_loss_sum += bv_loss.item() if not isinstance(bv_loss, float) else bv_loss
++                cum_loss_sum += fg_loss.item() if not isinstance(fg_loss, float) else fg_loss
+ 
+-            av_loss_sum += av_loss.item()
+-            bv_loss_sum += bv_loss.item()
+-            fg_loss_sum += fg_loss.item()
++            av_loss_sum += av_loss.item() if not isinstance(av_loss, float) else av_loss
++            bv_loss_sum += bv_loss.item() if not isinstance(bv_loss, float) else bv_loss
++            fg_loss_sum += fg_loss.item() if not isinstance(fg_loss, float) else fg_loss
+             av_dist_loss_sum += av_dist_loss.item() if type(av_dist_loss) != float else av_dist_loss
+             bv_dist_loss_sum += bv_dist_loss.item() if type(bv_dist_loss) != float else bv_dist_loss
+             fg_dist_loss_sum += fg_dist_loss.item() if type(fg_dist_loss) != float else fg_dist_loss
+@@ -432,12 +438,12 @@ def iter(self, epoch, train=True) -> List:
+             if self.gpu_id == 0 and self.n_steps % train_log_interval == 0:
+                 train_metrics = {
+                     'train/loss': loss.item(),
+-                    'train/av_loss': av_loss.item(),
+-                    'train/bv_loss': bv_loss.item(),
+-                    'train/fg_loss': fg_loss.item(),
+-                    'train/av_dist_loss': av_dist_loss.item(),
+-                    'train/bv_dist_loss': bv_dist_loss.item(),
+-                    'train/fg_dist_loss': fg_dist_loss.item(),
++                    'train/av_loss': av_loss.item() if not isinstance(av_loss, float) else av_loss,
++                    'train/bv_loss': bv_loss.item() if not isinstance(bv_loss, float) else bv_loss,
++                    'train/fg_loss': fg_loss.item() if not isinstance(fg_loss, float) else fg_loss,
++                    'train/av_dist_loss': av_dist_loss.item() if not isinstance(av_dist_loss, float) else av_dist_loss,
++                    'train/bv_dist_loss': bv_dist_loss.item() if not isinstance(bv_dist_loss, float) else bv_dist_loss,
++                    'train/fg_dist_loss': fg_dist_loss.item() if not isinstance(fg_dist_loss, float) else fg_dist_loss,
+                     'train/lr': self.scheduler.get_lr()[0],
+                     'train/epoch': epoch,
+                     'train/batch_idx': ibatch + self.batch_idx_offset,
+@@ -564,7 +570,13 @@ def __init__(self,
+         self.n_iter = 0
+ 
+         self.model.to(self.gpu_id)
+-        self.model = DDP(self.model, device_ids=[gpu_id])
++        # find_unused_parameters is required when embedding_output_type != 'both':
++        # in atom/bond mode the encoder produces only one aggregation level, so the
++        # opposite branch's FFNs and the bond/atom vocab + FG heads receive no gradient.
++        # 'both' exercises every branch, so keep the flag off there to avoid DDP overhead.
++        # (static_graph is not an option: dynamic-depth sampling varies the graph per step.)
++        self.model = DDP(self.model, device_ids=[gpu_id],
++                         find_unused_parameters=(self.args.embedding_output_type != 'both'))
+ 
+         if self.args.tensorboard:
+             self.writer = SummaryWriter(self.args.save_dir)
+@@ -871,7 +883,13 @@ def __init__(self,
+         self.n_iter = 0
+ 
+         self.model.to(self.gpu_id)
+-        self.model = DDP(self.model, device_ids=[gpu_id])
++        # find_unused_parameters is required when embedding_output_type != 'both':
++        # in atom/bond mode the encoder produces only one aggregation level, so the
++        # opposite branch's FFNs and the bond/atom vocab + FG heads receive no gradient.
++        # 'both' exercises every branch, so keep the flag off there to avoid DDP overhead.
++        # (static_graph is not an option: dynamic-depth sampling varies the graph per step.)
++        self.model = DDP(self.model, device_ids=[gpu_id],
++                         find_unused_parameters=(self.args.embedding_output_type != 'both'))
+ 
+         if self.args.tensorboard:
+             self.writer = SummaryWriter(self.args.save_dir)
+diff --git a/task/predict.py b/task/predict.py
+index caf71f4..a49ee5e 100644
+--- a/task/predict.py
++++ b/task/predict.py
+@@ -37,6 +37,7 @@
+ """
+ The predict function using the finetuned model to make the prediction. .
+ """
++import copy
+ from argparse import Namespace
+ from typing import List
+ 
+@@ -51,7 +52,7 @@
+ from kermt.data import MoleculeDataset
+ from kermt.data import StandardScaler
+ from kermt.util.utils import get_data, get_data_from_smiles, create_logger, load_args, get_task_names, tqdm, \
+-    load_checkpoint, load_scalars
++    load_checkpoint_for_prediction, load_scalars
+ 
+ 
+ def predict(model: nn.Module,
+@@ -75,15 +76,22 @@ def predict(model: nn.Module,
+     """
+     # debug = logger.debug if logger is not None else print
+     model.eval()
+-    args.bond_drop_rate = 0
++    # Evaluation must not apply bond dropout, but do NOT mutate the shared args:
++    # training and eval reuse one args instance and graphs are rebuilt every epoch
++    # (caching is off by default), so setting args.bond_drop_rate = 0 here would
++    # permanently disable bond dropout for all later training epochs -- and under
++    # DDP, where only rank 0 evaluates, desync augmentation across ranks. Use a
++    # shallow copy so the override is local to this call. See issue #22.
++    args_copy = copy.copy(args)
++    args_copy.bond_drop_rate = 0
+     preds = []
+ 
+     # num_iters, iter_step = len(data), batch_size
+-    num_tasks = args.num_tasks
++    num_tasks = args_copy.num_tasks
+     loss_sum = np.zeros(num_tasks, dtype=np.float32)
+     iter_count = 0
+ 
+-    mol_collator = MolCollator(args=args, shared_dict=shared_dict)
++    mol_collator = MolCollator(args=args_copy, shared_dict=shared_dict)
+     # mol_dataset = MoleculeDataset(data)
+ 
+     num_workers = 0
+@@ -99,12 +107,12 @@ def predict(model: nn.Module,
+         with torch.no_grad():
+             batch_preds = model(batch, features_batch)
+             iter_count += 1
+-            if args.fingerprint:
++            if args_copy.fingerprint:
+                 preds.extend(batch_preds.data.cpu().numpy())
+                 continue
+ 
+             if loss_func is not None:
+-                if args.dataset_type == 'classification':
++                if args_copy.dataset_type == 'classification':
+                     # In eval the model already applies sigmoid to classification
+                     # outputs, so batch_preds are probabilities. loss_func is
+                     # BCEWithLogitsLoss, which would sigmoid a second time. Score
+@@ -175,6 +183,25 @@ def make_predictions(args: Namespace, newest_train_args=None, smiles: List[str]
+     args.num_tasks = test_data.num_tasks()
+     args.features_size = test_data.features_size()
+ 
++    # features_size is not a model arg, so it is recomputed from the prediction data
++    # rather than inherited from the checkpoint. If it disagrees with what the model was
++    # finetuned on, the FFN input layer has the wrong width. Catch it here: the loader
++    # would otherwise report a bare tensor-shape mismatch that does not say which input
++    # is missing, and before the strict loader was restored it silently dropped that
++    # layer and predicted from its random initialization.
++    ckpt_features_size = getattr(train_args, 'features_size', None)
++    if ckpt_features_size is not None and args.features_size != ckpt_features_size:
++        ckpt_generator = getattr(train_args, 'features_generator', None)
++        hint = (f'pass the same features with --features_path, or regenerate them with '
++                f'--features_generator {" ".join(ckpt_generator)}'
++                if ckpt_generator else
++                'the checkpoint was finetuned without additional features, so do not pass '
++                '--features_path or --features_generator')
++        raise ValueError(
++            f'Feature size mismatch: the checkpoint was finetuned with features_size='
++            f'{ckpt_features_size} but the prediction data has features_size='
++            f'{args.features_size}. To predict with this checkpoint, {hint}.')
++
+     print('Validating SMILES')
+     # Drop empty / unparseable / zero-heavy-atom SMILES before featurization —
+     # MolGraph raises on invalid input, so leaving them in aborts the whole run.
+@@ -214,7 +241,7 @@ def make_predictions(args: Namespace, newest_train_args=None, smiles: List[str]
+     count = 0
+     for checkpoint_path in tqdm(args.checkpoint_paths, total=len(args.checkpoint_paths)):
+         # Load model
+-        model, _ = load_checkpoint(checkpoint_path, cuda=args.cuda, current_args=args, logger=logger)
++        model = load_checkpoint_for_prediction(checkpoint_path, cuda=args.cuda, current_args=args, logger=logger)
+         model_preds, _ = predict(
+             model=model,
+             data=test_data,
+diff --git a/task/run_evaluation.py b/task/run_evaluation.py
+index a1b3414..7ab345f 100644
+--- a/task/run_evaluation.py
++++ b/task/run_evaluation.py
+@@ -97,7 +97,7 @@ def run_evaluation(args: Namespace, logger: Logger = None) -> List[float]:
+             if "fold_%d" % cur_model in path:
+                 target_path = path
+         debug(f'Loading model {args.seed} from {target_path}')
+-        model = load_checkpoint(target_path, current_args=args, cuda=args.cuda, logger=logger)
++        model, _ = load_checkpoint(target_path, current_args=args, cuda=args.cuda, logger=logger)
+         # Get loss and metric functions
+         loss_func = get_loss_func(args, model)
+ 
+diff --git a/tests/integration/test_pretrain_finetune.py b/tests/integration/test_pretrain_finetune.py
+index 5b5753c..5346136 100644
+--- a/tests/integration/test_pretrain_finetune.py
++++ b/tests/integration/test_pretrain_finetune.py
+@@ -119,7 +119,6 @@ def predict(data_dir):
+         "--checkpoint_dir", "test_run/finetune/",
+         "--no_features_scaling",
+         "--features_generator", "rdkit_2d_normalized_cuik_molmaker",
+-        "--rdkit2D_normalization_type", "descriptastorus",
+         "--output", "test_run/predict/predict.csv"
+     ]
+     env = os.environ.copy()

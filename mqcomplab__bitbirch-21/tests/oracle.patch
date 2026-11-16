@@ -1,0 +1,49 @@
+diff --git a/bitbirch/cluster_analysis.py b/bitbirch/cluster_analysis.py
+index a007543..0b0a918 100644
+--- a/bitbirch/cluster_analysis.py
++++ b/bitbirch/cluster_analysis.py
+@@ -2,7 +2,7 @@
+ import numpy as np
+ from rdkit.Chem.Scaffolds import MurckoScaffold
+ import pandas as pd
+-from iSIM.sampling import stratified_sampling, outlier_sampling, medoid_sampling
++from iSIM.sampling import outlier_sampling, medoid_sampling
+ from iSIM.utils import binary_fps
+ 
+ class ClusterAnalysis:
+diff --git a/examples/simple_birch/birch_tutorial.ipynb b/examples/simple_birch/birch_tutorial.ipynb
+index a86af66..8d1cf62 100644
+--- a/examples/simple_birch/birch_tutorial.ipynb
++++ b/examples/simple_birch/birch_tutorial.ipynb
+@@ -42,7 +42,7 @@
+   },
+   {
+    "cell_type": "code",
+-   "execution_count": 19,
++   "execution_count": 1,
+    "id": "fb7202cf-4af2-4fda-8782-dc957cbbd389",
+    "metadata": {
+     "tags": []
+diff --git a/setup.py b/setup.py
+index 94552ad..4ace8ab 100644
+--- a/setup.py
++++ b/setup.py
+@@ -11,12 +11,15 @@
+     url='https://github.com/mqcomplab/bitbirch.git',  # Update with the actual URL if available
+     packages=find_packages(),
+     install_requires=[
+-        'numpy',
++        'numpy<2,>=1.20',
+         'matplotlib',
+         'pandas',
+         'rdkit',
+         'scipy',
+         'seaborn',
+-        'scikit-learn'
++        'scikit-learn',
++        'plotly',
++        'iSIM @ git+https://github.com/mqcomplab/iSIM.git',
++        'useful_rdkit_utils @ git+https://github.com/PatWalters/useful_rdkit_utils.git'
+     ]
+ )
+\ No newline at end of file

@@ -1,0 +1,1242 @@
+diff --git a/.github/workflows/pages.yml b/.github/workflows/pages.yml
+index 8251c4d..5a988eb 100644
+--- a/.github/workflows/pages.yml
++++ b/.github/workflows/pages.yml
+@@ -5,23 +5,21 @@
+ # the streams and uploads the result, so the hosted demo always shows
+ # what the current code actually produces.
+ #
+-# MANUAL UNTIL PAGES IS ENABLED. The repository owner has to turn it on
+-# once — Settings -> Pages -> Build and deployment -> Source: GitHub
+-# Actions — and until that happens the deploy step fails with "Pages is
+-# not enabled". Running on every push to main would therefore paint the
+-# default branch red for a setting, not a defect, so this workflow is
+-# dispatch-only. Once Pages is on, uncomment the `push:` block below and
+-# the site will rebuild whenever the viewer or the engine changes.
++# Pages was enabled on the repository on 2026-10-06, so this now runs on
++# its own: the site rebuilds whenever the viewer or the engine changes,
++# and the demo runs are simulated at deploy time rather than committed,
++# so what is published is always what the current code produces.
+ name: viewer
+ 
+ on:
+   workflow_dispatch:
+-  # push:
+-  #   branches: [main]
+-  #   paths:
+-  #     - "web/**"
+-  #     - "cellsim/cell/**"
+-  #     - ".github/workflows/pages.yml"
++  push:
++    branches: [main]
++    paths:
++      - "web/**"
++      - "cellsim/cell/**"
++      - "cellsim/*.py"
++      - ".github/workflows/pages.yml"
+ 
+ permissions:
+   contents: read
+diff --git a/README.md b/README.md
+index 5549a8d..192a49f 100755
+--- a/README.md
++++ b/README.md
+@@ -4,6 +4,10 @@
+ simulator in Python. Open source, Apple-silicon and Linux, no GPU
+ required.**
+ 
++**[Open a simulated spheroid in your browser →](https://rockman6.github.io/CellSim-3D-Multicellular-Biology-Drug-Testing-Simulator/)**
++(no install; the demo runs are simulated fresh on every deploy, so they
++show what the current code produces)
++
+ CellSim is converging on one product: an interactive dish. Pick a cell
+ line and a drug, set a dose schedule, watch the colony respond, and get a
+ dose-response curve whose error bar has been checked against public
+diff --git a/benchmarks/cell/dish_validation.json b/benchmarks/cell/dish_validation.json
+index a4085a1..00d836a 100644
+--- a/benchmarks/cell/dish_validation.json
++++ b/benchmarks/cell/dish_validation.json
+@@ -27,64 +27,64 @@
+       5
+      ],
+      "mean": {
+-      "final_count": 134.0,
+-      "mean_abs_rel_error": 0.14225180013449923,
+-      "complete_cycle_mean_h": 31.36895576330726,
+-      "complete_cycle_cv": 0.0009148110611511615,
++      "final_count": 148.6,
++      "mean_abs_rel_error": 0.0456404517293903,
++      "complete_cycle_mean_h": 19.000000000000302,
++      "complete_cycle_cv": 4.185072769787973e-14,
+       "km_undivided": {
+-       "20": 1.0,
+-       "30": 1.0
++       "20": 0.5200499847374849,
++       "30": 0.5200499847374849
+       }
+      },
+      "per_seed": [
+       {
+-       "final_count": 134.0,
+-       "mean_abs_rel_error": 0.14266138060241101,
+-       "complete_cycle_mean_h": 31.36666666666711,
+-       "complete_cycle_cv": 0.0009959356809101701,
++       "final_count": 154.0,
++       "mean_abs_rel_error": 0.041103603029805175,
++       "complete_cycle_mean_h": 19.00000000000034,
++       "complete_cycle_cv": 4.641627043228244e-14,
+        "km_undivided": {
+-        "20": 1.0,
+-        "30": 1.0
++        "20": 0.5142857142857141,
++        "30": 0.5142857142857141
+        }
+       },
+       {
+-       "final_count": 133.0,
+-       "mean_abs_rel_error": 0.13673842183037174,
+-       "complete_cycle_mean_h": 31.36978723404293,
+-       "complete_cycle_cv": 0.0009757474528715407,
++       "final_count": 151.0,
++       "mean_abs_rel_error": 0.050755789363276425,
++       "complete_cycle_mean_h": 19.000000000000256,
++       "complete_cycle_cv": 3.932515531621471e-14,
+        "km_undivided": {
+-        "20": 1.0,
+-        "30": 1.0
++        "20": 0.5000000000000002,
++        "30": 0.5000000000000002
+        }
+       },
+       {
+-       "final_count": 134.0,
+-       "mean_abs_rel_error": 0.1601076359569087,
+-       "complete_cycle_mean_h": 31.372500000000574,
+-       "complete_cycle_cv": 0.0009263971204139347,
++       "final_count": 144.0,
++       "mean_abs_rel_error": 0.03903429310032706,
++       "complete_cycle_mean_h": 19.000000000000252,
++       "complete_cycle_cv": 3.775348602037862e-14,
+        "km_undivided": {
+-        "20": 1.0,
+-        "30": 1.0
++        "20": 0.5538461538461543,
++        "30": 0.5538461538461543
+        }
+       },
+       {
+-       "final_count": 139.0,
+-       "mean_abs_rel_error": 0.11938976389877927,
+-       "complete_cycle_mean_h": 31.3703703703708,
+-       "complete_cycle_cv": 0.0008467110116439798,
++       "final_count": 142.0,
++       "mean_abs_rel_error": 0.05188738380405431,
++       "complete_cycle_mean_h": 19.000000000000234,
++       "complete_cycle_cv": 4.324223558753337e-14,
+        "km_undivided": {
+-        "20": 1.0,
+-        "30": 1.0
++        "20": 0.5555555555555557,
++        "30": 0.5555555555555557
+        }
+       },
+       {
+-       "final_count": 130.0,
+-       "mean_abs_rel_error": 0.15236179838402536,
+-       "complete_cycle_mean_h": 31.365454545454863,
+-       "complete_cycle_cv": 0.0008292640399161817,
++       "final_count": 152.0,
++       "mean_abs_rel_error": 0.045421189349488515,
++       "complete_cycle_mean_h": 19.00000000000042,
++       "complete_cycle_cv": 4.2516491132989534e-14,
+        "km_undivided": {
+-        "20": 1.0,
+-        "30": 1.0
++        "20": 0.4765625,
++        "30": 0.4765625
+        }
+       }
+      ]
+@@ -98,64 +98,64 @@
+       5
+      ],
+      "mean": {
+-      "final_count": 139.6,
+-      "mean_abs_rel_error": 0.11837060553901932,
+-      "complete_cycle_mean_h": 26.406884934466937,
+-      "complete_cycle_cv": 0.23276042381465012,
++      "final_count": 150.8,
++      "mean_abs_rel_error": 0.0642657247957796,
++      "complete_cycle_mean_h": 17.01593826812748,
++      "complete_cycle_cv": 0.21576929459891553,
+       "km_undivided": {
+-       "20": 0.8805318904369124,
+-       "30": 0.41181742607711735
++       "20": 0.636665389792879,
++       "30": 0.5155450931636921
+       }
+      },
+      "per_seed": [
+       {
+-       "final_count": 124.0,
+-       "mean_abs_rel_error": 0.14358728300397208,
+-       "complete_cycle_mean_h": 29.35333333333362,
+-       "complete_cycle_cv": 0.20381240711684143,
++       "final_count": 140.0,
++       "mean_abs_rel_error": 0.05166325867822249,
++       "complete_cycle_mean_h": 18.205925925926014,
++       "complete_cycle_cv": 0.18975114303233126,
+        "km_undivided": {
+-        "20": 1.0,
+-        "30": 0.5594135802469136
++        "20": 0.7352501131679304,
++        "30": 0.512907868801294
+        }
+       },
+       {
+-       "final_count": 140.0,
+-       "mean_abs_rel_error": 0.10357743788522333,
+-       "complete_cycle_mean_h": 26.94592592592624,
+-       "complete_cycle_cv": 0.22452771908966476,
++       "final_count": 157.0,
++       "mean_abs_rel_error": 0.057250350074427865,
++       "complete_cycle_mean_h": 16.97830985915521,
++       "complete_cycle_cv": 0.22095995256230372,
+        "km_undivided": {
+-        "20": 0.8974358974358975,
+-        "30": 0.455346746547496
++        "20": 0.5968576602952262,
++        "30": 0.4907066556743253
+        }
+       },
+       {
+-       "final_count": 132.0,
+-       "mean_abs_rel_error": 0.13740123388236744,
+-       "complete_cycle_mean_h": 27.388695652174242,
+-       "complete_cycle_cv": 0.23345710778800144,
++       "final_count": 157.0,
++       "mean_abs_rel_error": 0.05355807162981141,
++       "complete_cycle_mean_h": 17.725277777778025,
++       "complete_cycle_cv": 0.18733873890560832,
+        "km_undivided": {
+-        "20": 0.8992248062015503,
+-        "30": 0.524547803617571
++        "20": 0.5550713957426637,
++        "30": 0.4358586843032863
+        }
+       },
+       {
+-       "final_count": 163.0,
+-       "mean_abs_rel_error": 0.08316819615848949,
+-       "complete_cycle_mean_h": 21.942025316455904,
+-       "complete_cycle_cv": 0.26360566768439886,
++       "final_count": 161.0,
++       "mean_abs_rel_error": 0.12476376943231458,
++       "complete_cycle_mean_h": 15.022400000000177,
++       "complete_cycle_cv": 0.26017707774942,
+        "km_undivided": {
+-        "20": 0.7237497052736371,
+-        "30": 0.12082917420394622
++        "20": 0.5781387381545172,
++        "30": 0.5505222895016006
+        }
+       },
+       {
+        "final_count": 139.0,
+-       "mean_abs_rel_error": 0.12411887676504431,
+-       "complete_cycle_mean_h": 26.404444444444696,
+-       "complete_cycle_cv": 0.23839921739434414,
++       "mean_abs_rel_error": 0.034093174164121685,
++       "complete_cycle_mean_h": 17.14777777777798,
++       "complete_cycle_cv": 0.2206195607449143,
+        "km_undivided": {
+-        "20": 0.8822490432734766,
+-        "30": 0.39894982576966
++        "20": 0.7180090416040574,
++        "30": 0.5877299675379544
+        }
+       }
+      ]
+@@ -189,64 +189,64 @@
+       5
+      ],
+      "mean": {
+-      "final_count": 366.4,
+-      "mean_abs_rel_error": 0.17483458942528818,
+-      "complete_cycle_mean_h": 31.371030547333145,
+-      "complete_cycle_cv": 0.0008401461390101703,
++      "final_count": 401.6,
++      "mean_abs_rel_error": 0.05815521974330914,
++      "complete_cycle_mean_h": 19.000000000000224,
++      "complete_cycle_cv": 3.8687671606295343e-14,
+       "km_undivided": {
+-       "20": 1.0,
+-       "30": 1.0
++       "20": 0.5510382263488516,
++       "30": 0.5510382263488516
+       }
+      },
+      "per_seed": [
+       {
+-       "final_count": 367.0,
+-       "mean_abs_rel_error": 0.1826921497080365,
+-       "complete_cycle_mean_h": 31.37421487603346,
+-       "complete_cycle_cv": 0.0010488788851317384,
++       "final_count": 410.0,
++       "mean_abs_rel_error": 0.06619912732648296,
++       "complete_cycle_mean_h": 19.000000000000192,
++       "complete_cycle_cv": 3.7889712020616556e-14,
+        "km_undivided": {
+-        "20": 1.0,
+-        "30": 1.0
++        "20": 0.5386740331491715,
++        "30": 0.5386740331491715
+        }
+       },
+       {
+-       "final_count": 370.0,
+-       "mean_abs_rel_error": 0.16829916905934703,
+-       "complete_cycle_mean_h": 31.37151515151554,
+-       "complete_cycle_cv": 0.0008633436603752736,
++       "final_count": 407.0,
++       "mean_abs_rel_error": 0.05497735416598874,
++       "complete_cycle_mean_h": 19.00000000000028,
++       "complete_cycle_cv": 4.24216345960477e-14,
+        "km_undivided": {
+-        "20": 1.0,
+-        "30": 1.0
++        "20": 0.5439560439560448,
++        "30": 0.5439560439560448
+        }
+       },
+       {
+-       "final_count": 361.0,
+-       "mean_abs_rel_error": 0.17881165567654939,
+-       "complete_cycle_mean_h": 31.369354838710066,
+-       "complete_cycle_cv": 0.0007514602154179448,
++       "final_count": 394.0,
++       "mean_abs_rel_error": 0.056315787498539674,
++       "complete_cycle_mean_h": 19.000000000000238,
++       "complete_cycle_cv": 3.979644769484398e-14,
+        "km_undivided": {
+-        "20": 1.0,
+-        "30": 1.0
++        "20": 0.5552407932011334,
++        "30": 0.5552407932011334
+        }
+       },
+       {
+-       "final_count": 378.0,
+-       "mean_abs_rel_error": 0.15297255961433007,
+-       "complete_cycle_mean_h": 31.373576642336126,
+-       "complete_cycle_cv": 0.0009402556626649167,
++       "final_count": 406.0,
++       "mean_abs_rel_error": 0.04372672035649446,
++       "complete_cycle_mean_h": 19.00000000000021,
++       "complete_cycle_cv": 3.882617457021338e-14,
+        "km_undivided": {
+-        "20": 1.0,
+-        "30": 1.0
++        "20": 0.5555555555555546,
++        "30": 0.5555555555555546
+        }
+       },
+       {
+-       "final_count": 356.0,
+-       "mean_abs_rel_error": 0.19139741306817784,
+-       "complete_cycle_mean_h": 31.366491228070533,
+-       "complete_cycle_cv": 0.0005967922714609784,
++       "final_count": 391.0,
++       "mean_abs_rel_error": 0.06955710936903985,
++       "complete_cycle_mean_h": 19.000000000000203,
++       "complete_cycle_cv": 3.45043891497551e-14,
+        "km_undivided": {
+-        "20": 1.0,
+-        "30": 1.0
++        "20": 0.5617647058823536,
++        "30": 0.5617647058823536
+        }
+       }
+      ]
+@@ -260,64 +260,64 @@
+       5
+      ],
+      "mean": {
+-      "final_count": 377.0,
+-      "mean_abs_rel_error": 0.15337312804880054,
+-      "complete_cycle_mean_h": 27.263078973963417,
+-      "complete_cycle_cv": 0.2212418711941079,
++      "final_count": 399.8,
++      "mean_abs_rel_error": 0.05014703464560879,
++      "complete_cycle_mean_h": 17.805818061051603,
++      "complete_cycle_cv": 0.20707578003515598,
+       "km_undivided": {
+-       "20": 0.9376625820691624,
+-       "30": 0.4501445402153994
++       "20": 0.693605179774449,
++       "30": 0.5654454375755943
+       }
+      },
+      "per_seed": [
+       {
+-       "final_count": 381.0,
+-       "mean_abs_rel_error": 0.15823870959225206,
+-       "complete_cycle_mean_h": 26.85664233576682,
+-       "complete_cycle_cv": 0.21701771024318145,
++       "final_count": 364.0,
++       "mean_abs_rel_error": 0.060180295118538764,
++       "complete_cycle_mean_h": 17.50475409836086,
++       "complete_cycle_cv": 0.2002531404407385,
+        "km_undivided": {
+-        "20": 0.9337304966743473,
+-        "30": 0.4016545754054071
++        "20": 0.7245629406133355,
++        "30": 0.6317420878221466
+        }
+       },
+       {
+-       "final_count": 382.0,
+-       "mean_abs_rel_error": 0.13290771347895253,
+-       "complete_cycle_mean_h": 26.918333333333596,
+-       "complete_cycle_cv": 0.18921047604954946,
++       "final_count": 420.0,
++       "mean_abs_rel_error": 0.038274780883268404,
++       "complete_cycle_mean_h": 17.058750000000167,
++       "complete_cycle_cv": 0.20897024816414592,
+        "km_undivided": {
+-        "20": 0.9607805723418034,
+-        "30": 0.4258964011155151
++        "20": 0.6624419217902452,
++        "30": 0.5681176158002453
+        }
+       },
+       {
+-       "final_count": 375.0,
+-       "mean_abs_rel_error": 0.16091444304054442,
+-       "complete_cycle_mean_h": 28.155036496350835,
+-       "complete_cycle_cv": 0.23718804620292191,
++       "final_count": 387.0,
++       "mean_abs_rel_error": 0.04514339397465443,
++       "complete_cycle_mean_h": 18.264551724138066,
++       "complete_cycle_cv": 0.20949847381384115,
+        "km_undivided": {
+-        "20": 0.9525020038932783,
+-        "30": 0.5217789113367857
++        "20": 0.7420222110504958,
++        "30": 0.5762135030174689
+        }
+       },
+       {
+-       "final_count": 397.0,
+-       "mean_abs_rel_error": 0.13039230947661845,
+-       "complete_cycle_mean_h": 25.80556962025349,
+-       "complete_cycle_cv": 0.27485078355353265,
++       "final_count": 412.0,
++       "mean_abs_rel_error": 0.03782200343092434,
++       "complete_cycle_mean_h": 17.82000000000014,
++       "complete_cycle_cv": 0.23700211934492582,
+        "km_undivided": {
+-        "20": 0.874524797989814,
+-        "30": 0.4305255930877208
++        "20": 0.7047573192218844,
++        "30": 0.5507190724250467
+        }
+       },
+       {
+-       "final_count": 350.0,
+-       "mean_abs_rel_error": 0.18441246465563518,
+-       "complete_cycle_mean_h": 28.579813084112335,
+-       "complete_cycle_cv": 0.1879423399213541,
++       "final_count": 416.0,
++       "mean_abs_rel_error": 0.06931469982065805,
++       "complete_cycle_mean_h": 18.381034482758775,
++       "complete_cycle_cv": 0.1796549184121285,
+        "km_undivided": {
+-        "20": 0.9667750394465687,
+-        "30": 0.4708672201315687
++        "20": 0.6342415061962844,
++        "30": 0.5004349088130643
+        }
+       }
+      ]
+@@ -330,7 +330,7 @@
+    "push_sites": 1.0,
+    "n_seed": 3000,
+    "days": 12,
+-   "wall_s": 172.4,
++   "wall_s": 180.8,
+    "day": [
+     0.0,
+     1.0,
+@@ -415,7 +415,7 @@
+    "push_sites": 2.0,
+    "n_seed": 3000,
+    "days": 12,
+-   "wall_s": 376.4,
++   "wall_s": 502.9,
+    "day": [
+     0.0,
+     1.0,
+@@ -500,7 +500,7 @@
+    "push_sites": 3.0,
+    "n_seed": 3000,
+    "days": 12,
+-   "wall_s": 628.4,
++   "wall_s": 780.9,
+    "day": [
+     0.0,
+     1.0,
+@@ -585,7 +585,7 @@
+    "push_sites": Infinity,
+    "n_seed": 3000,
+    "days": 6,
+-   "wall_s": 248.9,
++   "wall_s": 229.5,
+    "day": [
+     0.0,
+     1.0,
+diff --git a/benchmarks/cell/gdsc_validation_results.csv b/benchmarks/cell/gdsc_validation_results.csv
+index a76c2e7..39126b4 100644
+--- a/benchmarks/cell/gdsc_validation_results.csv
++++ b/benchmarks/cell/gdsc_validation_results.csv
+@@ -1,74 +1,74 @@
+ drug,cell_line,p53_functional,role,reference_kind,reference_ic50_uM,accept_lo_uM,accept_hi_uM,n_screens,predicted_ic50_uM,null_ic50_uM,fold_error,pass,null_pass,top_dose_uM,observed_sensitive,predicted_sensitive,class_correct,null_class_correct
+-cisplatin,A549,True,fit,value,9.7673,3.25577,29.3019,1,11.40466,9.7673,1.168,True,True,10.0,True,False,False,True
++cisplatin,A549,True,fit,value,9.7673,3.25577,29.3019,1,9.67404,9.7673,0.99,True,True,10.0,True,True,True,True
+ cisplatin,HCT116,True,held-out,lower_bound,10.0,3.33333,inf,3,11.51095,9.7673,,True,True,10.0,False,False,True,False
+-cisplatin,HT-1080,True,held-out,value,2.73752,0.91251,8.21256,2,9.58962,9.7673,3.503,False,False,10.0,True,True,True,True
++cisplatin,HT-1080,True,held-out,value,2.73752,0.91251,8.21256,2,10.02961,9.7673,3.664,False,False,10.0,True,False,False,True
+ cisplatin,HT-29,False,held-out,lower_bound,10.0,3.33333,inf,3,14.37931,9.7673,,True,True,10.0,False,False,True,False
+-cisplatin,HeLa,True,held-out,value,6.8657,2.28857,20.5971,1,14.57498,9.7673,2.123,True,True,10.0,True,False,False,True
+-cisplatin,MCF7,True,held-out,lower_bound,10.0,3.33333,inf,3,11.29875,9.7673,,True,True,10.0,False,False,True,False
+-cisplatin,MDA-MB-231,False,held-out,lower_bound,10.0,3.33333,inf,3,14.3845,9.7673,,True,True,10.0,False,False,True,False
++cisplatin,HeLa,True,held-out,value,6.8657,2.28857,20.5971,1,14.75121,9.7673,2.149,True,True,10.0,True,False,False,True
++cisplatin,MCF7,True,held-out,lower_bound,10.0,3.33333,inf,3,11.248,9.7673,,True,True,10.0,False,False,True,False
++cisplatin,MDA-MB-231,False,held-out,lower_bound,10.0,3.33333,inf,3,14.58441,9.7673,,True,True,10.0,False,False,True,False
+ cisplatin,MDA-MB-468,False,held-out,value,3.09917,1.03306,9.2975,3,15.40541,9.7673,4.971,False,False,10.0,True,False,False,True
+ cisplatin,MIA-PaCa-2,False,held-out,value,1.95483,0.65161,5.8645,2,13.87715,9.7673,7.099,False,False,10.0,True,False,False,True
+ cisplatin,T47D,False,held-out,lower_bound,10.0,3.33333,inf,3,15.39927,9.7673,,True,True,10.0,False,False,True,False
+-cisplatin,U-2-OS,True,held-out,value,5.9075,1.96917,17.7225,1,11.4056,9.7673,1.931,True,True,10.0,True,False,False,True
++cisplatin,U-2-OS,True,held-out,value,5.9075,1.96917,17.7225,1,11.37957,9.7673,1.926,True,True,10.0,True,False,False,True
+ doxorubicin,A549,True,fit,value,0.10809,0.03603,0.32426,2,0.06078,0.05743,0.562,True,True,5.0,True,True,True,True
+-doxorubicin,HCT116,True,held-out,value,0.08344,0.02781,0.25033,2,0.08984,0.05743,1.077,True,True,5.0,True,True,True,True
++doxorubicin,HCT116,True,held-out,value,0.08344,0.02781,0.25033,2,0.08733,0.05743,1.047,True,True,5.0,True,True,True,True
+ doxorubicin,HT-1080,True,held-out,value,0.01389,0.00463,0.04166,2,0.05632,0.05743,4.055,False,False,5.0,True,True,True,True
+ doxorubicin,HT-29,False,held-out,value,0.14565,0.04855,0.43694,2,0.08685,0.05743,0.596,True,True,5.0,True,True,True,True
+-doxorubicin,HeLa,True,held-out,value,0.1158,0.0386,0.34739,2,0.32566,0.05743,2.812,True,True,5.0,True,True,True,True
++doxorubicin,HeLa,True,held-out,value,0.1158,0.0386,0.34739,2,0.34397,0.05743,2.97,True,True,5.0,True,True,True,True
+ doxorubicin,MCF7,True,fit,value,0.03051,0.01,0.0931,2,0.05773,0.05743,1.892,True,True,5.0,True,True,True,True
+-doxorubicin,MDA-MB-231,False,held-out,value,0.1081,0.03603,0.3243,1,0.07996,0.05743,0.74,True,True,5.0,True,True,True,True
++doxorubicin,MDA-MB-231,False,held-out,value,0.1081,0.03603,0.3243,1,0.08642,0.05743,0.799,True,True,5.0,True,True,True,True
+ doxorubicin,MDA-MB-468,False,held-out,value,0.07535,0.02512,0.22604,2,0.12173,0.05743,1.616,True,True,5.0,True,True,True,True
+ doxorubicin,MIA-PaCa-2,False,held-out,value,0.05476,0.01825,0.16427,2,0.07989,0.05743,1.459,True,True,5.0,True,True,True,True
+-doxorubicin,T47D,False,held-out,value,0.4645,0.15483,1.39349,2,0.08148,0.05743,0.175,False,False,5.0,True,True,True,True
++doxorubicin,T47D,False,held-out,value,0.4645,0.15483,1.39349,2,0.10007,0.05743,0.215,False,False,5.0,True,True,True,True
+ doxorubicin,U-2-OS,True,held-out,value,0.13885,0.046,0.4191,2,0.15378,0.05743,1.108,True,True,5.0,True,True,True,True
+ paclitaxel,A549,True,fit,value,0.0115,0.00383,0.0345,1,0.02897,0.02792,2.519,True,True,0.1,True,True,True,True
+-paclitaxel,HCT116,True,held-out,value,0.0166,0.00553,0.0498,1,0.03822,0.02792,2.302,True,True,0.1,True,True,True,True
++paclitaxel,HCT116,True,held-out,value,0.0166,0.00553,0.0498,1,0.03783,0.02792,2.279,True,True,0.1,True,True,True,True
+ paclitaxel,HT-1080,True,held-out,value,0.0542,0.01807,0.1626,1,0.02913,0.02792,0.538,True,True,0.1,True,True,True,True
+-paclitaxel,HT-29,False,held-out,value,0.0107,0.00357,0.0321,1,0.02921,0.02792,2.73,True,True,0.1,True,True,True,True
+-paclitaxel,HeLa,True,held-out,value,0.0378,0.0126,0.1134,1,0.1021,0.02792,2.701,True,True,0.1,True,False,False,True
++paclitaxel,HT-29,False,held-out,value,0.0107,0.00357,0.0321,1,0.02988,0.02792,2.793,True,True,0.1,True,True,True,True
++paclitaxel,HeLa,True,held-out,value,0.0378,0.0126,0.1134,1,0.10487,0.02792,2.774,True,True,0.1,True,False,False,True
+ paclitaxel,MCF7,True,fit,value,0.0678,0.0226,0.2034,1,0.03,0.02792,0.442,True,True,0.1,True,True,True,True
+ paclitaxel,MDA-MB-231,False,held-out,value,0.0888,0.0296,0.2664,1,0.02808,0.02792,0.316,False,False,0.1,True,True,True,True
+-paclitaxel,MDA-MB-468,False,held-out,value,0.017,0.00567,0.051,1,0.04023,0.02792,2.367,True,True,0.1,True,True,True,True
+-paclitaxel,MIA-PaCa-2,False,held-out,value,0.0456,0.0152,0.1368,1,0.02767,0.02792,0.607,True,True,0.1,True,True,True,True
+-paclitaxel,T47D,False,held-out,value,0.0922,0.03073,0.2766,1,0.0299,0.02792,0.324,False,False,0.1,True,True,True,True
+-paclitaxel,U-2-OS,True,held-out,value,0.0574,0.01913,0.1722,1,0.06342,0.02792,1.105,True,True,0.1,True,True,True,True
+-etoposide,A549,True,fit,value,0.9508,0.31693,2.8524,1,1.07366,0.95931,1.129,True,True,16.0,True,True,True,True
+-etoposide,HCT116,True,held-out,value,0.8065,0.26883,2.4195,1,1.36197,0.95931,1.689,True,True,16.0,True,True,True,True
++paclitaxel,MDA-MB-468,False,held-out,value,0.017,0.00567,0.051,1,0.03969,0.02792,2.335,True,True,0.1,True,True,True,True
++paclitaxel,MIA-PaCa-2,False,held-out,value,0.0456,0.0152,0.1368,1,0.02883,0.02792,0.632,True,True,0.1,True,True,True,True
++paclitaxel,T47D,False,held-out,value,0.0922,0.03073,0.2766,1,0.0295,0.02792,0.32,False,False,0.1,True,True,True,True
++paclitaxel,U-2-OS,True,held-out,value,0.0574,0.01913,0.1722,1,0.06305,0.02792,1.098,True,True,0.1,True,True,True,True
++etoposide,A549,True,fit,value,0.9508,0.31693,2.8524,1,1.04813,0.95931,1.102,True,True,16.0,True,True,True,True
++etoposide,HCT116,True,held-out,value,0.8065,0.26883,2.4195,1,1.33752,0.95931,1.658,True,True,16.0,True,True,True,True
+ etoposide,HT-1080,True,held-out,value,0.1228,0.04093,0.3684,1,0.98254,0.95931,8.001,False,False,16.0,True,True,True,True
+-etoposide,HT-29,False,held-out,value,2.0475,0.6825,6.1425,1,1.30662,0.95931,0.638,True,True,16.0,True,True,True,True
+-etoposide,HeLa,True,held-out,value,1.1979,0.3993,3.5937,1,4.34455,0.95931,3.627,False,True,16.0,True,True,True,True
++etoposide,HT-29,False,held-out,value,2.0475,0.6825,6.1425,1,1.39495,0.95931,0.681,True,True,16.0,True,True,True,True
++etoposide,HeLa,True,held-out,value,1.1979,0.3993,3.5937,1,4.50216,0.95931,3.758,False,True,16.0,True,True,True,True
+ etoposide,MCF7,True,fit,value,0.9679,0.32263,2.9037,1,0.9559,0.95931,0.988,True,True,16.0,True,True,True,True
+-etoposide,MDA-MB-231,False,held-out,value,6.0628,2.02093,18.1884,1,1.45312,0.95931,0.24,False,False,16.0,True,True,True,True
++etoposide,MDA-MB-231,False,held-out,value,6.0628,2.02093,18.1884,1,1.45506,0.95931,0.24,False,False,16.0,True,True,True,True
+ etoposide,MDA-MB-468,False,held-out,value,1.6859,0.56197,5.0577,1,1.91126,0.95931,1.134,True,True,16.0,True,True,True,True
+ etoposide,MIA-PaCa-2,False,held-out,value,2.4768,0.8256,7.4304,1,1.46538,0.95931,0.592,True,True,16.0,True,True,True,True
+-etoposide,T47D,False,held-out,value,6.9497,2.31657,20.8491,1,1.32805,0.95931,0.191,False,False,16.0,True,True,True,True
+-sn-38,A549,True,fit,value,0.01834,0.00611,0.05501,2,0.01223,0.01342,0.667,True,True,10.0,True,True,True,True
++etoposide,T47D,False,held-out,value,6.9497,2.31657,20.8491,1,1.49727,0.95931,0.215,False,False,16.0,True,True,True,True
++sn-38,A549,True,fit,value,0.01834,0.00611,0.05501,2,0.01434,0.01342,0.782,True,True,10.0,True,True,True,True
+ sn-38,HCT116,True,held-out,value,0.01284,0.00428,0.03853,3,0.01572,0.01342,1.224,True,True,10.0,True,True,True,True
+-sn-38,HT-1080,True,held-out,value,0.00399,0.0008,0.0723,3,0.0123,0.01342,3.082,True,True,10.0,True,True,True,True
+-sn-38,HT-29,False,held-out,value,0.03893,0.01298,0.11678,3,0.02349,0.01342,0.603,True,True,10.0,True,True,True,True
+-sn-38,HeLa,True,held-out,value,0.00109,0.0002,0.0059,2,0.02495,0.01342,22.967,False,False,10.0,True,True,True,True
++sn-38,HT-1080,True,held-out,value,0.00399,0.0008,0.0723,3,0.01397,0.01342,3.499,True,True,10.0,True,True,True,True
++sn-38,HT-29,False,held-out,value,0.03893,0.01298,0.11678,3,0.02425,0.01342,0.623,True,True,10.0,True,True,True,True
++sn-38,HeLa,True,held-out,value,0.00109,0.0002,0.0059,2,0.04206,0.01342,38.722,False,False,10.0,True,True,True,True
+ sn-38,MCF7,True,fit,value,0.00983,0.00328,0.0364,3,0.01317,0.01342,1.341,True,True,10.0,True,True,True,True
+-sn-38,MDA-MB-231,False,held-out,value,0.01763,0.00588,0.0529,3,0.02392,0.01342,1.356,True,True,10.0,True,True,True,True
+-sn-38,MDA-MB-468,False,held-out,value,0.00564,0.00188,0.01693,3,0.02352,0.01342,4.167,False,True,10.0,True,True,True,True
+-sn-38,MIA-PaCa-2,False,held-out,value,0.00449,0.0015,0.01347,2,0.02407,0.01342,5.36,False,True,10.0,True,True,True,True
++sn-38,MDA-MB-231,False,held-out,value,0.01763,0.00588,0.0529,3,0.02402,0.01342,1.362,True,True,10.0,True,True,True,True
++sn-38,MDA-MB-468,False,held-out,value,0.00564,0.00188,0.01693,3,0.02457,0.01342,4.354,False,True,10.0,True,True,True,True
++sn-38,MIA-PaCa-2,False,held-out,value,0.00449,0.0015,0.01347,2,0.02566,0.01342,5.714,False,True,10.0,True,True,True,True
+ sn-38,T47D,False,held-out,value,0.02498,0.00833,0.07495,2,0.02498,0.01342,1.0,True,True,10.0,True,True,True,True
+ sn-38,U-2-OS,True,held-out,value,0.07341,0.0113,2.0841,3,0.01299,0.01342,0.177,True,True,10.0,True,True,True,True
+ gemcitabine,A549,True,fit,value,0.01734,0.00578,0.05203,3,0.02385,0.02271,1.375,True,True,10.0,True,True,True,True
+-gemcitabine,HCT116,True,held-out,value,0.02566,0.0048,0.1162,3,0.02222,0.02271,0.866,True,True,10.0,True,True,True,True
++gemcitabine,HCT116,True,held-out,value,0.02566,0.0048,0.1162,3,0.02393,0.02271,0.933,True,True,10.0,True,True,True,True
+ gemcitabine,HT-1080,True,held-out,value,0.02387,0.0039,0.8716,3,0.02159,0.02271,0.905,True,True,10.0,True,True,True,True
+-gemcitabine,HT-29,False,held-out,value,0.04329,0.0052,0.5475,3,0.03896,0.02271,0.9,True,True,10.0,True,True,True,True
+-gemcitabine,HeLa,True,held-out,value,0.04096,0.0097,0.173,2,0.04298,0.02271,1.049,True,True,10.0,True,True,True,True
+-gemcitabine,MCF7,True,fit,value,0.02974,0.0027,1.2028,3,0.01978,0.02271,0.665,True,True,10.0,True,True,True,True
++gemcitabine,HT-29,False,held-out,value,0.04329,0.0052,0.5475,3,0.03933,0.02271,0.909,True,True,10.0,True,True,True,True
++gemcitabine,HeLa,True,held-out,value,0.04096,0.0097,0.173,2,0.07285,0.02271,1.778,True,True,10.0,True,True,True,True
++gemcitabine,MCF7,True,fit,value,0.02974,0.0027,1.2028,3,0.02181,0.02271,0.733,True,True,10.0,True,True,True,True
+ gemcitabine,MDA-MB-231,False,held-out,value,0.08191,0.0128,1.4312,3,0.04662,0.02271,0.569,True,True,10.0,True,True,True,True
+ gemcitabine,MDA-MB-468,False,held-out,value,0.03849,0.01283,0.1654,3,0.04445,0.02271,1.155,True,True,10.0,True,True,True,True
+ gemcitabine,MIA-PaCa-2,False,held-out,value,0.04701,0.01567,0.1771,3,0.04701,0.02271,1.0,True,True,10.0,True,True,True,True
+ gemcitabine,T47D,False,held-out,lower_bound,10.0,3.33333,inf,3,0.04568,0.02271,,False,False,10.0,False,True,False,False
+ gemcitabine,U-2-OS,True,held-out,value,0.011,0.00367,0.033,1,0.0232,0.02271,2.109,True,True,10.0,True,True,True,True
+-5-fluorouracil,A549,True,fit,value,9.2776,3.09253,27.8328,1,10.23831,9.2776,1.104,True,True,32.0,True,True,True,True
+-5-fluorouracil,HCT116,True,held-out,value,6.36284,2.12095,19.08852,2,9.17787,9.2776,1.442,True,True,32.0,True,True,True,True
++5-fluorouracil,A549,True,fit,value,9.2776,3.09253,27.8328,1,10.09406,9.2776,1.088,True,True,32.0,True,True,True,True
++5-fluorouracil,HCT116,True,held-out,value,6.36284,2.12095,19.08852,2,9.67095,9.2776,1.52,True,True,32.0,True,True,True,True
+ 5-fluorouracil,HT-1080,True,held-out,lower_bound,32.0,10.66667,inf,2,9.06088,9.2776,,False,False,32.0,False,True,False,False
+ 5-fluorouracil,HT-29,False,held-out,value,9.77067,3.25689,29.312,2,15.04611,9.2776,1.54,True,True,32.0,True,True,True,True
+-5-fluorouracil,HeLa,True,held-out,lower_bound,32.0,10.66667,inf,2,19.43047,9.2776,,True,False,32.0,False,True,False,False
++5-fluorouracil,HeLa,True,held-out,lower_bound,32.0,10.66667,inf,2,23.09316,9.2776,,True,False,32.0,False,True,False,False
+ 5-fluorouracil,MCF7,True,held-out,lower_bound,32.0,10.66667,inf,2,9.03165,9.2776,,False,False,32.0,False,True,False,False
+ 5-fluorouracil,MDA-MB-231,False,held-out,lower_bound,32.0,10.66667,inf,2,14.70384,9.2776,,True,False,32.0,False,True,False,False
+ 5-fluorouracil,MDA-MB-468,False,held-out,value,20.1175,6.70583,60.3525,1,20.1175,9.2776,1.0,True,True,32.0,True,True,True,True
+@@ -78,31 +78,31 @@ gemcitabine,U-2-OS,True,held-out,value,0.011,0.00367,0.033,1,0.0232,0.02271,2.10
+ docetaxel,A549,True,fit,value,0.00269,0.0009,0.00806,3,0.01041,0.01083,3.872,False,False,3.0,True,True,True,True
+ docetaxel,HCT116,True,held-out,value,0.00303,0.00101,0.00909,3,0.01482,0.01083,4.889,False,False,3.0,True,True,True,True
+ docetaxel,HT-1080,True,held-out,value,0.00687,0.0005,0.0558,3,0.01159,0.01083,1.688,True,True,3.0,True,True,True,True
+-docetaxel,HT-29,False,held-out,value,0.00412,0.00137,0.01235,3,0.01124,0.01083,2.73,True,True,3.0,True,True,True,True
+-docetaxel,HeLa,True,held-out,value,0.00451,0.0015,0.01353,3,0.04092,0.01083,9.072,False,True,3.0,True,True,True,True
++docetaxel,HT-29,False,held-out,value,0.00412,0.00137,0.01235,3,0.01163,0.01083,2.825,True,True,3.0,True,True,True,True
++docetaxel,HeLa,True,held-out,value,0.00451,0.0015,0.01353,3,0.04056,0.01083,8.99,False,True,3.0,True,True,True,True
+ docetaxel,MCF7,True,fit,value,0.04363,0.0017,1.1198,2,0.01147,0.01083,0.263,True,True,3.0,True,True,True,True
+ docetaxel,MDA-MB-231,False,held-out,value,0.0058,0.00193,0.0174,1,0.01169,0.01083,2.015,True,True,3.0,True,True,True,True
+-docetaxel,MDA-MB-468,False,held-out,value,0.00433,0.00144,0.013,3,0.01402,0.01083,3.236,False,True,3.0,True,True,True,True
+-docetaxel,MIA-PaCa-2,False,held-out,value,0.01347,0.003,0.0605,2,0.0101,0.01083,0.75,True,True,3.0,True,True,True,True
++docetaxel,MDA-MB-468,False,held-out,value,0.00433,0.00144,0.013,3,0.01539,0.01083,3.551,False,True,3.0,True,True,True,True
++docetaxel,MIA-PaCa-2,False,held-out,value,0.01347,0.003,0.0605,2,0.0106,0.01083,0.787,True,True,3.0,True,True,True,True
+ docetaxel,T47D,False,held-out,value,0.02794,0.0042,0.4556,3,0.01169,0.01083,0.418,True,True,3.0,True,True,True,True
+ docetaxel,U-2-OS,True,held-out,value,0.02111,0.0026,0.1714,2,0.02459,0.01083,1.165,True,True,3.0,True,True,True,True
+-vinorelbine,A549,True,fit,value,0.01545,0.00515,0.04635,2,0.02091,0.01962,1.353,True,True,0.1,True,True,True,True
+-vinorelbine,HCT116,True,held-out,value,0.0045,0.0015,0.0135,2,0.02763,0.01962,6.14,False,False,0.1,True,True,True,True
+-vinorelbine,HT-1080,True,held-out,value,0.01259,0.0029,0.0547,2,0.02096,0.01962,1.664,True,True,0.1,True,True,True,True
+-vinorelbine,HT-29,False,held-out,value,0.00604,0.00201,0.01811,2,0.01922,0.01962,3.183,False,False,0.1,True,True,True,True
+-vinorelbine,HeLa,True,held-out,value,0.0276,0.0092,0.0828,1,0.06906,0.01962,2.502,True,True,0.1,True,True,True,True
+-vinorelbine,MCF7,True,fit,value,0.02491,0.0065,0.0955,2,0.01827,0.01962,0.733,True,True,0.1,True,True,True,True
++vinorelbine,A549,True,fit,value,0.01545,0.00515,0.04635,2,0.02063,0.01962,1.335,True,True,0.1,True,True,True,True
++vinorelbine,HCT116,True,held-out,value,0.0045,0.0015,0.0135,2,0.02712,0.01962,6.026,False,False,0.1,True,True,True,True
++vinorelbine,HT-1080,True,held-out,value,0.01259,0.0029,0.0547,2,0.02079,0.01962,1.651,True,True,0.1,True,True,True,True
++vinorelbine,HT-29,False,held-out,value,0.00604,0.00201,0.01811,2,0.02045,0.01962,3.387,False,False,0.1,True,True,True,True
++vinorelbine,HeLa,True,held-out,value,0.0276,0.0092,0.0828,1,0.07079,0.01962,2.565,True,True,0.1,True,True,True,True
++vinorelbine,MCF7,True,fit,value,0.02491,0.0065,0.0955,2,0.01931,0.01962,0.775,True,True,0.1,True,True,True,True
+ vinorelbine,MDA-MB-231,False,held-out,value,0.04968,0.01656,0.14904,2,0.02126,0.01962,0.428,True,True,0.1,True,True,True,True
+ vinorelbine,MDA-MB-468,False,held-out,value,0.01856,0.0046,0.0749,2,0.02802,0.01962,1.51,True,True,0.1,True,True,True,True
+-vinorelbine,MIA-PaCa-2,False,held-out,value,0.0053,0.00177,0.0159,1,0.01845,0.01962,3.481,False,False,0.1,True,True,True,True
+-vinorelbine,T47D,False,held-out,lower_bound,0.1,0.03333,inf,2,0.02154,0.01962,,False,False,0.1,False,True,False,False
+-vinorelbine,U-2-OS,True,held-out,value,0.081,0.027,0.243,1,0.04494,0.01962,0.555,True,False,0.1,True,True,True,True
++vinorelbine,MIA-PaCa-2,False,held-out,value,0.0053,0.00177,0.0159,1,0.01928,0.01962,3.637,False,False,0.1,True,True,True,True
++vinorelbine,T47D,False,held-out,lower_bound,0.1,0.03333,inf,2,0.01961,0.01962,,False,False,0.1,False,True,False,False
++vinorelbine,U-2-OS,True,held-out,value,0.081,0.027,0.243,1,0.04464,0.01962,0.551,True,False,0.1,True,True,True,True
+ nutlin-3a,A549,True,fit,value,5.39908,1.79969,16.19725,2,5.81932,5.46711,1.078,True,True,10.0,True,True,True,True
+ nutlin-3a,HCT116,True,held-out,value,4.57059,1.52353,13.71177,2,6.0247,5.46711,1.318,True,True,10.0,True,True,True,True
+ nutlin-3a,HT-1080,True,held-out,value,4.5845,1.52817,13.7535,1,6.0375,5.46711,1.317,True,True,10.0,True,True,True,True
+ nutlin-3a,HT-29,False,held-out,lower_bound,10.0,3.33333,inf,2,inf,5.46711,,True,True,10.0,False,False,True,False
+ nutlin-3a,HeLa,True,held-out,lower_bound,10.0,3.33333,inf,2,inf,5.46711,,True,True,10.0,False,False,True,False
+-nutlin-3a,MCF7,True,fit,value,5.536,1.84533,16.608,1,4.35541,5.46711,0.787,True,True,10.0,True,True,True,True
++nutlin-3a,MCF7,True,fit,value,5.536,1.84533,16.608,1,5.28288,5.46711,0.954,True,True,10.0,True,True,True,True
+ nutlin-3a,MDA-MB-231,False,held-out,lower_bound,10.0,3.33333,inf,2,inf,5.46711,,True,True,10.0,False,False,True,False
+ nutlin-3a,MDA-MB-468,False,held-out,lower_bound,10.0,3.33333,inf,2,inf,5.46711,,True,True,10.0,False,False,True,False
+ nutlin-3a,MIA-PaCa-2,False,held-out,lower_bound,10.0,3.33333,inf,2,inf,5.46711,,True,True,10.0,False,False,True,False
+diff --git a/benchmarks/cell/gdsc_validation_summary.json b/benchmarks/cell/gdsc_validation_summary.json
+index 4d72671..a642760 100644
+--- a/benchmarks/cell/gdsc_validation_summary.json
++++ b/benchmarks/cell/gdsc_validation_summary.json
+@@ -54,23 +54,25 @@
+     "het_sigma": 0.3,
+     "p73_gain": 0.1,
+     "p73_atm_on": 0.5,
+-    "cycle_cv": 0.0
++    "cycle_cv": 0.0,
++    "quiescent_fraction": 0.0,
++    "quiescence_exit_per_h": 0.0
+   },
+   "drugs": {
+     "cisplatin": {
+       "fit_target": "k_damage_per_uM_h",
+-      "gain": 0.001177685138145445,
++      "gain": 0.0011843241922848732,
+       "per_line_gain": {
+-        "A549": 0.0011776851381454447
++        "A549": 0.0011843241922848734
+       },
+       "fit_on": [
+         "A549"
+       ],
+-      "spearman_vs_reference": -0.028571428571428574,
++      "spearman_vs_reference": -0.2571428571428572,
+       "null_ic50_uM": 9.7673,
+-      "log10_rmse_model": 0.532133998750494,
++      "log10_rmse_model": 0.5352498871524795,
+       "log10_rmse_null": 0.4306877970311103,
+-      "log10_rmse_model_heldout": 0.5821458947304452,
++      "log10_rmse_model_heldout": 0.5863339132647204,
+       "log10_rmse_null_heldout": 0.4717948433522912,
+       "n_heldout_in_range": 5,
+       "pass": 8,
+@@ -91,11 +93,11 @@
+         "A549",
+         "MCF7"
+       ],
+-      "spearman_vs_reference": 0.5818181818181819,
++      "spearman_vs_reference": 0.6454545454545455,
+       "null_ic50_uM": 0.05742796304794019,
+-      "log10_rmse_model": 0.3596447897430976,
++      "log10_rmse_model": 0.34501362596089563,
+       "log10_rmse_null": 0.41279074667168153,
+-      "log10_rmse_model_heldout": 0.37764904784511577,
++      "log10_rmse_model_heldout": 0.3605797077003625,
+       "log10_rmse_null_heldout": 0.43760321576764993,
+       "n_heldout_in_range": 9,
+       "pass": 9,
+@@ -116,11 +118,11 @@
+         "A549",
+         "MCF7"
+       ],
+-      "spearman_vs_reference": -0.06363636363636364,
++      "spearman_vs_reference": -0.19090909090909092,
+       "null_ic50_uM": 0.02792310870945425,
+-      "log10_rmse_model": 0.37475158220150234,
++      "log10_rmse_model": 0.37589174605550096,
+       "log10_rmse_null": 0.34811187088143924,
+-      "log10_rmse_model_heldout": 0.3739327564764583,
++      "log10_rmse_model_heldout": 0.3753288598883951,
+       "log10_rmse_null_heldout": 0.33930336352508045,
+       "n_heldout_in_range": 9,
+       "pass": 9,
+@@ -141,11 +143,11 @@
+         "A549",
+         "MCF7"
+       ],
+-      "spearman_vs_reference": 0.406060606060606,
++      "spearman_vs_reference": 0.6,
+       "null_ic50_uM": 0.9593118992277746,
+-      "log10_rmse_model": 0.46666856827374376,
++      "log10_rmse_model": 0.4590953140588796,
+       "log10_rmse_null": 0.5030758538502763,
+-      "log10_rmse_model_heldout": 0.5214140264719362,
++      "log10_rmse_model_heldout": 0.5130624024434982,
+       "log10_rmse_null_heldout": 0.5624525739205628,
+       "n_heldout_in_range": 8,
+       "pass": 6,
+@@ -166,11 +168,11 @@
+         "A549",
+         "MCF7"
+       ],
+-      "spearman_vs_reference": -0.19090909090909092,
++      "spearman_vs_reference": -0.3727272727272728,
+       "null_ic50_uM": 0.013423013820692529,
+-      "log10_rmse_model": 0.5792083972456403,
++      "log10_rmse_model": 0.6364554449998612,
+       "log10_rmse_null": 0.49697337587872115,
+-      "log10_rmse_model_heldout": 0.6362391579515823,
++      "log10_rmse_model_heldout": 0.7014490329827349,
+       "log10_rmse_null_heldout": 0.5457033321383423,
+       "n_heldout_in_range": 9,
+       "pass": 8,
+@@ -191,11 +193,11 @@
+         "A549",
+         "MCF7"
+       ],
+-      "spearman_vs_reference": 0.7212121212121211,
++      "spearman_vs_reference": 0.7575757575757575,
+       "null_ic50_uM": 0.022711168695988663,
+-      "log10_rmse_model": 0.1509080489787451,
++      "log10_rmse_model": 0.1653036126798696,
+       "log10_rmse_null": 0.2714049671453164,
+-      "log10_rmse_model_heldout": 0.1488276463743022,
++      "log10_rmse_model_heldout": 0.17173645394477702,
+       "log10_rmse_null_heldout": 0.2977331476213294,
+       "n_heldout_in_range": 8,
+       "pass": 10,
+@@ -216,9 +218,9 @@
+       ],
+       "spearman_vs_reference": 0.942857142857143,
+       "null_ic50_uM": 9.2776,
+-      "log10_rmse_model": 0.18484357896992226,
++      "log10_rmse_model": 0.18808746958289654,
+       "log10_rmse_null": 0.2667530009354992,
+-      "log10_rmse_model_heldout": 0.20157960355609622,
++      "log10_rmse_model_heldout": 0.20538724545011924,
+       "log10_rmse_null_heldout": 0.2922132717891392,
+       "n_heldout_in_range": 5,
+       "pass": 9,
+@@ -239,11 +241,11 @@
+         "A549",
+         "MCF7"
+       ],
+-      "spearman_vs_reference": 0.02727272727272728,
++      "spearman_vs_reference": 0.0,
+       "null_ic50_uM": 0.010827941243526276,
+-      "log10_rmse_model": 0.5074390353874871,
++      "log10_rmse_model": 0.5113607346358123,
+       "log10_rmse_null": 0.41476544675667815,
+-      "log10_rmse_model_heldout": 0.4888070878212088,
++      "log10_rmse_model_heldout": 0.4937769414482049,
+       "log10_rmse_null_heldout": 0.3590487718762949,
+       "n_heldout_in_range": 9,
+       "pass": 7,
+@@ -264,11 +266,11 @@
+         "A549",
+         "MCF7"
+       ],
+-      "spearman_vs_reference": 0.4424242424242424,
++      "spearman_vs_reference": 0.5030303030303029,
+       "null_ic50_uM": 0.019619285602176125,
+-      "log10_rmse_model": 0.40543735938793585,
++      "log10_rmse_model": 0.41002517424468504,
+       "log10_rmse_null": 0.4021193855392981,
+-      "log10_rmse_model_heldout": 0.448385327757634,
++      "log10_rmse_model_heldout": 0.4545888188376532,
+       "log10_rmse_null_heldout": 0.4465819123665513,
+       "n_heldout_in_range": 8,
+       "pass": 7,
+@@ -291,7 +293,7 @@
+       ],
+       "spearman_vs_reference": -0.3,
+       "null_ic50_uM": 5.467113706987059,
+-      "log10_rmse_model": 0.1881306491614503,
++      "log10_rmse_model": 0.18249824839185502,
+       "log10_rmse_null": 0.1627055993458662,
+       "log10_rmse_model_heldout": 0.23456006360818732,
+       "log10_rmse_null_heldout": 0.2100050897293149,
+@@ -304,14 +306,14 @@
+       "n_observed_resistant": 6
+     }
+   },
+-  "paired_vs_null_wins": 34,
+-  "paired_vs_null_losses": 39,
+-  "paired_vs_null_p": 0.6399729317539424,
++  "paired_vs_null_wins": 32,
++  "paired_vs_null_losses": 41,
++  "paired_vs_null_p": 0.3491818381705883,
+   "discriminates_lines": false,
+   "held_out_pass": 67,
+   "held_out_null_pass": 68,
+   "held_out_n": 91,
+-  "held_out_class_correct": 79,
++  "held_out_class_correct": 78,
+   "held_out_null_class_correct": 73,
+   "drugs_beating_null_heldout": [
+     "doxorubicin",
+@@ -320,5 +322,5 @@
+     "5-fluorouracil"
+   ],
+   "exit_gate_met": false,
+-  "wall_s": 1434.3
++  "wall_s": 4324.3
+ }
+diff --git a/cellsim/cell/dish.py b/cellsim/cell/dish.py
+index dd5a3ae..cc00086 100644
+--- a/cellsim/cell/dish.py
++++ b/cellsim/cell/dish.py
+@@ -260,9 +260,10 @@ def __init__(self, line: CellLine, drug=None, *, n_seed: int = 100,
+             raise ValueError(f"{n_seed} cells do not fit on a {self.shape} lattice")
+ 
+         # Initial cells: the engine's own asynchronous population.
++        from cellsim.cell.engine import _quiescent_fraction
+         pop = make_population(n_seed, 0.0, self.rng, het_sigma=p.het_sigma,
+                               n_drugs=self.n_drugs, cycle_cv=p.cycle_cv,
+-                              quiescent_fraction=p.quiescent_fraction)
++                              quiescent_fraction=_quiescent_fraction(line, p))
+         self.cells = pop
+         self.lineage = np.arange(n_seed)
+         # Birth time of each cell; -inf for the founders, whose cycle began
+@@ -522,7 +523,8 @@ def _divide(self, divide: np.ndarray) -> None:
+             # Each daughter decides independently, so the sister of a
+             # quiescent cell is not automatically quiescent — which is the
+             # observation the bifurcation was described from.
+-            draw = self.rng.random(len(idx)) < self.p.quiescent_fraction
++            from cellsim.cell.engine import _quiescent_fraction
++            draw = self.rng.random(len(idx)) < _quiescent_fraction(self.line, self.p)
+             c.quiescent = np.concatenate([c.quiescent, draw])
+         self.lineage = np.concatenate([self.lineage, self.lineage[idx]])
+         self.birth_t = np.concatenate([self.birth_t, np.full(len(idx), self.t_h)])
+@@ -582,7 +584,7 @@ def advance(self, dose_fn: Optional[DoseFn]) -> None:
+             _rk4(self.cells.Y, self._aux(), self.line, self.drugs or None, self.p, self.k_cyc, dp.dt_h)
+             self.t_h += dp.dt_h
+             divide, die = _cell_events(self.cells, self.drugs or None, self.p, dp.dt_h,
+-                                       rng=self.rng)
++                                       rng=self.rng, line=self.line)
+             if die.any():
+                 self._bury(die, APOPTOTIC)
+             if divide.any():
+diff --git a/cellsim/cell/engine.py b/cellsim/cell/engine.py
+index 4ba120a..d9cb6ff 100644
+--- a/cellsim/cell/engine.py
++++ b/cellsim/cell/engine.py
+@@ -500,8 +500,18 @@ def make_population(n_cells: int, C_out: Union[float, np.ndarray], rng: np.rando
+                       cycle_rate=cycle_rate, quiescent=quiescent)
+ 
+ 
++def _quiescent_fraction(line: CellLine, p: Params) -> float:
++    """The line's own quiescent fraction, unless Params overrides it.
++
++    It belongs to the line — it is a property of those cells in that
++    culture — but an experiment sweeping the value needs one place to set
++    it, so a non-zero Params value wins."""
++    return p.quiescent_fraction if p.quiescent_fraction > 0 else line.quiescent_fraction
++
++
+ def _cell_events(pop: "Population", drug, p: Params, dt_h: float,
+-                 rng: Optional[np.random.Generator] = None) -> tuple[np.ndarray, np.ndarray]:
++                 rng: Optional[np.random.Generator] = None,
++                 line: Optional[CellLine] = None) -> tuple[np.ndarray, np.ndarray]:
+     """Mitosis, mitotic arrest, slippage and death after one integration
+     step, for any set of cells.
+ 
+@@ -544,9 +554,11 @@ def _cell_events(pop: "Population", drug, p: Params, dt_h: float,
+         pop.t_in_M[divide] = 0.0
+         # The bifurcation at mitotic exit: some of what leaves mitosis
+         # does not start the next cycle.
+-        if pop.quiescent is not None and p.quiescent_fraction > 0 and rng is not None:
++        q = (p.quiescent_fraction if line is None
++             else _quiescent_fraction(line, p))
++        if pop.quiescent is not None and q > 0 and rng is not None:
+             idx = np.flatnonzero(divide)
+-            pop.quiescent[idx] = rng.random(len(idx)) < p.quiescent_fraction
++            pop.quiescent[idx] = rng.random(len(idx)) < q
+     slip = pop.alive & arrested & (pop.t_in_M >= p.slippage_h)
+     if slip.any():
+         Y[slip, :7] = fresh_cycle_state()
+@@ -585,9 +597,9 @@ def simulate(line: CellLine, drug: Optional[Drug], C_out_uM: Union[float, np.nda
+     rng = np.random.default_rng(seed)
+     drugs = _as_drug_tuple(drug)
+     n_drugs = max(1, len(drugs))
++    q = _quiescent_fraction(line, p)
+     pop = make_population(n_cells, C_out_uM, rng, forced_D, het_sigma=p.het_sigma,
+-                          n_drugs=n_drugs, cycle_cv=p.cycle_cv,
+-                          quiescent_fraction=p.quiescent_fraction)
++                          n_drugs=n_drugs, cycle_cv=p.cycle_cv, quiescent_fraction=q)
+     if traits is not None:
+         pop.het_bcl2[:] = np.asarray(traits["bcl2"], float)
+         pop.het_uptake[:] = np.asarray(traits["uptake"], float)
+@@ -644,7 +656,7 @@ def _apply_dose(t_h: float) -> None:
+             _apply_dose(pop.t_h)               # aux["C_out"] is this same array
+         _rk4(pop.Y, aux, line, drug, p, k_cyc, dt_h)
+         pop.t_h += dt_h
+-        divide, die = _cell_events(pop, drug, p, dt_h, rng=rng)
++        divide, die = _cell_events(pop, drug, p, dt_h, rng=rng, line=line)
+         if divide.any():
+             pop.weight[divide] *= 2.0          # a representative cell stands for both daughters
+         if die.any():
+@@ -694,8 +706,9 @@ def ic50_from_curve(conc_uM: np.ndarray, viability: np.ndarray) -> float:
+ 
+ 
+ def ic50(line: CellLine, drug: Drug, *, guess_uM: float = 1.0, t_end_h: float = 72.0,
+-         n_cells_per_conc: int = 48, seed: int = 1, p: Params = Params(),
+-         k_cyc: Optional[float] = None, exposure_h: Optional[float] = None) -> float:
++         n_cells_per_conc: int = 48, seed: int = 1, n_seeds: int = 3,
++         p: Params = Params(), k_cyc: Optional[float] = None,
++         exposure_h: Optional[float] = None) -> float:
+     """The engine's continuous-exposure IC50 (µM) for one line and drug.
+ 
+     Two passes: a 17-point grid over eight decades around `guess_uM`
+@@ -704,7 +717,34 @@ def ic50(line: CellLine, drug: Drug, *, guess_uM: float = 1.0, t_end_h: float =
+     multiples of a drug's own potency, which keeps a design meaningful
+     when the library's fitted constants are refitted. `exposure_h` gives
+     the IC50 of a pulse washed out at that time and read at t_end_h; it
+-    is +inf when no concentration reaches half kill."""
++    is +inf when no concentration reaches half kill.
++
++    WHY THIS TAKES A MEDIAN. A single run of this is a random variable
++    with 10-20 % spread, and the spread does not shrink with more cells,
++    because a population's IC50 is set by WHICH RESISTANT LINEAGES were
++    drawn rather than by how many cells were counted — switch
++    `Params.het_sigma` to 0 and it collapses below 1 %
++    (docs/VALIDATION.md). So the remedy is more seeds, and the default is
++    the median of `n_seeds` consecutive ones starting at `seed`.
++
++    `n_seeds=1` restores the old single-run behaviour and costs a third
++    as much; `cellsim.api.ic50_spread` reports the spread itself when
++    what matters is how far the number could move."""
++    if n_seeds < 1:
++        raise ValueError(f"n_seeds must be at least 1, got {n_seeds}")
++    if n_seeds > 1:
++        vals = [ic50(line, drug, guess_uM=guess_uM, t_end_h=t_end_h,
++                     n_cells_per_conc=n_cells_per_conc, seed=seed + i, n_seeds=1, p=p,
++                     k_cyc=k_cyc, exposure_h=exposure_h) for i in range(n_seeds)]
++        finite = [v for v in vals if np.isfinite(v)]
++        # All-infinite means no concentration reached half kill in any
++        # run, which is an answer rather than a failure. A mixture is
++        # resolved by the median, as it would be for finite values.
++        if not finite:
++            return float("inf")
++        if len(finite) * 2 <= len(vals):
++            return float("inf")
++        return float(np.median(finite))
+     if k_cyc is None:
+         k_cyc = calibrate_cycle_scale(line, p)
+     coarse = guess_uM * np.logspace(-4, 4, 17)
+diff --git a/cellsim/cell/library.py b/cellsim/cell/library.py
+index fa0ba50..9af478f 100644
+--- a/cellsim/cell/library.py
++++ b/cellsim/cell/library.py
+@@ -61,6 +61,16 @@ class CellLine:
+     # why their wild-type TP53 neither rises under nutlin nor mounts a
+     # full damage response. 0 for HPV-negative lines.
+     p53_mdm2_independent_deg_per_h: float = 0.0
++    # Share of each generation that leaves mitosis into G0 rather than
++    # starting another cycle (Spencer et al. 2013 Cell 155:369). This is
++    # a property of the LINE and its culture conditions, so it lives here
++    # rather than in Params; `Params.quiescent_fraction` overrides it when
++    # an experiment wants to sweep the value.
++    #
++    # It is also the other half of `doubling_time_h`: a culture that is
++    # half quiescent doubles at half the rate its cycling cells divide,
++    # so the two must be set together or the population growth moves.
++    quiescent_fraction: float = 0.0
+     gdsc_name: str = ""              # name in GDSC tables, when it differs
+     source: str = ""
+ 
+@@ -126,16 +136,22 @@ class Drug:
+                       source="ATCC CCL-228 ~26 h; TP53 p.R273H + p.P309S (CVCL_0546). "
+                              "NOT screened in GDSC 8.4 (which has SW48 and SW620), so "
+                              "it has no IC50 reference here"),
+-    "HeLa": CellLine("HeLa", 31.0, True, "cervix",
++    # 19 h is the CYCLE time its individual cells take, with half of each
++    # generation going quiescent; together these reproduce the Cell
++    # Tracking Challenge movie on both axes, where the 31 h population
++    # figure used before matched the counts and made every single-cell
++    # cycle 1.6x too slow (docs/VALIDATION.md).
++    "HeLa": CellLine("HeLa", 19.0, True, "cervix", quiescent_fraction=0.50,
+                      efflux_level=9.79, p53_mdm2_independent_deg_per_h=10.0,
+                      source="Doubling 1.3 d (Cellosaurus CVCL_0030, PubMed 29156801; DSMZ "
+                             "~48 h); the Cell Tracking Challenge HeLa movie's own counts "
+                             "double every 27-31 h (scripts/ctc_reference.py). An earlier "
+                             "20 h here was the mean of its COMPLETE cycles, which a 46 h "
+-                            "movie biases short. TP53 wild-type but degraded by HPV18 "
+-                            "E6 independently of MDM2 (Hengstermann 2001); the E6 rate "
+-                            "holds p53 below its apoptotic threshold even with MDM2 "
+-                            "fully blocked"),
++                            "movie biases short — and the cycle time and the quiescent "
++                            "fraction are now set separately, which is what reproduces "
++                            "both. TP53 wild-type but degraded by HPV18 E6 independently "
++                            "of MDM2 (Hengstermann 2001); the E6 rate holds p53 below its "
++                            "apoptotic threshold even with MDM2 fully blocked"),
+ 
+     # ── Added 2026-10 to test the p53-independent death route against
+     # lines that played no part in choosing its parameter. Doubling
+diff --git a/cellsim/cli.py b/cellsim/cli.py
+index 0003d14..e6bce85 100644
+--- a/cellsim/cli.py
++++ b/cellsim/cli.py
+@@ -63,14 +63,19 @@
+ 
+ USAGE = """usage: cellsim <subcommand> [args...]
+ 
+-  Cell drug-response engine (Phase 1)
++  The CELL commands below need only NumPy and SciPy and work from a plain
++  `pip install cellsim`. Everything after them needs the chemistry stack
++  (RDKit, OpenMM, AutoDock Vina, xTB, fpocket, AmberTools), which is
++  conda-only:  mamba env create -f environment.yml && conda activate cellsim
++
++  Cell drug-response engine  — pip is enough
+     cell-sim      dose-response of one cell line to one drug -> viability + IC50
+     cell-stream   one population under a dosing schedule -> per-tick JSON Lines for a UI
+     dish          cells in space (monolayer or spheroid) -> per-cell JSON Lines for a UI
+     plate         your plate-reader export -> viability, IC50 with a CI, GR metrics
+     validate-gdsc fit one potency per drug on p53-wt lines, predict the rest vs GDSC
+ 
+-  Screening and triage
++  Screening and triage  — needs the conda environment
+     dock          batch docking screen -> ranked CSV ± MC error bars ± profile PNGs
+     dock-one      single-compound dock + viewer
+     off-target    one compound vs N receptors (selectivity)
+diff --git a/docs/PLAN.md b/docs/PLAN.md
+index 75447ce..6d57316 100644
+--- a/docs/PLAN.md
++++ b/docs/PLAN.md
+@@ -168,7 +168,7 @@ No UI work until this exists.
+ 
+    DECISION: per-line IC50 prediction is not a goal this engine can
+    reach with available inputs, and is dropped as the headline metric.
+-   Phase 3 confirmed this on ten drugs (34 wins to 39 losses over 91
++   Phase 3 confirmed this on ten drugs (32 wins to 41 losses over 91
+    held-out predictions) and found the exception it does NOT cover:
+    where the drug's target is itself part of the modelled mechanism —
+    an MDM2 inhibitor acting through p53 — the engine calls all eleven
+@@ -316,6 +316,30 @@ a cell biologist would hit it:
+   resistance range that pulsed and continuous selection actually produce
+   (2-8x; McDermott et al. 2014 Front Oncol 4:40).
+ 
++### Housekeeping that keeps the record honest
++
++Found the hard way, three times in one day, and worth fixing before it
++bites a fourth: a change lands in one place while a DERIVED ARTEFACT
++elsewhere goes on asserting the old world.
++
++* `benchmarks/cell/*.json` are outputs, not assertions, so nothing fails
++  when they go stale. Changing HeLa's parameters silently invalidated
++  `dish_validation.json`, which kept reporting figures measured under the
++  old ones.
++* `scripts/validate_gdsc.py` carries its own copy of the IC50 estimator,
++  so a change to `engine.ic50` left the largest published table untouched
++  while appearing to succeed.
++* A table of C50 figures went on quoting four significant figures after
++  the text around it said they were approximate.
++
++The fix is one target that regenerates every benchmark artefact and fails
++if the committed file disagrees with what the code now produces —
++`make validate`, or a CI job on a schedule, since the full set takes
++hours. Until it exists, every change to a cell line or an estimator means
++re-running `validate_gdsc.py`, `validate_dish.py`, `validate_plate_fit.py`
++and `validate_calibration.py` by hand, and the duplicate estimator should
++be unified away.
++
+ ### Phase 6 — the parts that make it a tool others use
+ 
+ - A notebook-first API (`cellsim.api`) that returns data frames, because
+diff --git a/docs/VALIDATION.md b/docs/VALIDATION.md
+index ef55d78..55ec1a2 100644
+--- a/docs/VALIDATION.md
++++ b/docs/VALIDATION.md
+@@ -197,8 +197,8 @@ held-out log10 RMSE 0.65 / 0.43 / 0.32 against the null's
+ 
+ ### Exit gate: NOT met
+ 
+-*Re-measured at ten drugs in Phase 3 (below): 34 wins to 39 losses over
+-91 held-out predictions, p = 0.64. The conclusion holds, and the larger
++*Re-measured at ten drugs in Phase 3 (below): 32 wins to 41 losses over
++91 held-out predictions, p = 0.35. The conclusion holds, and the larger
+ panel also found the one exception — a drug whose target is part of the
+ modelled mechanism, where the engine does call lines correctly.*
+ 
+@@ -694,18 +694,46 @@ cells are a mix of fast cyclers (complete cycles ~19 h) and a large
+ fraction that does not divide within the window — the proliferation /
+ quiescence decision at mitotic exit (Spencer et al. 2013 Cell 155:369).
+ 
+-**Now modelled, and it closes the gap** (`Params.quiescent_fraction`,
+-off by default). The fix needed two changes together, which is what made
+-the miss informative:
++**Now modelled** (`CellLine.quiescent_fraction`, 0 for every line but
++HeLa). The fix needed two changes together, which is what made the miss
++informative:
+ 
+-| | 20 h | 30 h | cells at 46 h |
+-|---|:-:|:-:|:-:|
+-| measured, sequence 01 | 0.77 | 0.51 | 137 |
+-| engine, 31 h cycle, no quiescence | 1.00 | 0.52 | 126 |
+-| engine, 19 h cycle + 50 % quiescent | **0.74** | **0.51** | **140** |
+-| measured, sequence 02 | 0.80 | 0.71 | 363 |
+-| engine, 31 h cycle, no quiescence | 0.94 | 0.38 | 385 |
+-| engine, 19 h cycle + 50 % quiescent | **0.72** | **0.63** | **364** |
++Re-measured through `scripts/validate_dish.py` with the library's new
++HeLa (five seeds per row), against the committed figures from before:
++
++| | undivided 20 h | 30 h | complete cycle | trajectory error |
++|---|:-:|:-:|:-:|:-:|
++| **measured, seq 01** | 0.77 | 0.51 | 20.2 h | — |
++| 31 h cycle, no quiescence | 0.88 | 0.41 | 26.4 h | 0.12 |
++| 19 h cycle + 50 % quiescent | 0.64 | **0.52** | **17.0 h** | **0.06** |
++| **measured, seq 02** | 0.80 | 0.71 | 18.5 h | — |
++| 31 h cycle, no quiescence | 0.94 | 0.45 | 27.3 h | 0.15 |
++| 19 h cycle + 50 % quiescent | 0.69 | 0.57 | **17.8 h** | **0.05** |
++
++The trajectory error halves or better, the cycle times come down from
++26–27 h to within a couple of hours of the measured 18–20 h, and
++sequence 01's plateau is reproduced almost exactly. It now slightly
++OVERSHOOTS at 20 h — the engine divides a little too fast early — where
++before it was far too slow.
++
++**This is a calibration, not a validation, and the distinction matters.**
++The 19 h and the 0.50 were chosen by scanning against these very
++sequences, so "the engine matches the movie" is circular: it was tuned
++to. What survives the caveat is narrower:
++
++* two parameters, eight targets — per sequence it reproduces the count
++  trajectory, the complete-cycle mean, and the undivided fractions at
++  20 h and 30 h, with no per-sequence tuning;
++* the STRUCTURAL claim, which is the real finding and does not depend on
++  the fitted values: no single cycle time can reproduce both a 46 h
++  count trajectory and a plateauing Kaplan-Meier curve, because they
++  demand different things of it. Needing two parameters is what exposed
++  that `doubling_time_h` was conflating them.
++
++What would settle it is a different HeLa time-lapse, or another line
++with tracked single cells, held out entirely. Until then this sits in
++the same category as the spheroid growth constant: calibrated on one
++dataset, not independently validated.
+ 
+ Quiescence alone was not enough: it fixed the plateau at 30 h and left
+ the engine far too slow at 20 h. The cycling cells also had to cycle
+@@ -826,13 +854,24 @@ applied unchanged everywhere else (`scripts/validate_gdsc.py`).
+ 
+ **The Phase-1 conclusion survives the larger panel, and is now much
+ better measured.** On held-out lines the engine is closer than a
+-constant-IC50 null on 34 and further on 39 (sign test p = 0.64), and
++constant-IC50 null on 32 and further on 41 (sign test p = 0.35), and
+ lands inside GDSC's replicate span 67 times against the null's 68. Ten
+ drugs and 91 predictions say the same thing three drugs and 25 said:
+ **the engine reproduces each drug's potency scale and does not rank cell
+ lines better than a single number.** That is now a result rather than a
+ small-sample suspicion.
+ 
++**Those figures are medians over three seeds**, and switching to them
++is a small result in itself. Each held-out prediction used to be a
++single run carrying the ±20 % the engine varies by; now it is a median.
++The fitted constants did not move at all (≤ 0.6 %), because the
++bisection's own tolerance was already coarser than the noise it was
++averaging. The paired comparison did move, and *against* the engine:
++34 : 39 became 32 : 41, p 0.64 → 0.35. Removing a model's own noise is
++supposed to be able to do that — a fair comparison is the point, not a
++flattering one — and the negative result is now stated on cleaner
++numbers at three times the compute.
++
+ **But the panel also found the exception, and it is the informative
+ one.** Nutlin-3a is the only drug whose line-to-line differences are
+ *mechanism* rather than an unmeasured marker: it blocks MDM2, so p53
+diff --git a/scripts/validate_gdsc.py b/scripts/validate_gdsc.py
+index 7b25d5b..c46a046 100644
+--- a/scripts/validate_gdsc.py
++++ b/scripts/validate_gdsc.py
+@@ -90,11 +90,28 @@ def load_targets(path: Path) -> dict[tuple[str, str], Target]:
+ 
+ # ── engine wrappers ───────────────────────────────────────────────────
+ def predicted_ic50(line_name: str, drug, center_uM: float, *, n_cells: int,
+-                   k_cyc: dict[str, float], seed: int = 1, params: Params = Params()) -> float:
++                   k_cyc: dict[str, float], seed: int = 1, n_seeds: int = 3,
++                   params: Params = Params()) -> float:
+     """IC50 in two passes: a 13-point log grid over 4 decades either side
+     to bracket the crossing, then 9 points across the bracket. The single
+     coarse pass this replaced (4.6-fold steps) moved a fitted line's own
+-    prediction by up to 15 % between runs."""
++    prediction by up to 15 % between runs.
++
++    Taken as the median of `n_seeds` runs, for the same reason
++    `engine.ic50` does: one run is a random variable with 10-20 % spread,
++    set by which resistant lineages were drawn rather than by cell count,
++    so a single seed puts that noise straight into every number in the
++    published table (docs/VALIDATION.md). This duplicates `engine.ic50`
++    rather than calling it because the two take their grids differently;
++    when that is unified, this should go."""
++    if n_seeds > 1:
++        vals = [predicted_ic50(line_name, drug, center_uM, n_cells=n_cells, k_cyc=k_cyc,
++                               seed=seed + i, n_seeds=1, params=params)
++                for i in range(n_seeds)]
++        finite = [v for v in vals if np.isfinite(v)]
++        if len(finite) * 2 <= len(vals):
++            return float("inf")
++        return float(np.median(finite))
+     line = CELL_LINES[line_name]
+     conc = center_uM * np.logspace(-4, 4, 13)
+     viab, _ = dose_response(line, drug, conc, n_cells_per_conc=n_cells,

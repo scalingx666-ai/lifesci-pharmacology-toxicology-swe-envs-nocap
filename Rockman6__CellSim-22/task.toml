@@ -1,0 +1,66 @@
+version = "1.0"
+
+[task]
+name = "default/Rockman6__CellSim-22"
+description = "Phase 5: the proliferation/quiescence split — and the parameter conflation it exposed"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "CellSim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "Rockman6/CellSim"
+ref = "8e281d0cb48343e39d01acdd2035364b542842f1"
+reference = "https://github.com/Rockman6/CellSim/pull/22"
+source_access = "auto"
+built_at = "2026-11-16T11:04:32.760814+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:ea62165dbc0946c6a6f8f174d535c16824aa133ac8894e254c5f4c625d4929d1"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2026-10-05T15:26:35Z"
+diff_format = "unified"
+context_files = [
+    "cellsim/cell/dish.py",
+    "cellsim/cell/engine.py",
+    "cellsim/cell/library.py",
+    "docs/VALIDATION.md",
+    "tests/cell/test_quiescence_smoke.py",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 275
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

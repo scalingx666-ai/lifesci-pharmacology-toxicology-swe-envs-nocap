@@ -1,0 +1,66 @@
+version = "1.0"
+
+[task]
+name = "default/Global-Chem__global-chem-99"
+description = "dk-1: added mobile support for front-page and added authors for flash…"
+
+[metadata]
+difficulty = "medium"
+category = "bugfix"
+keywords = [
+    "global-chem",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "Global-Chem/global-chem"
+ref = "df10617917bb4428403f1df1365cfda31863fbf0"
+reference = "https://github.com/Global-Chem/global-chem/pull/99"
+source_access = "auto"
+built_at = "2026-11-16T09:54:00.576849+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:5f3bbde02a28e61567f5bdb12733b63f2c8bc56fc3d387afd9f1a70021532698"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2022-05-03T15:50:53Z"
+diff_format = "unified"
+context_files = [
+    ".gitignore",
+    "front_end/flashcards/src/css/styles.css",
+    "front_end/flashcards/src/index.html",
+    "front_end/landing/src/css/styles.css",
+    "index.html",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 52
+difficulty = "medium"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

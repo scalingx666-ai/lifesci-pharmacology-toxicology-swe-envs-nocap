@@ -1,0 +1,70 @@
+version = "1.0"
+
+[task]
+name = "default/cthoyt__chembl-downloader-26"
+description = "Automate generating temporal summaries"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "chembl-downloader",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "cthoyt/chembl-downloader"
+ref = "6ff1a3649a81854e84eaa8043449e0c3c1474a53"
+reference = "https://github.com/cthoyt/chembl-downloader/pull/26"
+source_access = "auto"
+built_at = "2026-11-16T11:23:04.180995+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:f46237b102391c2b49c9824960232bbef74403f09aa5b39a6ca2ddd7f2a48bbe"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2025-08-24T08:59:51Z"
+diff_format = "unified"
+context_files = [
+    "README.md",
+    "docs/_data/summary.svg",
+    "docs/_data/summary.tsv",
+    "src/chembl_downloader/__init__.py",
+    "src/chembl_downloader/api.py",
+    "src/chembl_downloader/cli.py",
+    "src/chembl_downloader/contrib.py",
+    "src/chembl_downloader/queries.py",
+    "tests/test_api.py",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 2455
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0
