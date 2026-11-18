@@ -9,9 +9,9 @@ Repo2RLEnv pr_diff (v0.9.6), Harbor-format output. Domain: pharmacology-toxicolo
 | Domain candidates (deduped) | 160 |
 | After active+star+noise filter | 40 |
 | Final target list (cap unlimited) | 40 |
-| Repos with >=1 task | 9 |
-| Repos with 0 tasks | 31 |
-| Total tasks (unlimited (no per-repo cap)) | 93 |
+| Repos with >=1 task | 10 |
+| Repos with 0 tasks | 30 |
+| Total tasks (unlimited (no per-repo cap)) | 185 |
 
 ## Generation
 
@@ -23,7 +23,7 @@ Repo2RLEnv pr_diff (v0.9.6), Harbor-format output. Domain: pharmacology-toxicolo
 - Overlap with the 3 published cancer editions is allowed (user decision);
   domains are independent selections, not a partition of one repo set.
 
-## Zero-yield repos (informational, 31)
+## Zero-yield repos (informational, 30)
 
 - wu-yc/LabClaw
 - fregu856/papers
@@ -52,7 +52,6 @@ Repo2RLEnv pr_diff (v0.9.6), Harbor-format output. Domain: pharmacology-toxicolo
 - Aitslab/BioNLP
 - Open-Systems-Pharmacology/OSP-PBPK-Model-Library
 - WangLabCSU/faers
-- InsightRX/PKPDsim
 - Daylily-Huang/ScholarFlow
 - OpenVet-Projects/VetClaw
 - esqLABS/esqlabsR

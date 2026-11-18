@@ -1,0 +1,157 @@
+diff --git a/.github/workflows/pkgdown.yaml b/.github/workflows/pkgdown.yaml
+index 0b260216..8f0272c4 100644
+--- a/.github/workflows/pkgdown.yaml
++++ b/.github/workflows/pkgdown.yaml
+@@ -20,7 +20,7 @@ jobs:
+     env:
+       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+     steps:
+-      - uses: actions/checkout@v2
++      - uses: actions/checkout@v4
+ 
+       - uses: r-lib/actions/setup-pandoc@v2
+ 
+diff --git a/DESCRIPTION b/DESCRIPTION
+index 91e92cc8..c85a2991 100644
+--- a/DESCRIPTION
++++ b/DESCRIPTION
+@@ -11,7 +11,7 @@ Authors@R: c(
+         person("Jordan", "Brooks", email = "jordan.brooks@insight-rx.com", role = "aut"),
+         person("InsightRX", role = c("cph", "fnd")))
+ Depends: R (>= 4.0.0)
+-Imports: Rcpp (>= 0.12.9), BH, data.table, stringr, MASS,
++Imports: Rcpp (>= 1.0.13), BH, data.table, stringr, MASS,
+         randtoolbox, jsonlite, stats, parallel, magrittr
+ Suggests: 
+     httr,
+diff --git a/R/compile_sim_cpp.R b/R/compile_sim_cpp.R
+index 339ceca9..417d75c1 100644
+--- a/R/compile_sim_cpp.R
++++ b/R/compile_sim_cpp.R
+@@ -130,7 +130,7 @@ compile_sim_cpp <- function(
+   pars <- paste0(pars, paste0("double bioav[] = { ", paste(rep(1, size), collapse=", "), " };\n"))
+   if(!is.null(iov) && !is.null(iov$n_bins)) {
+     pars <- paste0(pars, paste0("Rcpp::NumericVector iov_bin(", (iov$n_bins+1) ,");\n"))
+-    par_def <- paste0('  for(int i = 0; i < (iov_bin.size()); i++) { iov_bin[i] = iov_bins[i]; };\n', par_def);
++    par_def <- paste0('  for(int i = 0; i < (iov_bins.size()); i++) { iov_bin[i] = iov_bins[i]; };\n', par_def);
+   }
+   for(i in seq(p_def)) { # actual parameters for model
+     par_def <- paste0(par_def, '  ', p_def[i], ' = par["', p_def[i], '"];\n')
+diff --git a/R/sim.R b/R/sim.R
+index 421e3ba9..461083f6 100644
+--- a/R/sim.R
++++ b/R/sim.R
+@@ -10,7 +10,11 @@
+ #' @param omega vector describing the lower-diagonal of the between-subject variability matrix
+ #' @param omega_type exponential or normal, specified as vector
+ #' @param res_var residual variability. Expected a list with arguments `prop`, `add`, and/or `exp`. NULL by default.
+-#' @param iov_bins allow override of the default IOV bins for a model. Specified as a vector of timepoints specifying the bin separators, e.g. `iov_bins = c(0, 24, 48, 72, 9999)`.
++#' @param iov_bins allow override of the default IOV bins for a model. Specified
++#' as a vector of timepoints specifying the bin separators, e.g.
++#' `iov_bins = c(0, 24, 48, 72, 9999)`. A warning will be thrown when less bins
++#' are requested than was defined for the model during compilation. When the
++#' number of bins is higher than defined for the model an error will be thrown.
+ #' @param seed set seed for reproducible results
+ #' @param sequence if not NULL specifies the pseudo-random sequence to use, e.g. "halton" or "sobol". See `mvrnorm2` for more details.
+ #' @param n_ind number of individuals to simulate
+@@ -190,8 +194,10 @@ sim <- function (ode = NULL,
+       }
+     }
+     if(!is.null(attr(ode, "iov")$n_bins) && attr(ode, "iov")$n_bins > 1) {
+-      if(attr(ode, "iov")$n_bins != (length(iov_bins)-1)) {
+-        warning("Number of IOV bins specified for model does not match supplied `iov_bins` argument. This could lead to simulation failures or erroneous output.")
++      if(attr(ode, "iov")$n_bins < (length(iov_bins)-1)) {
++        stop("Number of allowed IOV bins for model is lower than number of bins supplied in `iov_bins`. Please reduce the number of requested IOV bins in the `sim()` call, or increase the number of IOV bins allowed for the model.")
++      } else if (attr(ode, "iov")$n_bins > (length(iov_bins)-1)) {
++        warning("Number of allowed IOV bins for model is higher than number of bins supplied in `iov_bins`.")
+       }
+     }
+     if(is.null(analytical)) {
+diff --git a/man/sim.Rd b/man/sim.Rd
+index 9a6d69d6..cba57455 100644
+--- a/man/sim.Rd
++++ b/man/sim.Rd
+@@ -61,7 +61,11 @@ sim(
+ 
+ \item{res_var}{residual variability. Expected a list with arguments \code{prop}, \code{add}, and/or \code{exp}. NULL by default.}
+ 
+-\item{iov_bins}{allow override of the default IOV bins for a model. Specified as a vector of timepoints specifying the bin separators, e.g. \code{iov_bins = c(0, 24, 48, 72, 9999)}.}
++\item{iov_bins}{allow override of the default IOV bins for a model. Specified
++as a vector of timepoints specifying the bin separators, e.g.
++\code{iov_bins = c(0, 24, 48, 72, 9999)}. A warning will be thrown when less bins
++are requested than was defined for the model during compilation. When the
++number of bins is higher than defined for the model an error will be thrown.}
+ 
+ \item{seed}{set seed for reproducible results}
+ 
+diff --git a/tests/testthat/test_iov.R b/tests/testthat/test_iov.R
+index 71a034ce..9fb9e1bf 100644
+--- a/tests/testthat/test_iov.R
++++ b/tests/testthat/test_iov.R
+@@ -33,8 +33,8 @@ reg1 <- new_regimen(
+ )
+ iov_var <- 0.3 ^ 2 # 30% IOV
+ 
+-test_that("Throws warning when `iov_bins` length doesn't match number of specified bins", {
+-  expect_warning({
++test_that("Throws error when number of `iov_bins` is higher than allowed for model", {
++  expect_error({
+     sim(
+       ode = pk1,
+       parameters = pars,
+@@ -52,32 +52,29 @@ test_that("Throws warning when `iov_bins` length doesn't match number of specifi
+       only_obs = TRUE,
+       output_include = list(parameters = TRUE, variables = TRUE)
+     )
+-  }, "Number of IOV bins specified")
+-  Rcpp_v <- unlist(packageVersion("Rcpp"))
+-  if(Rcpp_v[1] >= 1 && Rcpp_v[2] >= 0 && (Rcpp_v[3] >= 13 || isTRUE(Rcpp_v[3] >= 12 && Rcpp_v[4] >= 4))) {
+-    ## if-statement can be removed when Rcpp on CRAN >= 1.0.12.4
+-    expect_warning({
+-      expect_warning({
+-        sim(
+-          ode = pk1,
+-          parameters = pars,
+-          regimen = reg1,
+-          omega = c(
+-            iov_var, # IOV in CL
+-            0, iov_var,
+-            0, 0, iov_var,
+-            0, 0, 0, iov_var,
+-            0, 0, 0, 0, 0.3 # IIV in CL
+-          ),
+-          n = 1,
+-          iov_bins = c(0, 24, 999), # one bin too few
+-          omega_type = "normal",
+-          only_obs = TRUE,
+-          output_include = list(parameters = TRUE, variables = TRUE)
+-        )
+-      }, "Number of IOV bins specified")
+-    }, "subscript out of bounds") # only thrown when Rcpp >= 1.0.12.4
+-  }
++  }, "Number of allowed IOV bins for model is lower")
++})
++
++test_that("Throws warning when number of `iov_bins` is lower than allowed for model", {
++  expect_warning({
++    sim(
++      ode = pk1,
++      parameters = pars,
++      regimen = reg1,
++      omega = c(
++        iov_var, # IOV in CL
++        0, iov_var,
++        0, 0, iov_var,
++        0, 0, 0, iov_var,
++        0, 0, 0, 0, 0.3 # IIV in CL
++      ),
++      n = 1,
++      iov_bins = c(0, 24, 999), # one bin too few
++      omega_type = "normal",
++      only_obs = TRUE,
++      output_include = list(parameters = TRUE, variables = TRUE)
++    )}, "Number of allowed IOV bins for model is higher"
++  )
+ })
+ 
+ test_that("IOV is added to parameters", {

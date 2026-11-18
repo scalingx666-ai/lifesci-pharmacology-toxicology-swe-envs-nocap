@@ -1,0 +1,39 @@
+diff --git a/R/apply_lagtime.R b/R/apply_lagtime.R
+index c9978684..4e68cb8f 100644
+--- a/R/apply_lagtime.R
++++ b/R/apply_lagtime.R
+@@ -17,11 +17,12 @@ apply_lagtime <- function(regimen, lagtime, parameters) {
+       if(length(lagtime) == 1) {
+         regimen$dose_times <- regimen$dose_times + parameters[[lagtime]]
+       } else {
+-        if(!is.null(regimen$cmt)) {
+-          par_tmp <- parameters
+-          par_tmp[["0"]] <- 0
+-          regimen$dose_times <- regimen$dose_times + as.numeric(unlist(par_tmp[lagtime[regimen$cmt]]))
++        if(is.null(regimen$cmt)) {
++          regimen$cmt <- rep(1, length(regimen$dose_times))
+         }
++        par_tmp <- parameters
++        par_tmp[["0"]] <- 0
++        regimen$dose_times <- regimen$dose_times + as.numeric(unlist(par_tmp[lagtime[regimen$cmt]]))
+       }
+     }
+     return(regimen)
+diff --git a/tests/testthat/test_apply_lagtime.R b/tests/testthat/test_apply_lagtime.R
+index 04b9a3f8..a5f7f6d8 100644
+--- a/tests/testthat/test_apply_lagtime.R
++++ b/tests/testthat/test_apply_lagtime.R
+@@ -20,3 +20,13 @@ test_that("lagtime applied to regimens using lagtime arg", {
+   expect_true("regimen" %in% class(lag2))
+   expect_equal(lag2$dose_times, reg1$dose_times + 0.75)
+ })
++
++test_that("lagtime applied when multiple compartments and no compartment specified in regimen", {
++  lag3 <- apply_lagtime(
++    regimen = reg1,
++    lagtime = c("TLAG", 0, 0),
++    parameters = list(CL = 5, V = 50, TLAG = .5)
++  )
++  expect_true("regimen" %in% class(lag3))
++  expect_equal(lag3$dose_times, reg1$dose_times + 0.5)
++})

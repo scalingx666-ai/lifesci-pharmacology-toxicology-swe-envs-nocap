@@ -1,0 +1,116 @@
+diff --git a/DESCRIPTION b/DESCRIPTION
+index ebf0f49f..07ade04d 100644
+--- a/DESCRIPTION
++++ b/DESCRIPTION
+@@ -16,7 +16,6 @@ Imports: Rcpp (>= 1.0.13), BH, data.table, stringr, MASS,
+ Suggests: 
+     httr,
+     testthat (>= 3.0.0),
+-    mockery,
+     knitr,
+     rmarkdown
+ LinkingTo: BH, Rcpp (>= 1.0.13)
+diff --git a/Dockerfile b/Dockerfile
+index 1e55ce29..85ccce90 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y \
+     && rm -rf /var/lib/apt/lists/*
+ 
+     
+-RUN Rscript -e "install.packages(c('mockery', 'nlmixr2', 'knitr', 'rmarkdown'), repos = 'https://cloud.r-project.org')"
++RUN Rscript -e "install.packages(c('nlmixr2', 'knitr', 'rmarkdown'), repos = 'https://cloud.r-project.org')"
+ 
+ RUN R CMD check PKPDsim
+ 
+diff --git a/Dockerfile.aws b/Dockerfile.aws
+index 4e38cd25..182b26b4 100644
+--- a/Dockerfile.aws
++++ b/Dockerfile.aws
+@@ -9,4 +9,4 @@ WORKDIR /src/PKPDsim
+ # Install system and CRAN dependencies
+ RUN apt-get update
+ RUN apt install -y pandoc qpdf
+-RUN Rscript -e "install.packages(c('mockery', 'nlmixr2', 'knitr', 'rmarkdown'), repos = '${RSPM_SNAPSHOT}')"
+\ No newline at end of file
++RUN Rscript -e "install.packages(c('nlmixr2', 'knitr', 'rmarkdown'), repos = '${RSPM_SNAPSHOT}')"
+\ No newline at end of file
+diff --git a/R/advan_process_infusion_doses.R b/R/advan_process_infusion_doses.R
+index a475191d..74321f62 100644
+--- a/R/advan_process_infusion_doses.R
++++ b/R/advan_process_infusion_doses.R
+@@ -24,11 +24,15 @@ advan_process_infusion_doses <- function (data) {
+   doserowslast[, badcols] <- NA
+ 
+   # Are there any doserows without a DV value?  These need to precede the infusion change
+-  noDVindex <- which(!doserowslast$TIME %in% data$TIME)
++  # Solely exclude observation-only times (AMT==0): infusion end times coinciding with dose times
++  # still need an AMT=0 sentinel row so ordering is correct in the RATEALL loop.
++  noDVindex <- which(!doserowslast$TIME %in% data$TIME[data$AMT == 0])
+   doserowslastnoDV <- doserowslast[noDVindex,]
+-  doserowslastnoDV$AMT <- 0
+-  doserowslastnoDV$RATE <- 0
+-  doserowslastnoDV$DNUM <- NA
++  if (nrow(doserowslastnoDV) > 0) {
++    doserowslastnoDV$AMT <- 0
++    doserowslastnoDV$RATE <- 0
++    doserowslastnoDV$DNUM <- NA
++  }
+ 
+   # Collect the new rows
+   doserows <- rbind(doserows, doserowslast, doserowslastnoDV)
+diff --git a/tests/testthat/test_calc_auc_analytic.R b/tests/testthat/test_calc_auc_analytic.R
+index 44d159c7..5dac066f 100644
+--- a/tests/testthat/test_calc_auc_analytic.R
++++ b/tests/testthat/test_calc_auc_analytic.R
+@@ -113,6 +113,36 @@ test_that("Works for 1cmt model", {
+   expect_equal(tmp$auc, aucfr$auc)
+ })
+ 
++test_that("Correct output when t_inf equals interval", {
++  # confirm that continuous infusion and infusion that is _nearly_ continuous
++  # produce nearly the same estimates and don't raise an error
++  reg_c <- new_regimen(
++    amt = 750, n = 12, interval = 8, t_inf = 8, type = "infusion"
++  )
++  reg_i <- new_regimen(
++    amt = 750, n = 12, interval = 8, t_inf = 7.999, type = "infusion"
++  )
++  expect_no_error(
++    res_c <- calc_auc_analytic(
++      f = "2cmt_iv_infusion",
++      parameters = list(CL = 4.5, V = 45, Q = 2.3, V2 = 49),
++      regimen = reg_c,
++      t_obs = c(0, 88, 96)
++    )
++  )
++  res_i <- calc_auc_analytic(
++    f = "2cmt_iv_infusion",
++    parameters = list(CL = 4.5, V = 45, Q = 2.3, V2 = 49),
++    regimen = reg_i,
++    t_obs = c(0, 88, 96)
++  )
++  # Trough at t=96 should be positive and finite
++  expect_true(is.finite(tail(res_c$y, 1)) && tail(res_c$y, 1) > 0)
++  # AUC and trough are nearly identical (difference is due to delta in t_inf)
++  expect_equal(round(res_c$auc[3]/res_i$auc[3], 5), 1)
++  expect_equal(round(res_c$y[3]/res_i$y[3], 3), 1)
++})
++
+ test_that("Doesn't fail when t_inf is specified as 0 in regimen or as t_inf. Should be nearly equal to bolus", {
+   reg1 <- new_regimen(amt = 1500, n = 10, interval = 24, type = "infusion", t_inf = 0)
+   reg2 <- new_regimen(amt = 1500, n = 10, interval = 24, type = "bolus")
+diff --git a/tests/testthat/test_misc.R b/tests/testthat/test_misc.R
+index fd54f047..214aa449 100644
+--- a/tests/testthat/test_misc.R
++++ b/tests/testthat/test_misc.R
+@@ -1,9 +1,4 @@
+ test_that("now_utc returns time in UTC", {
+-  mockery::stub(
+-    now_utc,
+-    "Sys.time",
+-    structure(1640042187.11864, class = c("POSIXct", "POSIXt"))
+-  )
+   now <- now_utc()
+   expect_equal(attr(now, "tzone"), "UTC")
+ })

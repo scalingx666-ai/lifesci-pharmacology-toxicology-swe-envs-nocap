@@ -1,0 +1,64 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-77"
+description = "use LOCF when non-numeric too; check for implementation type"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "5bbc5d686df09e46bc53d40c4bc933eed5f66d90"
+reference = "https://github.com/InsightRX/PKPDsim/pull/77"
+source_access = "auto"
+built_at = "2026-11-16T19:41:08.723179+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:b5373bbc8de8347e18017ea52d2942b68bf6fb109574730093bf06c78b610374"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2023-10-05T20:06:18Z"
+diff_format = "unified"
+context_files = [
+    "R/new_covariate.R",
+    "man/new_covariate.Rd",
+    "tests/testthat/test_new_covariate.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 157
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

@@ -1,0 +1,14 @@
+diff --git a/README.md b/README.md
+index c0da7d10..1f6acd99 100644
+--- a/README.md
++++ b/README.md
+@@ -1,4 +1,4 @@
+-# PKPDsim
++# PKPDsim <img src="man/figures/hexsticker.png" align="right" width = "200"/>
+ 
+ PKPDsim is a library for numerical integration of ODE systems, in particular pharmacokinetic-pharmacodynamic (PK-PD) mixed-effects models.
+ 
+diff --git a/man/figures/hexsticker.png b/man/figures/hexsticker.png
+new file mode 100644
+index 00000000..bf214084
+Binary files /dev/null and b/man/figures/hexsticker.png differ

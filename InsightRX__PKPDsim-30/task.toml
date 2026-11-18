@@ -1,0 +1,66 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-30"
+description = "RXR-799: parse bioav as array"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "98163c62e8a0d5810b3fa91ac80d65f2150b8a79"
+reference = "https://github.com/InsightRX/PKPDsim/pull/30"
+source_access = "auto"
+built_at = "2026-11-16T19:41:59.049780+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:b8550109f52c2cbc903b1b8fd06d66927cb1d18ab927972cca7ca0ef4b0ca318"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2022-01-25T17:51:37Z"
+diff_format = "unified"
+context_files = [
+    "R/new_ode_model.R",
+    "R/object_to_R_code.R",
+    "man/bioavailability_to_R_code.Rd",
+    "man/vector_to_R_code.Rd",
+    "tests/testthat/test_object_to_R_code.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 133
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

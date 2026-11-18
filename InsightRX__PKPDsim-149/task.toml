@@ -1,0 +1,65 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-149"
+description = "RXR-3328: export `is_bolus_or_oral()`, update docs and roxygen version"
+
+[metadata]
+difficulty = "medium"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "f1bcc20139958d19e1675f46eb4f35484bd0b925"
+reference = "https://github.com/InsightRX/PKPDsim/pull/149"
+source_access = "auto"
+built_at = "2026-11-16T19:39:55.485506+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:01caa45906a0cd08c98e9c397f95d99f7750a1f77b6a148a2ee316f2dd7a998d"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2026-10-30T18:13:21Z"
+diff_format = "unified"
+context_files = [
+    "DESCRIPTION",
+    "NAMESPACE",
+    "R/new_regimen.R",
+    "man/regimen_to_nm.Rd",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 39
+difficulty = "medium"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

@@ -1,0 +1,81 @@
+diff --git a/R/get_fixed_parameters.R b/R/get_fixed_parameters.R
+index a68f3804..f3a74e6c 100644
+--- a/R/get_fixed_parameters.R
++++ b/R/get_fixed_parameters.R
+@@ -1,6 +1,6 @@
+ #' Get fixed parameters
+ #'
+-#' Get fixed parameters listed in model definition if present. If not present, use size of omega matrix to determine fixed parameters.
++#' Get fixed parameters listed in model definition.
+ #'
+ #' @param def Model definition as output by [read_model_json()]
+ #' @md
+@@ -10,7 +10,10 @@ get_fixed_parameters <- function(def) {
+   # written as `if (!is.null(def$fixed))`
+   if ("fixed" %in% names(def)) {
+     return(def$fixed)
++  } else {
++    stop(
++      "Fixed parameters are required to be present in the model definition.",
++      call. = FALSE
++    )
+   }
+-  n_estimated <- lower_triangle_mat_size(def$omega)
+-  names(tail(def$parameters, -n_estimated))
+ }
+diff --git a/man/get_fixed_parameters.Rd b/man/get_fixed_parameters.Rd
+index 27043f06..27e7cfbc 100644
+--- a/man/get_fixed_parameters.Rd
++++ b/man/get_fixed_parameters.Rd
+@@ -10,5 +10,5 @@ get_fixed_parameters(def)
+ \item{def}{Model definition as output by \code{\link[=read_model_json]{read_model_json()}}}
+ }
+ \description{
+-Get fixed parameters listed in model definition if present. If not present, use size of omega matrix to determine fixed parameters.
++Get fixed parameters listed in model definition.
+ }
+diff --git a/tests/testthat/sample_json/test_1cmt_iv.json5 b/tests/testthat/sample_json/test_1cmt_iv.json5
+index 13001e2f..0cb3c2af 100644
+--- a/tests/testthat/sample_json/test_1cmt_iv.json5
++++ b/tests/testthat/sample_json/test_1cmt_iv.json5
+@@ -10,6 +10,7 @@
+   "obs": { "cmt": 1, "scale": "V" },
+   "dose": { "cmt": 1, "bioav": 1 },
+   "parameters": { "CL": 5, "V": 50 },
++  "fixed": [],
+   "covariates": [],
+   "variables": [],
+   "misc": {
+diff --git a/tests/testthat/test_get_fixed_parameters.R b/tests/testthat/test_get_fixed_parameters.R
+index e7bce80d..e9021902 100644
+--- a/tests/testthat/test_get_fixed_parameters.R
++++ b/tests/testthat/test_get_fixed_parameters.R
+@@ -20,21 +20,15 @@ test_that("get_fixed_parameters returns fixed params listed in model def even if
+   expect_equal(res2, list())
+ })
+ 
+-test_that("get_fixed_parameters determines fixed params from omega matrix size", {
++test_that("get_fixed_parameters errors if fixed params are not present", {
+   def <- list(
+     parameters = list(
+-      KA = 0.5,
+-      CL = 169L,
+-      V = 33.1,
+-      Q = 14.6,
+-      V2 = 226L,
+-      ALAG = 1L
+-    ),
+-    omega = c(0.223289, 0.449190, 3.459600)
++      CL = 5.312,
++      V = 42.52,
++      V2 = 41.68,
++      Q = 3.222
++    )
+   )
+ 
+-  expect_equal(
+-    get_fixed_parameters(def),
+-    c("V", "Q", "V2", "ALAG")
+-  )
++  expect_error(get_fixed_parameters(def))
+ })

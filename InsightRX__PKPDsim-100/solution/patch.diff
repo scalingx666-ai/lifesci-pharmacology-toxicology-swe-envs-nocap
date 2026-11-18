@@ -1,0 +1,104 @@
+diff --git a/DESCRIPTION b/DESCRIPTION
+index b903c19d..4aa8216b 100644
+--- a/DESCRIPTION
++++ b/DESCRIPTION
+@@ -27,7 +27,7 @@ License: MIT + file LICENSE
+ URL: https://github.com/InsightRX/PKPDsim,
+     https://insightrx.github.io/PKPDsim/
+ LazyData: TRUE
+-RoxygenNote: 7.2.3
++RoxygenNote: 7.3.1
+ Config/testthat/edition: 3
+ Config/Needs/website: tidyverse, nlmixr2
+ Encoding: UTF-8
+diff --git a/R/PKPDsim-package.R b/R/PKPDsim-package.R
+index aed79a30..7621b751 100644
+--- a/R/PKPDsim-package.R
++++ b/R/PKPDsim-package.R
+@@ -2,11 +2,10 @@
+ #'
+ #' Simulate regimens for PKPD models defined by ODE systems
+ #'
+-#' @docType package
+ #' @name PKPDsim-package
+ #' @author Ron Keizer \email{ronkeizer@@gmail.com}
+ #' @importFrom utils packageVersion tail
+ #' @importFrom stats aggregate qnorm quantile reshape rnorm
+ #' @importFrom magrittr `%>%`
+ #' @keywords internal
+-NULL
++"_PACKAGE"
+diff --git a/R/create_event_table.R b/R/create_event_table.R
+index 31b28a6c..a2aba175 100644
+--- a/R/create_event_table.R
++++ b/R/create_event_table.R
+@@ -46,6 +46,13 @@ create_event_table <- function(
+ 
+   } else if (!is.null(model) && !is.null(attr(model, "cmt_mapping"))) {
+     cmt_mapping <- attr(model, "cmt_mapping")
++    if (!all(regimen$type %in% names(cmt_mapping))) {
++      stop(
++        "Unrecognized regimen type. Define '",
++        setdiff(regimen$type, names(cmt_mapping)),
++        "' in model md field `cmt_mapping`"
++      )
++    }
+     regimen$dose_cmt <- vapply(regimen$type, function(x) cmt_mapping[[x]], FUN.VALUE = numeric(1), USE.NAMES = FALSE)
+ 
+   } else {
+diff --git a/man/PKPDsim-package.Rd b/man/PKPDsim-package.Rd
+index 0c81fade..07f6dc56 100644
+--- a/man/PKPDsim-package.Rd
++++ b/man/PKPDsim-package.Rd
+@@ -2,10 +2,19 @@
+ % Please edit documentation in R/PKPDsim-package.R
+ \docType{package}
+ \name{PKPDsim-package}
++\alias{PKPDsim}
+ \alias{PKPDsim-package}
+ \title{PKPDsim package}
+ \description{
+ Simulate regimens for PKPD models defined by ODE systems
++}
++\seealso{
++Useful links:
++\itemize{
++  \item \url{https://github.com/InsightRX/PKPDsim}
++  \item \url{https://insightrx.github.io/PKPDsim/}
++}
++
+ }
+ \author{
+ Ron Keizer \email{ronkeizer@gmail.com}
+diff --git a/tests/testthat/test_create_event_table.R b/tests/testthat/test_create_event_table.R
+index 7c3f3229..1f50a871 100644
+--- a/tests/testthat/test_create_event_table.R
++++ b/tests/testthat/test_create_event_table.R
+@@ -114,6 +114,27 @@ test_that("simulatenous doses in different cmts do not remove infusion stops", {
+   expect_true(all((reg$dose_amts/reg$t_inf) %in% res$rate)) # rates are right
+ })
+ 
++test_that("useful cmt_mapping mismatch error is thrown", {
++  reg <- new_regimen(
++    amt = 100,
++    times = c(0, 12, 24),
++    t_inf = 0,
++    type = rep("oral", 3)
++  )
++  model <- mod_2cmt_iv
++  attr(model, "cmt_mapping") <- list(infusion = 1, bolus = 1) # not oral
++  expect_error(
++    create_event_table(
++      regimen = reg,
++      t_obs = 36,
++      covariates = list(WT = new_covariate(value = c(50, 55), times = c(0, 20))),
++      model = model
++    ),
++    "Unrecognized regimen type. Define 'oral' in model md field `cmt_mapping`",
++    fixed = TRUE
++  )
++})
++
+ test_that("sc, im are considered to have t_inf = 0", {
+   reg1 <- new_regimen(
+     amt = c(100, 100),

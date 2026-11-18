@@ -1,0 +1,65 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-69"
+description = "RXR-1379: require fixed parameters in model definition"
+
+[metadata]
+difficulty = "medium"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "a882732bde41e2e24db5d03403caafb9b949f765"
+reference = "https://github.com/InsightRX/PKPDsim/pull/69"
+source_access = "auto"
+built_at = "2026-11-16T19:41:18.177661+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:3500bdd6858a100466bc0e25cd241da921cf1f78fc168460650d7e3a8001a6cb"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2023-03-06T19:53:47Z"
+diff_format = "unified"
+context_files = [
+    "R/get_fixed_parameters.R",
+    "man/get_fixed_parameters.Rd",
+    "tests/testthat/sample_json/test_1cmt_iv.json5",
+    "tests/testthat/test_get_fixed_parameters.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 32
+difficulty = "medium"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

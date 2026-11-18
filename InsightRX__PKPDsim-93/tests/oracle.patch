@@ -1,0 +1,199 @@
+diff --git a/R/calculate_parameters.R b/R/calculate_parameters.R
+index 55d920bc..f42af7c2 100644
+--- a/R/calculate_parameters.R
++++ b/R/calculate_parameters.R
+@@ -1,14 +1,21 @@
+ #' Calculate model-specific variables using a dummy call to sim_ode()
+ #'
+-#' This is a convenience function for PKPDsim users, it is not used inside the `sim_ode()``
+-#' function in any way.
+-#' This function is useful for converting from an estimated parameter to actual parameter,
+-#' e.g. when clearance is specified as `CLi = CL * (WT/70) * (1/CR)` it can be used to
+-#' calculate `CLi` without having to write that function a second time in R.
++#' This is a convenience function for PKPDsim users, it is not used inside the
++#' `sim_ode()`` function in any way. This function is useful for converting from
++#' an estimated parameter to actual parameter, e.g. when clearance is specified
++#' as `CLi = CL * (WT/70) * (1/CR)` it can be used to calculate `CLi` without
++#' having to write that function a second time in R.
+ #'
+ #' @param ode PKPDsim model object
+ #' @param parameters parameter list
+-#' @param covariates covariate list. Make sure to include covariates at the right time point, since only last observed covariate values are used.
++#' @param covariates covariate list. Make sure to include covariates at the
++#'   right time point, since only last observed covariate values are used.
++#' @param regimen optional, provide a `regimen` object for the computation of
++#'   the effective parameters. This is only relevant for models for which
++#'   parameters depend on the dose or administration type, which is rare.
++#' @param t_obs optional, provide timepoint(s) at which to computate effective
++#'   parameters. This is only relevant for models with time-varying
++#'   fixed-effects. If unspecified, will evaluate parameters at `t=0`.
+ #' @param include_parameters boolean, include parameters?
+ #' @param include_variables boolean, include variables?
+ #' @param ... arguments to pass on to simulation function
+@@ -20,19 +27,38 @@ calculate_parameters <- function(
+   covariates = NULL,
+   include_parameters = TRUE,
+   include_variables = TRUE,
++  regimen = NULL,
++  t_obs = NULL,
+   ...
+ ) {
+-  reg <- new_regimen(amt = 0, times = 0, cmt = 1, type = "bolus")
++  if(is.null(regimen)) { # then just use dummy regimen.
++    regimen <- new_regimen(amt = 0, times = 0, cmt = 1, type = "bolus")
++  }
++  if(is.null(t_obs)) {
++    t_obs_sim <- c(0, 1)
++  } else {
++    t_obs_sim <- t_obs
++  }
++  t_obs_sim <- round(t_obs_sim, 3)
+   incl <- list(parameters = FALSE, variables = FALSE)
+   if(!is.null(covariates)) covariates <- covariate_last_obs_only(covariates) # make sure only single value!
+   if(include_parameters) incl$parameters <- TRUE
+   if(include_variables) incl$variables <- TRUE
+-  res <- sim_ode(ode = ode,
+-                 parameters = parameters,
+-                 regimen = reg,
+-                 omega = NULL,
+-                 covariates = covariates,
+-                 output_include = incl,
+-                 t_obs = c(0,1), only_obs = TRUE, ...) %>% utils::tail(1)
+-  return(pars <- as.list(res[,-c(1:4)]))
++  res <- sim_ode(
++    ode = ode,
++    parameters = parameters,
++    regimen = regimen,
++    omega = NULL,
++    covariates = covariates,
++    output_include = incl,
++    t_obs = t_obs_sim,
++    only_obs = TRUE,
++    ...
++  )
++  if(!is.null(t_obs)) {
++    res <- res[res$t %in% t_obs_sim, ]
++  } else {
++    res <- res[nrow(res),]
++  }
++  return(as.list(res[, -c(1:4)]))
+ }
+diff --git a/man/calculate_parameters.Rd b/man/calculate_parameters.Rd
+index 7d05e820..4942974b 100644
+--- a/man/calculate_parameters.Rd
++++ b/man/calculate_parameters.Rd
+@@ -10,6 +10,8 @@ calculate_parameters(
+   covariates = NULL,
+   include_parameters = TRUE,
+   include_variables = TRUE,
++  regimen = NULL,
++  t_obs = NULL,
+   ...
+ )
+ }
+@@ -18,21 +20,30 @@ calculate_parameters(
+ 
+ \item{parameters}{parameter list}
+ 
+-\item{covariates}{covariate list. Make sure to include covariates at the right time point, since only last observed covariate values are used.}
++\item{covariates}{covariate list. Make sure to include covariates at the
++right time point, since only last observed covariate values are used.}
+ 
+ \item{include_parameters}{boolean, include parameters?}
+ 
+ \item{include_variables}{boolean, include variables?}
+ 
++\item{regimen}{optional, provide a `regimen` object for the computation of
++the effective parameters. This is only relevant for models for which
++parameters depend on the dose or administration type, which is rare.}
++
++\item{t_obs}{optional, provide timepoint(s) at which to computate effective
++parameters. This is only relevant for models with time-varying
++fixed-effects. If unspecified, will evaluate parameters at `t=0`.}
++
+ \item{...}{arguments to pass on to simulation function}
+ }
+ \value{
+ List of model-specific variables
+ }
+ \description{
+-This is a convenience function for PKPDsim users, it is not used inside the `sim_ode()``
+-function in any way.
+-This function is useful for converting from an estimated parameter to actual parameter,
+-e.g. when clearance is specified as `CLi = CL * (WT/70) * (1/CR)` it can be used to
+-calculate `CLi` without having to write that function a second time in R.
++This is a convenience function for PKPDsim users, it is not used inside the
++`sim_ode()`` function in any way. This function is useful for converting from
++an estimated parameter to actual parameter, e.g. when clearance is specified
++as `CLi = CL * (WT/70) * (1/CR)` it can be used to calculate `CLi` without
++having to write that function a second time in R.
+ }
+diff --git a/tests/testthat/setup.R b/tests/testthat/setup.R
+index 53c27d50..a33e349d 100644
+--- a/tests/testthat/setup.R
++++ b/tests/testthat/setup.R
+@@ -1,14 +1,23 @@
+ mod_1cmt_iv <- new_ode_model("pk_1cmt_iv")
+ mod_2cmt_iv <- new_ode_model("pk_2cmt_iv")
+ mod_1cmt_oral <- new_ode_model("pk_1cmt_oral")
+-oral_1cmt_allometric <- new_ode_model(
++oral_1cmt_allometric <- new_ode_model( # also timevarying and dose-dependence factor
+   code = "
+-      CLi = CL * pow(WT/70, 0.75)
++      if(t<168.0) {
++        CLi = CL * pow(WT/70, 0.75)
++      } else {
++        CLi = CL * pow(WT/70, 0.75) * 1.5
++      }
++      if(prv_dose > 1000.0) {
++        Vi = V * 2.0
++      } else {
++        Vi = V
++      }
+       dAdt[1] = -KA * A[1]
+-      dAdt[2] = KA*A[1] - (CLi/V)*A[2]
++      dAdt[2] = KA*A[1] - (CLi/Vi)*A[2]
+     ",
+   dose = list(cmt = 1, bioav = 1),
+   covariates = list(WT = new_covariate(50)),
+-  declare_variables = "CLi",
++  declare_variables = c("CLi", "Vi"),
+   parameters = list(KA = 0.5, CL = 5, V = 50)
+ )
+diff --git a/tests/testthat/test_calc_parameters.R b/tests/testthat/test_calc_parameters.R
+index 41eb04b2..04332f8d 100644
+--- a/tests/testthat/test_calc_parameters.R
++++ b/tests/testthat/test_calc_parameters.R
+@@ -49,3 +49,32 @@ test_that("Works if no covariates", {
+   expect_true(all(c(expect_pars, expect_vars) %in% names(eff2)))
+   expect_equal(eff2$CL, pars$CL)
+ })
++
++test_that("Works when t_obs specified for timevarying model", {
++  # model defined in setup.R, with CLi = CL * pow(WT/70, 0.75), and x1.5 after 168 hrs
++  covs1 <- list(WT = new_covariate(50))
++  pars <- list(KA = 0.5, CL = 5, V = 50)
++  eff1 <- calculate_parameters(oral_1cmt_allometric, pars, covs1, t_obs = c(20, 40, 200))
++  expect_pars <- attr(oral_1cmt_allometric, "parameters")
++  expect_vars <- attr(oral_1cmt_allometric, "variables")
++  expect_true(all(c(expect_pars, expect_vars) %in% names(eff1)))
++  CL1 <- pars$CL * (covs1$WT$value / 70) ** 0.75
++  CL2 <- CL1 * 1.5
++  expect_equal(
++    eff1$CLi,
++    c(CL1, CL1, CL2)
++  )
++})
++
++test_that("Works for dose-dependent model", {
++  # model defined in setup.R, with CLi = CL * pow(WT/70, 0.75), and x1.5 after 168 hrs
++  covs1 <- list(WT = new_covariate(50))
++  pars <- list(KA = 0.5, CL = 5, V = 50)
++  reg_low <- new_regimen(amt = 500, times = 0, type = "bolus")
++  reg_high <- new_regimen(amt = 1500, times = 0, type = "bolus")
++  eff1 <- calculate_parameters(oral_1cmt_allometric, pars, covs1)
++  eff2 <- calculate_parameters(oral_1cmt_allometric, pars, covs1, regimen = reg_low)
++  eff3 <- calculate_parameters(oral_1cmt_allometric, pars, covs1, regimen = reg_high)
++  expect_equal(eff1, eff2)
++  expect_equal(eff3$Vi, eff1$Vi * 2)
++})

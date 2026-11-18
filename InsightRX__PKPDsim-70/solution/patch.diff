@@ -1,0 +1,114 @@
+diff --git a/R/regimen_to_nm.R b/R/regimen_to_nm.R
+index c8dd23c1..bef3ce89 100644
+--- a/R/regimen_to_nm.R
++++ b/R/regimen_to_nm.R
+@@ -5,6 +5,7 @@
+ #' @param n_ind repeat for `n_ind` subjects
+ #' @param t_obs add observation time(s)
+ #' @param obs_cmt observation compartment for added observation time(s)
++#' @param bioav bioavailability (numeric vector, can not be a parameter)
+ #'
+ #' @export
+ #' @return Data frame containing doses
+@@ -13,7 +14,9 @@ regimen_to_nm <- function(
+   dose_cmt = 1,
+   n_ind = 1,
+   t_obs = NULL,
+-  obs_cmt = 1) {
++  obs_cmt = 1,
++  bioav = NULL
++) {
+   if(is.null(reg) || ! "regimen" %in% class(reg)) {
+     stop("No regimen or invalid regimen object supplied.")
+   }
+@@ -27,6 +30,19 @@ regimen_to_nm <- function(
+     MDV = 1))
+   if(any(reg$type == "infusion")) {
+     dat$RATE <- reg$dose_amts / reg$t_inf
++    if(!is.null(bioav[dose_cmt])) {
++      suppressWarnings(
++        bioav_dose <- as.numeric(bioav[dose_cmt])
++      )
++      if(!is.na(bioav_dose)) {
++        if(bioav_dose != 1) {
++          dat$RATE <- dat$RATE * bioav_dose
++          message("Recalculating infusion rates to reflect bioavailability for infusion.")
++        }
++      } else {
++        warning("Bioavailability not specified correctly, cannot correct infusion rates.")
++      }
++    }
+   }
+   if(!is.null(t_obs)) {
+     obs <- data.frame(
+diff --git a/man/regimen_to_nm.Rd b/man/regimen_to_nm.Rd
+index 0ff17b92..11ec2139 100644
+--- a/man/regimen_to_nm.Rd
++++ b/man/regimen_to_nm.Rd
+@@ -4,7 +4,14 @@
+ \alias{regimen_to_nm}
+ \title{Convert PKPDsim regimen to NONMEM table (doses only)}
+ \usage{
+-regimen_to_nm(reg = NULL, dose_cmt = 1, n_ind = 1, t_obs = NULL, obs_cmt = 1)
++regimen_to_nm(
++  reg = NULL,
++  dose_cmt = 1,
++  n_ind = 1,
++  t_obs = NULL,
++  obs_cmt = 1,
++  bioav = NULL
++)
+ }
+ \arguments{
+ \item{reg}{`PKPDsim` regimen, created using `new_regimen()` function}
+@@ -16,6 +23,8 @@ regimen_to_nm(reg = NULL, dose_cmt = 1, n_ind = 1, t_obs = NULL, obs_cmt = 1)
+ \item{t_obs}{add observation time(s)}
+ 
+ \item{obs_cmt}{observation compartment for added observation time(s)}
++
++\item{bioav}{bioavailability (numeric vector, can not be a parameter)}
+ }
+ \value{
+ Data frame containing doses
+diff --git a/tests/testthat/test_regimen_to_nm.R b/tests/testthat/test_regimen_to_nm.R
+index 44e5976c..cade292e 100644
+--- a/tests/testthat/test_regimen_to_nm.R
++++ b/tests/testthat/test_regimen_to_nm.R
+@@ -15,3 +15,37 @@ test_that("regimen can be converted to nonmem format", {
+   expect_true(all(expected_cols %in% colnames(b)))
+ })
+ 
++test_that("regimen with infusion correctly recalculates rates when bioavailability specified", {
++  a <- new_regimen(amt = 10, n = 5, interval = 12, t_inf = 1, type = "infusion")
++  expect_message(
++    {
++      b <- regimen_to_nm(
++        a,
++        t_obs = c(1, 2, 3),
++        bioav = 0.5
++      )
++    },
++    "Recalculating infusion rates"
++  )
++  expect_warning(
++    regimen_to_nm(
++      a,
++      t_obs = c(1, 2, 3),
++      bioav = "F1"
++    ),
++    "Bioavailability not specified correctly"
++  )
++  expected_cols <- c(
++    "ID",
++    "TIME",
++    "CMT",
++    "DV",
++    "AMT",
++    "EVID",
++    "MDV",
++    "RATE"
++  )
++  expect_true(all(expected_cols %in% colnames(b)))
++  expect_equal(b$RATE, c(5, 0, 0, 0, 5, 5, 5, 5))
++})
++

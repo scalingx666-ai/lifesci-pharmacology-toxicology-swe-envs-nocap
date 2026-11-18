@@ -1,0 +1,63 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-86"
+description = "Fix `n` and length of rate vector in regimens joined by t_dose_update"
+
+[metadata]
+difficulty = "small"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "90cb3f637b34af3010ced4a3f55be7c1937e2014"
+reference = "https://github.com/InsightRX/PKPDsim/pull/86"
+source_access = "auto"
+built_at = "2026-11-16T19:40:58.057528+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:838cffd021e32c9fecd439266bcc8dbc63fd0101215431249f131f575c7aacbb"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2024-01-08T20:54:40Z"
+diff_format = "unified"
+context_files = [
+    "R/join_regimen.R",
+    "tests/testthat/test_join_regimen.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 19
+difficulty = "small"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

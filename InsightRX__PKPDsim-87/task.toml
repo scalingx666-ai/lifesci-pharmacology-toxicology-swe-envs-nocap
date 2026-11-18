@@ -1,0 +1,63 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-87"
+description = "fix regimen to nm convertor"
+
+[metadata]
+difficulty = "medium"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "b892eca5062368028b7e064d5b406f96d4f375a3"
+reference = "https://github.com/InsightRX/PKPDsim/pull/87"
+source_access = "auto"
+built_at = "2026-11-16T19:40:56.741230+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:137c14dbeb145d2eb0bf004c04008b82c6fd738c285104117e20121fa22ca403"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2024-01-10T18:02:38Z"
+diff_format = "unified"
+context_files = [
+    "R/regimen_to_nm.R",
+    "tests/testthat/test_regimen_to_nm.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 42
+difficulty = "medium"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

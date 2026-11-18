@@ -1,0 +1,76 @@
+diff --git a/Dockerfile b/Dockerfile
+index 99d9846a..1e55ce29 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -1,12 +1,19 @@
+-FROM 579831337053.dkr.ecr.us-west-2.amazonaws.com/irx-r-base:latest
++FROM rocker/r-ver:latest
+ 
+ ENV _R_CHECK_TESTS_NLINES_=0
+ 
+-RUN rm -rf /src/PKPDsim
+-COPY ./ /src/PKPDsim
+ WORKDIR /src/PKPDsim
+ 
+-# Install system and CRAN dependencies
+-RUN apt-get update
+-RUN apt install -y pandoc qpdf
+-RUN Rscript -e "install.packages(c('mockery', 'nlmixr2', 'knitr', 'rmarkdown'), repos = '${RSPM_SNAPSHOT}')"
++COPY ./ /src/PKPDsim
++
++RUN apt-get update && apt-get install -y \
++    pandoc \
++    qpdf \
++    && apt-get clean \
++    && rm -rf /var/lib/apt/lists/*
++
++    
++RUN Rscript -e "install.packages(c('mockery', 'nlmixr2', 'knitr', 'rmarkdown'), repos = 'https://cloud.r-project.org')"
++
++RUN R CMD check PKPDsim
++
+diff --git a/Dockerfile.aws b/Dockerfile.aws
+new file mode 100644
+index 00000000..4e38cd25
+--- /dev/null
++++ b/Dockerfile.aws
+@@ -0,0 +1,12 @@
++FROM 579831337053.dkr.ecr.us-west-2.amazonaws.com/irx-r-base:latest
++
++ENV _R_CHECK_TESTS_NLINES_=0
++
++RUN rm -rf /src/PKPDsim
++COPY ./ /src/PKPDsim
++WORKDIR /src/PKPDsim
++
++# Install system and CRAN dependencies
++RUN apt-get update
++RUN apt install -y pandoc qpdf
++RUN Rscript -e "install.packages(c('mockery', 'nlmixr2', 'knitr', 'rmarkdown'), repos = '${RSPM_SNAPSHOT}')"
+\ No newline at end of file
+diff --git a/docker-compose.yml b/docker-compose.yml
+new file mode 100644
+index 00000000..1a6b0282
+--- /dev/null
++++ b/docker-compose.yml
+@@ -0,0 +1,19 @@
++version: '3'
++services:
++  pkpdsim:
++    build:
++      context: .
++      dockerfile: Dockerfile
++    image: pkpdsim:latest
++
++  pkpdsim-aws:
++    build:
++      context: .
++      dockerfile: Dockerfile.aws
++    image: pkpdsim:aws
++
++# docker-compose build
++# docker-compose build pkpdsim
++# docker-compose build pkpdsim-aws
++# docker-compose run pkpdsim
++# docker-compose run pkpdsim-aws
+\ No newline at end of file

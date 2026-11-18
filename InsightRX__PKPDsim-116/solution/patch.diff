@@ -1,0 +1,93 @@
+diff --git a/PKPDsim.Rproj b/PKPDsim.Rproj
+index 71e4461e..3ab87d3f 100644
+--- a/PKPDsim.Rproj
++++ b/PKPDsim.Rproj
+@@ -1,5 +1,4 @@
+ Version: 1.0
+-ProjectId: ae147ab9-a513-4f38-a09b-ceb5d569c3a0
+ 
+ RestoreWorkspace: Default
+ SaveWorkspace: Default
+diff --git a/R/sim.R b/R/sim.R
+index 461083f6..cde47f54 100644
+--- a/R/sim.R
++++ b/R/sim.R
+@@ -180,6 +180,7 @@ sim <- function (ode = NULL,
+     } else {
+       cpp <- FALSE
+     }
++
+     ## Add _kappa parameters (IOV) if not specified by user but required by model
+     if(!is.null(attr(ode, "parameters"))) {
+       p_mod <- attr(ode, "parameters")
+@@ -193,6 +194,10 @@ sim <- function (ode = NULL,
+         p <- parameters
+       }
+     }
++    ## Throw warning when iov_bins supplied but no IOV in model, and reset iov_bins
++    if(!is.null(iov_bins) && !is.null(attr(ode, "iov")$n_bins) && attr(ode, "iov")$n_bins == 1) {
++      stop("No IOV implemented for this model, please set `iov_bins` argument to `NULL`.")
++    }
+     if(!is.null(attr(ode, "iov")$n_bins) && attr(ode, "iov")$n_bins > 1) {
+       if(attr(ode, "iov")$n_bins < (length(iov_bins)-1)) {
+         stop("Number of allowed IOV bins for model is lower than number of bins supplied in `iov_bins`. Please reduce the number of requested IOV bins in the `sim()` call, or increase the number of IOV bins allowed for the model.")
+diff --git a/tests/testthat/test_iov.R b/tests/testthat/test_iov.R
+index 9fb9e1bf..650d1388 100644
+--- a/tests/testthat/test_iov.R
++++ b/tests/testthat/test_iov.R
+@@ -7,7 +7,21 @@ pars <- list(
+   "V" = 50,
+   "KA" = 1
+ )
+-
++pars0 <- list(
++  "CL" = 5,
++  "V" = 50,
++  "KA" = 1
++)
++pk0 <- new_ode_model( # no IOV
++  code = "
++      dAdt[1] = -KA * A[1]
++      dAdt[2] = +KA * A[1] -(CL/V) * A[2]
++    ",
++  obs = list(cmt = 2, scale = "V"),
++  dose = list(cmt = 1, bioav = 1),
++  parameters = names(pars0),
++  cpp_show_code = F
++)
+ pk1 <- new_ode_model(
+   code = "
+       CL_iov = CL * exp(kappa_CL + eta_CL);
+@@ -24,7 +38,6 @@ pk1 <- new_ode_model(
+   parameters = names(pars),
+   cpp_show_code = F
+ )
+-
+ reg1 <- new_regimen(
+   amt = 100,
+   interval = 24,
+@@ -33,6 +46,24 @@ reg1 <- new_regimen(
+ )
+ iov_var <- 0.3 ^ 2 # 30% IOV
+ 
++test_that("Throws error when `iov_bins` supplied but not present in model", {
++  expect_error({
++    sim(
++      ode = pk0,
++      parameters = pars0,
++      regimen = reg1,
++      omega = c(
++        0.3 # IIV in CL
++      ),
++      n = 1,
++      iov_bins = c(0, 24, 48, 72, 999), # !!
++      omega_type = "normal",
++      only_obs = TRUE,
++      output_include = list(parameters = TRUE, variables = TRUE)
++    )
++  }, "No IOV implemented for this model")
++})
++
+ test_that("Throws error when number of `iov_bins` is higher than allowed for model", {
+   expect_error({
+     sim(

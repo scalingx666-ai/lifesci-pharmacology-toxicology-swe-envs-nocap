@@ -1,0 +1,170 @@
+diff --git a/inst/models/pk_busulfan_mccune.json5 b/inst/models/pk_busulfan_mccune.json5
+new file mode 100644
+index 00000000..8998b116
+--- /dev/null
++++ b/inst/models/pk_busulfan_mccune.json5
+@@ -0,0 +1,92 @@
++{
++  "id": "pk_busulfan_mccune",
++  "ode_code": "\
++    FTIM = 1\
++    if(t > T_CL_EFF+6) { \
++      FTIM = 0.932 \
++    }\
++    if(t > T_CL_EFF+36) { \
++      FTIM = 0.919 \
++    }\
++    CL_avg = CL * FSIZE_CL  * FMAT  * FTIM \
++    CLi    = CL_avg * exp(kappa_CL) \
++    V_avg  = V * FSIZE_V   * FSEXV \
++    Vi     = V_avg * exp(kappa_V) \
++    dAdt[0] = -(CLi/Vi)*A[0] + (Qi/V2i)*A[1] - (Qi/Vi)*A[0] \
++    dAdt[1] =                - (Qi/V2i)*A[1] + (Qi/Vi)*A[0] \
++    dAdt[2] =  (A[0]/scale) ",
++  "pk_code": "\
++    HTM = HT/100 \
++    BMI = WT/(HTM*HTM) \
++    FSEXV = 1 \
++    FFM = WT * 0.85 \
++    if(SEX == 0) {\
++      WHS_MAX = 37.99\
++      WHS_50 = 35.98 \
++      FSEXV  = 1.07 \
++    } else {\
++      WHS_MAX = 42.92 \
++      WHS_50 = 30.93 \
++    } \
++    FFM = WHS_MAX * (HTM*HTM) * (WT/(WHS_50*(HTM*HTM) + WT)) \
++    FATKG = WT-FFM \
++    NFM_CL = FFM + 0.509 * FATKG \
++    NFM_V  = FFM + 0.203 * FATKG \
++    FSIZE_CL = pow(NFM_CL/70, 0.75) \
++    FSIZE_V  = NFM_V/70 \
++    PMA  = AGE * 52.1775 + 40 \
++    FMAT = 1.0 / (1.0 + pow((PMA/(TM50)), -HILL)) \
++    V2i    = V2 * FSIZE_V   * FSEXV \
++    Qi     = Q  * FSIZE_CL \
++  ",
++  "n_comp": 3,
++  "obs": { "cmt": 1, "scale": "(V * FSIZE_V * FSEXV) * exp(kappa_V) / 1000" },
++  "dose": { "cmt": 1, "bioav": 1 },
++  "covariates": ["AGE", "WT", "HT", "SEX", "T_CL_EFF" ],
++  "variables": ["CL_avg", "CLi", "V_avg", "Vi", "Qi", "V2i", "HTM", "BMI", "FFM", "FATKG", "NFM_CL", "NFM_V", "FSIZE_CL", "FSIZE_V", "FMAT", "FSIZE", "FSEXV", "FTIM", "PMA", "WHS_MAX", "WHS_50"],
++  "parameters": {
++    "CL": 11.4,
++    "V": 13.9,
++    "Q": 135.2,
++    "V2": 29.9,
++    "TM50": 45.7,
++    "HILL": 2.3
++  },
++  "omega_matrix": [
++    0.0459,
++    0.0172, 0.152,
++    0.0681, 0.097, 0.814,
++    0.0115, -0.00924, 0.069, 0.00932
++  ],
++  "iov": {
++    "use": true,
++    "cv": {
++      "CL": 0.113,
++      "V": 0.224
++    },
++    "n_bins": 5,
++    "bins": [0, 24, 48, 72, 96, 9999]
++  },
++  "fixed": ["TM50", "HILL"],
++  "ruv": {
++    "prop": 0.0387,
++    "add": 27
++  },
++  "misc": {
++    "model_type": "2cmt_iv",
++    "linearity": "linear",
++    "init_parameter": false,
++    "int_step_size": 0.01
++  },
++  "references": [
++    {
++        "ref": "McCune JS et al. Clin Cancer Res 2015",
++        "url": "http://www.ncbi.nlm.nih.gov/pubmed/24218510"
++    },
++    {
++        "ref": "McCune JS et al. Clin Cancer Res 2015 Supplementary Material",
++        "url": "https://clincancerres.aacrjournals.org/content/clincanres/suppl/2013/11/11/1078-0432.CCR-13-1960.DC1/supp_methods.pdf"
++    }
++  ],
++  "version": "0.1.16"
++}
+diff --git a/inst/models/pk_busulfan_shukla.json5 b/inst/models/pk_busulfan_shukla.json5
+new file mode 100644
+index 00000000..f8125a01
+--- /dev/null
++++ b/inst/models/pk_busulfan_shukla.json5
+@@ -0,0 +1,66 @@
++{
++  "id": "pk_busulfan_shukla",
++  "ode_code": "\
++    DAY = 0; \
++    if(t > 24) { DAY = 1; }\
++    CL_avg = CL * FMAT * FSIZE * FREGI * (1 + TH_DAY * DAY);\
++    CLi = CL_avg * exp(kappa_CL) \
++    Vi = V_avg * exp(kappa_V) \
++    dAdt[0] = -(CLi/Vi) * A[0];\
++    dAdt[1] = (A[0]/(Vi / 1000.0));",
++  "pk_code": "\
++    BMI = WT/(HT*HT/1e4); \
++    if(SEX == 0) {\
++      FFM = (1.11 + ((1-1.11)/(1+pow((AGE/7.1),-1.1)))) * ((9270 * WT)/(8780 + (244 * BMI))); \
++    } \
++    if(SEX != 0) {\
++      FFM = (0.88 + ((1-0.88)/(1+pow((AGE/13.4),-12.7)))) * ((9270 * WT)/(6680 + (216 * BMI))); \
++    }\
++    FMAT = (MAT_MAG + (1-MAT_MAG)*(1-exp(-AGE*K_MAT)));\
++    FSIZE = pow(FFM/12, 0.75);\
++    FREGI = (1 + (TH_REGI * REGI));\
++    V_avg = V * FFM/12.0 \
++  ",
++  "n_comp": 2,
++  "obs": { "cmt": 1, "scale": "Vi / 1000.0" },
++  "dose": { "cmt": 1, "bioav": 1 },
++  "parameters": {
++    "CL": 3.96,
++    "V": 10.8,
++    "MAT_MAG": 0.451,
++    "K_MAT": 1.37,
++    "TH_REGI": -0.20,
++    "TH_DAY": -0.135
++  },
++  "omega_matrix": [
++    0.0595,
++    0.0323, 0.0293
++  ],
++  "iov": {
++    "cv": {
++      "CL": 0.1288,
++      "V": 0.1334
++     },
++     "n_bins": 5,
++     "bins": [0, 24, 48, 72, 96, 9999]
++  },
++  "fixed": ["MAT_MAG", "K_MAT", "TH_REGI", "TH_DAY"],
++  "ruv": {
++    "prop": 0.106,
++    "add": 22.2
++  },
++  "covariates": ["AGE", "WT", "HT", "SEX", "REGI"],
++  "variables": ["CLi", "Vi", "BMI", "FFM", "FMAT", "FSIZE", "FREGI", "DAY", "CL_avg", "V_avg"],
++  "misc": {
++    "model_type": "1cmt_iv",
++    "linearity": "linear",
++    "init_parameter": false
++  },
++  "references": [
++    {
++      "ref": "Shukla et al. Front. Pharmacol. 2020",
++      "url": "https://www.frontiersin.org/articles/10.3389/fphar.2020.00888/abstract"
++    }
++  ],
++  "version": "0.2.14"
++}

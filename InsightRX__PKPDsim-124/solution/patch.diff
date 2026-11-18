@@ -1,0 +1,63 @@
+diff --git a/R/sim.R b/R/sim.R
+index f622c89a..cad2efef 100644
+--- a/R/sim.R
++++ b/R/sim.R
+@@ -625,13 +625,14 @@ sim <- function (ode = NULL,
+   colnames(grid) <- c("t_obs_type", "id", "comp")
+   comb$t_obs_type <- paste(comb$t, comb$obs_type, sep = "_")
+   comb$rownr <- 1:nrow(comb) # keep row-ordering during merge
++  # Extract all timepoints requested, note that times are still shifted by t_ss
++  # and/or t_init
+   comb <- merge(grid, comb, all=FALSE)[, c("id", "t_obs_type", "t", "comp", "y", "obs_type", "rownr", all_names)]
+   rm_cols <- which(colnames(comb) %in% c("t_obs_type", "rownr"))
+   comb <- comb[order(comb$id, comb$comp, comb$t, comb$obs_type, comb$rownr, decreasing=FALSE), -rm_cols]
+   if(!is.null(regimen_orig$ss_regimen)) {
+     t_ss <- utils::tail(regimen_orig$ss_regimen$dose_times,1) + regimen_orig$ss_regimen$interval
+     comb$t <- as.num(comb$t) - t_ss
+-    comb <- comb[comb$t >= 0,]
+   }
+ 
+   ## add residual variability
+diff --git a/tests/testthat/test_sim.R b/tests/testthat/test_sim.R
+index 905d072f..cb676754 100644
+--- a/tests/testthat/test_sim.R
++++ b/tests/testthat/test_sim.R
+@@ -491,9 +491,10 @@ test_that("times are recalculated correctly after steady-state regimen added", {
+   # we expect SCR before t = 3 to be 0.5, SCR after t = 30 to be 0.9, and
+   # a gradient applied in between
+   expect_equal(res$SCR, c(0.5, 0.5, 0.811111111111111, 0.9, 0.9))
+-
+   # t_obs passed as argument should match returned values
+   expect_equal(res$t, t_obs)
++  # we expect y to be consistent across the scenarios in this test as well
++  expect_equal(res$y, c(9.06594585, 22.29872435, 9.06599650, 16.51932909, 9.06600109))
+ 
+   # the above should also be true if t_init > steady state duration
+   res <- suppressMessages(sim(
+@@ -508,6 +509,26 @@ test_that("times are recalculated correctly after steady-state regimen added", {
+   ))
+   expect_equal(res$SCR, c(0.5, 0.5, 0.811111111111111, 0.9, 0.9))
+   expect_equal(res$t, t_obs)
++  expect_equal(res$y, c(9.06594585, 22.29872435, 9.06599650, 16.51932909, 9.06600109))
++
++  # the above should also be true if t_init != 0 and there's an observation
++  # before t == 0
++  t_obs <- c(-15, 0, 3, 24, 30, 48)
++  res <- suppressMessages(sim(
++    mod_1cmt_iv,
++    parameters = par,
++    covariates = covs,
++    regimen = reg,
++    t_obs = t_obs,
++    t_init = 15,
++    only_obs = TRUE,
++    output_include = list(covariates = TRUE)
++  ))
++  expect_equal(res$SCR, c(0.5, 0.5, 0.5, 0.811111111111111, 0.9, 0.9))
++  expect_equal(res$t, t_obs)
++  expect_equal(
++    res$y, c(12.23757239, 9.06594585, 22.29872435, 9.06599650, 16.51932909, 9.06600109)
++  )
+ })
+ 
+ test_that("t_max is shifted correctly when t_ss != 0", {

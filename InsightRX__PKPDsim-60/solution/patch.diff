@@ -1,0 +1,101 @@
+diff --git a/DESCRIPTION b/DESCRIPTION
+index ac116a39..de293d7f 100644
+--- a/DESCRIPTION
++++ b/DESCRIPTION
+@@ -27,7 +27,7 @@ License: MIT + file LICENSE
+ URL: https://github.com/InsightRX/PKPDsim,
+     https://insightrx.github.io/PKPDsim/
+ LazyData: TRUE
+-RoxygenNote: 7.2.0
++RoxygenNote: 7.2.1
+ Config/testthat/edition: 3
+ Config/Needs/website: tidyverse, nlmixr2
+ Encoding: UTF-8
+diff --git a/R/model_from_api.R b/R/model_from_api.R
+index c4915d0d..100ab459 100644
+--- a/R/model_from_api.R
++++ b/R/model_from_api.R
+@@ -73,6 +73,7 @@ model_from_api <- function(url,
+         package = package,
+         iiv = def$iiv,
+         iov = def$iov,
++        development = def$development,
+         omega_matrix = def$omega_matrix,
+         ruv = def$ruv,
+         ltbs = def$ltbs,
+diff --git a/R/new_ode_model.R b/R/new_ode_model.R
+index 592edbd5..b8099612 100644
+--- a/R/new_ode_model.R
++++ b/R/new_ode_model.R
+@@ -20,6 +20,7 @@
+ #' @param fixed parameters that should not have iiv added.
+ #' @param iiv inter-individual variability, can optionally be added to library
+ #' @param iov inter-occasion variability, can optionally be added to library
++#' @param development Information about the model development population, can optionally be added to library
+ #' @param omega_matrix variance-covariance matrix for inter-individual variability, can optionally be added to library
+ #' @param ruv residual variability, can optionally be added to library
+ #' @param ltbs log-transform both sides. Not used in simulations, only for fitting (sets attribute `ltbs`).
+@@ -63,6 +64,7 @@ new_ode_model <- function (model = NULL,
+                            declare_variables = NULL,
+                            iiv = NULL,
+                            iov = NULL,
++                           development = NULL,
+                            omega_matrix = NULL,
+                            ruv = NULL,
+                            ltbs = NULL,
+@@ -269,6 +271,7 @@ new_ode_model <- function (model = NULL,
+       attr(sim_out, "misc") <- misc
+       attr(sim_out, "cmt_mapping") <- cmt_mapping
+       attr(sim_out, "iov") <- iov
++      attr(sim_out, "development") <- development
+       attr(sim_out, "comments") <- paste0("\n", as.character(paste0(paste0(" - ", comments), collapse = "\n")))
+       if(!is.null(int_step_size)) {
+         attr(sim_out, "int_step_size") <- int_step_size
+diff --git a/man/new_ode_model.Rd b/man/new_ode_model.Rd
+index 1a8c7d5a..88e8d1a3 100644
+--- a/man/new_ode_model.Rd
++++ b/man/new_ode_model.Rd
+@@ -24,6 +24,7 @@ new_ode_model(
+   declare_variables = NULL,
+   iiv = NULL,
+   iov = NULL,
++  development = NULL,
+   omega_matrix = NULL,
+   ruv = NULL,
+   ltbs = NULL,
+@@ -85,6 +86,8 @@ new_ode_model(
+ 
+ \item{iov}{inter-occasion variability, can optionally be added to library}
+ 
++\item{development}{Information about the model development population, can optionally be added to library}
++
+ \item{omega_matrix}{variance-covariance matrix for inter-individual variability, can optionally be added to library}
+ 
+ \item{ruv}{residual variability, can optionally be added to library}
+diff --git a/tests/testthat/test_new_ode_model.R b/tests/testthat/test_new_ode_model.R
+index 9ec18f03..8b872af5 100644
+--- a/tests/testthat/test_new_ode_model.R
++++ b/tests/testthat/test_new_ode_model.R
+@@ -132,3 +132,22 @@ test_that("correct combinations of vars/scale/cmt are supported", {
+   )
+ 
+ })
++
++test_that("adding development info works", {
++  skip_on_cran()
++  dev <- list(
++    n_patients = 50,
++    n_sites = 1,
++    n_tdms = 200,
++    age = list(min = 15, median = 50, max = 90, unit = "years")
++  )
++  mod_1cmt_iv <- new_ode_model(
++    "pk_1cmt_iv",
++    development = dev
++  )
++
++  expect_identical(
++    attr(mod_1cmt_iv, "development"),
++    dev
++  )
++})

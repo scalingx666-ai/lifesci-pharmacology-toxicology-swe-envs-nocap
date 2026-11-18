@@ -1,0 +1,45 @@
+diff --git a/PKPDsim.Rproj b/PKPDsim.Rproj
+index 88ff2b5d..3ab87d3f 100644
+--- a/PKPDsim.Rproj
++++ b/PKPDsim.Rproj
+@@ -17,5 +17,6 @@ StripTrailingWhitespace: Yes
+ 
+ BuildType: Package
+ PackageUseDevtools: Yes
++PackageCleanBeforeInstall: No
+ PackageInstallArgs: --no-multiarch --with-keep.source
+ PackageRoxygenize: rd,collate,namespace
+diff --git a/R/new_ode_model.R b/R/new_ode_model.R
+index 9255982f..567fb410 100644
+--- a/R/new_ode_model.R
++++ b/R/new_ode_model.R
+@@ -207,6 +207,11 @@ new_ode_model <- function (model = NULL,
+       }
+     }
+     variables <- declare_variables
++    if(!is.null(cov_names) && !is.null(variables)) {
++      if(length(intersect(cov_names, variables))) {
++        stop("Covariates and specified variables cannot overlap.")
++      }
++    }
+     if(!is.null(cov_names)) {
+       declare_variables <- c(declare_variables,
+                              cov_names,
+diff --git a/tests/testthat/test_new_ode_model.R b/tests/testthat/test_new_ode_model.R
+index 8b872af5..85a9b7c6 100644
+--- a/tests/testthat/test_new_ode_model.R
++++ b/tests/testthat/test_new_ode_model.R
+@@ -151,3 +151,13 @@ test_that("adding development info works", {
+     dev
+   )
+ })
++
++test_that("specifying overlapping covariates and variables throws error", {
++  expect_error(
++    new_ode_model(
++      code = "dAdt[1] = -(CL*WT/V)*A[1]; CONC = 1000*A[1]/V; METAB = CONC/2; METAB2 = CONC * t; ACT = 15",
++      covariates = list(WT = new_covariate(70)),
++      declare_variables = c("WT")
++    )
++  )
++})

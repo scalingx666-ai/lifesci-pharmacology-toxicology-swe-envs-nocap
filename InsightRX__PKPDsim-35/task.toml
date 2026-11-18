@@ -1,0 +1,63 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-35"
+description = "RXR-837 fix order output for models with lagtime"
+
+[metadata]
+difficulty = "medium"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "edc1587adf5d5c34f41a1bd8dc044855d880efc0"
+reference = "https://github.com/InsightRX/PKPDsim/pull/35"
+source_access = "auto"
+built_at = "2026-11-16T19:41:53.374302+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:2c2496b196033ae81d00c7bda96c91c14c8cdcfe25e37af8f30c146f3545b98e"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2022-02-04T17:44:57Z"
+diff_format = "unified"
+context_files = [
+    "R/sim.R",
+    "tests/testthat/test_sim_lagtime.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 28
+difficulty = "medium"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

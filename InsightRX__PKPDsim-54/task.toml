@@ -1,0 +1,63 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-54"
+description = "move up check for parameter vs parameter table"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "03b393e188daa48a91e790d5a82ef8ed3ecc2aab"
+reference = "https://github.com/InsightRX/PKPDsim/pull/54"
+source_access = "auto"
+built_at = "2026-11-16T19:41:34.360919+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:a74edb316819d6a1e1bcff8f7e70e38f5eced07c55a226863135840b0dc56955"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2022-07-11T07:16:46Z"
+diff_format = "unified"
+context_files = [
+    "R/sim.R",
+    "tests/testthat/test_iov.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 123
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

@@ -1,0 +1,10 @@
+diff --git a/src/Makevars b/src/Makevars
+new file mode 100644
+index 00000000..347d79dc
+--- /dev/null
++++ b/src/Makevars
+@@ -0,0 +1,4 @@
++strippedLib: $(SHLIB)
++	if test -e "/usr/bin/strip" & test -e "/bin/uname" & [[ `uname` == "Linux" ]] ; then /usr/bin/strip --strip-debug $(SHLIB); fi
++.phony: strippedLib
++

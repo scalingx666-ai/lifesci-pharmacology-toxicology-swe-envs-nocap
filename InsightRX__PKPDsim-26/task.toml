@@ -1,0 +1,65 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-26"
+description = "RXR-633 rm unused functionality"
+
+[metadata]
+difficulty = "medium"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "3af74cf588c4e256a9e1cac0bb66b483b97fdf0d"
+reference = "https://github.com/InsightRX/PKPDsim/pull/26"
+source_access = "auto"
+built_at = "2026-11-16T19:42:04.481938+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:b18755bd4fa11238155887ba281f69ecc55868dcf8b895556f3dc0f45349a017"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2021-12-21T00:52:37Z"
+diff_format = "unified"
+context_files = [
+    "NAMESPACE",
+    "R/analytical_eqn_wrapper.R",
+    "R/sim_core_analytic.R",
+    "man/sim_core_analytic.Rd",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 68
+difficulty = "medium"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

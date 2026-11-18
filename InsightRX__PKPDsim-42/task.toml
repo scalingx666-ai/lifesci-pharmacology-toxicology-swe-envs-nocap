@@ -1,0 +1,66 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-42"
+description = "RXR-1014 fix issue with multiple observation types"
+
+[metadata]
+difficulty = "medium"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "08677e82f59e37882a2bd76a04d39b4d28fe849b"
+reference = "https://github.com/InsightRX/PKPDsim/pull/42"
+source_access = "auto"
+built_at = "2026-11-16T19:41:45.208066+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:795e1cf038bb949540a48ff6ff807a81ed7eb0174f147110f41fafa0cbf0241f"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2022-05-13T05:24:57Z"
+diff_format = "unified"
+context_files = [
+    "R/create_event_table.R",
+    "R/parse_obs_types.R",
+    "inst/cpp/sim.cpp",
+    "tests/testthat/test_multi_obs.R",
+    "tests/testthat/test_parse_obs_types.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 67
+difficulty = "medium"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

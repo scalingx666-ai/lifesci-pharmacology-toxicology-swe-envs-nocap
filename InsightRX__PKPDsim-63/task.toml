@@ -1,0 +1,66 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-63"
+description = "Rewrite print_list"
+
+[metadata]
+difficulty = "medium"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "7f3d8271a243d439a9ce3c6dad520493057545fa"
+reference = "https://github.com/InsightRX/PKPDsim/pull/63"
+source_access = "auto"
+built_at = "2026-11-16T19:41:24.185686+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:a9428501438b53590b9a408e17ea0947063308d936a6e24cd42d8b33244b0351"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2022-11-30T20:51:04Z"
+diff_format = "unified"
+context_files = [
+    "NAMESPACE",
+    "R/misc.R",
+    "R/new_ode_model.R",
+    "man/print_list.Rd",
+    "tests/testthat/test_misc.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 62
+difficulty = "medium"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

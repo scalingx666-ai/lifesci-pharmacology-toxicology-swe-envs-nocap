@@ -1,0 +1,63 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-82"
+description = "RXR-1771: Include sc, im among types whose t_inf should be 0"
+
+[metadata]
+difficulty = "medium"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "e23960fc89881719709cbc451c108c1e047d84d6"
+reference = "https://github.com/InsightRX/PKPDsim/pull/82"
+source_access = "auto"
+built_at = "2026-11-16T19:41:03.333401+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:40c9e4b0ca0a5f30f568d7a1be3de4cacd9680b4d262d8a20dc8f9b7770699a9"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2023-12-14T17:09:25Z"
+diff_format = "unified"
+context_files = [
+    "R/create_event_table.R",
+    "tests/testthat/test_create_event_table.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 36
+difficulty = "medium"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

@@ -1,0 +1,102 @@
+diff --git a/.github/workflows/R-CMD-check.yaml b/.github/workflows/R-CMD-check.yaml
+index 2bd5ba1b..400610fc 100644
+--- a/.github/workflows/R-CMD-check.yaml
++++ b/.github/workflows/R-CMD-check.yaml
+@@ -21,7 +21,7 @@ jobs:
+         config:
+           - {os: ubuntu-latest,   r: 'release'}
+           - {os: windows-latest, r: 'release'}
+-          #- {os: macos-latest,   r: 'release'}
++          - {os: macos-latest,   r: 'release'}
+           #- {os: ubuntu-latest,   r: 'devel', http-user-agent: 'release'}
+           
+           
+diff --git a/DESCRIPTION b/DESCRIPTION
+index c85a2991..f26ac97d 100644
+--- a/DESCRIPTION
++++ b/DESCRIPTION
+@@ -1,8 +1,8 @@
+ Package: PKPDsim
+ Type: Package
+ Title: Tools for Performing Pharmacokinetic-Pharmacodynamic Simulations
+-Version: 1.4.0
+-Date: 2024-08-19
++Version: 1.4.1
++Date: 2025-04-09
+ Authors@R: c(
+         person("Ron", "Keizer", email = "ron@insight-rx.com", role = c("aut", "cre")),
+         person("Jasmine", "Hughes", email = "jasmine@insight-rx.com", role = "aut"),
+@@ -27,9 +27,10 @@ Description: Simulate dose regimens for pharmacokinetic-pharmacodynamic (PK-PD)
+ License: MIT + file LICENSE
+ URL: https://github.com/InsightRX/PKPDsim,
+     https://insightrx.github.io/PKPDsim/
++Language: en-US
+ LazyData: TRUE
+ Roxygen: list(markdown = TRUE)
+-RoxygenNote: 7.3.1
++RoxygenNote: 7.3.2
+ Config/testthat/edition: 3
+ Config/Needs/website: tidyverse, nlmixr2
+ Encoding: UTF-8
+diff --git a/NEWS.md b/NEWS.md
+index 808a6e27..12b21382 100644
+--- a/NEWS.md
++++ b/NEWS.md
+@@ -1,3 +1,15 @@
++# PKPDsim 1.4.1
++
++This release fixes a few minor issues:
++
++- an edge case where dose-dependent variables or parameters were not correctly initialized
++- a bug in the Cpp template for ODE models related to IOV bins that could potentially result in runtime error
++
++Also:
++- small improvements to the README
++- grammar and code style fixes in vignettes
++- removed test for warning in `is_positive_definite()` that is not thrown on macos-arm64
++
+ # PKPDsim 1.4.0
+ 
+ This release fixes an issue introduced with an upgrade in Rcpp (1.0.13), as described here: https://github.com/RcppCore/Rcpp/issues/1311.
+diff --git a/cran-comments.md b/cran-comments.md
+index ecce0b94..9803c4cf 100755
+--- a/cran-comments.md
++++ b/cran-comments.md
+@@ -1,3 +1,21 @@
++## Version 1.4.1
++
++The previous version of PKPDsim was removed from the CRAN repository due to an 
++issue which CRAN requested to fix. We apologize for the inability to address the
++issue within the allotted time. We have addressed the issue now (i.e. removed a 
++test with slightly different behavior on macos-arm64 compared to other 
++platforms).
++
++We're therefore resubmitting PKPDsim to CRAN, and including these minor fixes:
++
++- removed test for warning in `is_positive_definite()` that is not thrown on macos-arm64
++- fixed an edge case where dose-dependent variables or parameters were not correctly initialized
++- fixed a bug in the Cpp template for ODE models related to IOV bins that could potentially result in runtime error
++
++Also:
++- minor improvements to the README
++- grammar and code style fixes in vignettes
++
+ ## Version 1.4.0
+ 
+ This release fixes an issue introduced with an upgrade in Rcpp (1.0.13), as described here: https://github.com/RcppCore/Rcpp/issues/1311.
+diff --git a/tests/testthat/test_is_positive_definite.R b/tests/testthat/test_is_positive_definite.R
+index 324222f6..4ccc82be 100644
+--- a/tests/testthat/test_is_positive_definite.R
++++ b/tests/testthat/test_is_positive_definite.R
+@@ -105,9 +105,7 @@ test_that("Matrix where numerical solver issues result in very tiny complex comp
+   ),
+   nrow = 16
+   )
+-  expect_warning(
+-    is_x_positive_def <- is_positive_definite(x),
+-    "imaginary parts discarded in coercion"
+-  )
++  is_x_positive_def <- is_positive_definite(x)
+   expect_true(is_x_positive_def)
+ })
++

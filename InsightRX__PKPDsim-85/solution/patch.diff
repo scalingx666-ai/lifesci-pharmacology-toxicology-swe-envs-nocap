@@ -1,0 +1,35 @@
+diff --git a/R/merge_regimen.R b/R/merge_regimen.R
+index 0fdcddc3..96f9f8d2 100644
+--- a/R/merge_regimen.R
++++ b/R/merge_regimen.R
+@@ -15,7 +15,7 @@ merge_regimen <- function(regimens) {
+     for(i in 2:length(regimens)) {
+       reg_tmp <- data.frame(regimens[[i]])
+       reg_tmp$type <- as.character(reg_tmp$type)
+-      reg_tmp$t_inf <- ifelse0(0, reg_tmp$t_inf)
++      reg_tmp$t_inf <- ifelse0(reg_tmp$t_inf, 0)
+       reg <- rbind(reg, reg_tmp[, cols])
+     }
+   }
+diff --git a/tests/testthat/test_merge_regimen.R b/tests/testthat/test_merge_regimen.R
+index 7adee177..fa0bb904 100644
+--- a/tests/testthat/test_merge_regimen.R
++++ b/tests/testthat/test_merge_regimen.R
+@@ -9,6 +9,17 @@ test_that("merge regimens correctly", {
+   expect_null(reg3$cmt)
+ })
+ 
++test_that("merge regimens correctly: two infusions", {
++  reg1 <- new_regimen(amt = 1000, times = c(0, 24), type = "infusion_1", t_inf = 1)
++  reg2 <- new_regimen(amt = 500, times = c(12, 36), type = "infusion_2", t_inf = 2)
++  reg3 <- merge_regimen(regimens = list(reg1, reg2))
++  expect_equal(reg3$dose_times, c(0, 12, 24, 36))
++  expect_equal(reg3$type, c("infusion_1", "infusion_2", "infusion_1", "infusion_2"))
++  expect_equal(reg3$dose_amts, c(1000, 500, 1000, 500))
++  expect_equal(reg3$t_inf, c(1, 2, 1, 2))
++  expect_null(reg3$cmt)
++})
++
+ test_that("cmt info gets merged as well, when available", {
+   reg1 <- new_regimen(amt = 1000, times = c(0, 24), type = "infusion", t_inf = 1, cmt = 2)
+   reg2 <- new_regimen(amt = 500, times = c(12, 36), type = "oral", cmt = 1)

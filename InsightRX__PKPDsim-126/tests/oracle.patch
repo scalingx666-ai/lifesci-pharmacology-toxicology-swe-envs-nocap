@@ -1,0 +1,96 @@
+diff --git a/R/install_default_literature_model.R b/R/install_default_literature_model.R
+index 744c68f8..73c153d5 100644
+--- a/R/install_default_literature_model.R
++++ b/R/install_default_literature_model.R
+@@ -13,7 +13,10 @@
+ #' }
+ #' @export
+ 
+-install_default_literature_model <- function(model, ...) {
++install_default_literature_model <- function(
++  model,
++  ...
++) {
+   if (model == "all") {
+     for (m in available_default_literature_models()) {
+       install_default_literature_model(m, ...)
+@@ -27,7 +30,8 @@ install_default_literature_model <- function(model, ...) {
+         package = "PKPDsim"
+       ),
+       install_all = TRUE,
+-      to_package = TRUE
++      to_package = TRUE,
++      ...
+     )
+   }
+ }
+diff --git a/inst/models/pk_vanco_colin.json5 b/inst/models/pk_vanco_colin.json5
+index ce639de9..927c6476 100644
+--- a/inst/models/pk_vanco_colin.json5
++++ b/inst/models/pk_vanco_colin.json5
+@@ -50,8 +50,7 @@
+     0.684
+   ],
+   "fixed": [
+-    "Q",
+-    "TDM_INIT"
++    "Q"
+   ],
+   "iov": null,
+   "ruv": {
+@@ -89,7 +88,7 @@
+   "misc": {
+     "model_type": "2cmt_iv",
+     "linearity": "linear",
+-    "init_parameter": true
++    "init_parameter": false
+   },
+   "references": [
+     {
+diff --git a/inst/models/pk_vanco_kloprogge.json5 b/inst/models/pk_vanco_kloprogge.json5
+index 0ab92be3..0d3eaac4 100644
+--- a/inst/models/pk_vanco_kloprogge.json5
++++ b/inst/models/pk_vanco_kloprogge.json5
+@@ -57,8 +57,7 @@
+   },
+   "fixed": [
+     "Q",
+-    "V2",
+-    "TDM_INIT"
++    "V2"
+   ],
+   "omega_matrix": [
+     0.2263512,
+@@ -74,7 +73,7 @@
+   "misc": {
+     "model_type": "2cmt_iv",
+     "linearity": "linear",
+-    "init_parameter": true
++    "init_parameter": false
+   },
+   "references": [
+     {
+diff --git a/inst/models/pk_vanco_thomson.json5 b/inst/models/pk_vanco_thomson.json5
+index 8b0f2a25..f1192cc0 100644
+--- a/inst/models/pk_vanco_thomson.json5
++++ b/inst/models/pk_vanco_thomson.json5
+@@ -40,9 +40,7 @@
+     "V2": 0.732
+   },
+   "fixed": [
+-    "TH_CRCL",
+-    "TDM_INIT",
+-    "TH_CVVH"
++    "TH_CRCL"
+   ],
+   "omega_matrix": [
+     0.0729,
+@@ -64,7 +62,7 @@
+   "misc": {
+     "model_type": "2cmt_iv",
+     "linearity": "linear",
+-    "init_parameter": true
++    "init_parameter": false
+   },
+   "references": [
+     {

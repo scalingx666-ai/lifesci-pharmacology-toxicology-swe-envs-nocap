@@ -1,0 +1,154 @@
+diff --git a/src/pk_1cmt_iv_bolus.cpp b/src/pk_1cmt_iv_bolus.cpp
+index e2495d9b..2a48b0fe 100644
+--- a/src/pk_1cmt_iv_bolus.cpp
++++ b/src/pk_1cmt_iv_bolus.cpp
+@@ -17,7 +17,6 @@ DataFrame pk_1cmt_iv_bolus(DataFrame d){
+   NumericVector AUC = out["AUC"];
+ 
+   // prepare initial state
+-  std::vector<int>::iterator it;
+   i = 0;
+   while(TIME[i] == 0) {
+     A1[i] = AMT[i];
+diff --git a/src/pk_1cmt_iv_bolus_covariates.cpp b/src/pk_1cmt_iv_bolus_covariates.cpp
+index 7342afda..bbd30ea2 100644
+--- a/src/pk_1cmt_iv_bolus_covariates.cpp
++++ b/src/pk_1cmt_iv_bolus_covariates.cpp
+@@ -5,12 +5,9 @@ using namespace Rcpp;
+ DataFrame pk_1cmt_iv_bolus_covariates(DataFrame data, List parameters, StringVector covariates, Function covariate_model){
+ 
+   double k10, t, A1last;
+-  double CLi, Vi, tmp;
+   int i, j;
+   DataFrame out = clone(data);
+ 
+-  double CL = parameters["CL"];
+-  double V  = parameters["V"];
+   NumericVector A1 = out["A1"];
+   NumericVector DV = out["DV"];
+   NumericVector TIME = out["TIME"];
+@@ -20,7 +17,6 @@ DataFrame pk_1cmt_iv_bolus_covariates(DataFrame data, List parameters, StringVec
+   List p_in, p_upd;
+ 
+   // prepare initial state
+-  std::vector<int>::iterator it;
+   i = 0;
+   while(TIME[i] == 0) {
+     A1[i] = AMT[i];
+diff --git a/src/pk_1cmt_iv_infusion.cpp b/src/pk_1cmt_iv_infusion.cpp
+index 658bcda7..9d04070d 100644
+--- a/src/pk_1cmt_iv_infusion.cpp
++++ b/src/pk_1cmt_iv_infusion.cpp
+@@ -17,7 +17,6 @@ DataFrame pk_1cmt_iv_infusion(DataFrame d){
+   NumericVector AUC = out["AUC"];
+ 
+   // prepare initial state
+-  std::vector<int>::iterator it;
+   i = 0;
+   while(TIME[i] == 0) {
+     A1[i] = 0;
+diff --git a/src/pk_1cmt_oral.cpp b/src/pk_1cmt_oral.cpp
+index 8c117d41..eebeb2c0 100644
+--- a/src/pk_1cmt_oral.cpp
++++ b/src/pk_1cmt_oral.cpp
+@@ -22,7 +22,6 @@ DataFrame pk_1cmt_oral(DataFrame d){
+   }
+ 
+   // prepare initial state
+-  std::vector<int>::iterator it;
+   i = 0;
+   while(TIME[i] == 0) {
+     A1[i] = AMT[i] * F1[i];
+diff --git a/src/pk_2cmt_iv_bolus.cpp b/src/pk_2cmt_iv_bolus.cpp
+index 54759e62..46924fa3 100644
+--- a/src/pk_2cmt_iv_bolus.cpp
++++ b/src/pk_2cmt_iv_bolus.cpp
+@@ -21,7 +21,6 @@ DataFrame pk_2cmt_iv_bolus(DataFrame d){
+   NumericVector AUC = out["AUC"];
+ 
+   // prepare initial state
+-  std::vector<int>::iterator it;
+   i = 0;
+   while(TIME[i] == 0) {
+     A1[i] = AMT[i];
+diff --git a/src/pk_2cmt_iv_infusion.cpp b/src/pk_2cmt_iv_infusion.cpp
+index 840eb837..5cfdad07 100644
+--- a/src/pk_2cmt_iv_infusion.cpp
++++ b/src/pk_2cmt_iv_infusion.cpp
+@@ -22,7 +22,6 @@ DataFrame pk_2cmt_iv_infusion(DataFrame d){
+   NumericVector AUC = out["AUC"];
+ 
+   // prepare initial state
+-  std::vector<int>::iterator it;
+   i = 0;
+   while(TIME[i] == 0) {
+     A1[i] = 0;
+diff --git a/src/pk_2cmt_oral.cpp b/src/pk_2cmt_oral.cpp
+index 3fc5c27a..53cfc541 100644
+--- a/src/pk_2cmt_oral.cpp
++++ b/src/pk_2cmt_oral.cpp
+@@ -5,7 +5,7 @@ using namespace Rcpp;
+ // [[Rcpp::export]]
+ DataFrame pk_2cmt_oral(DataFrame d){
+ 
+-  double ka, k10, k20, k30, k23, k32, E1, E2, E3, lambda1, lambda2, t, A1last, A2last, A3last, A2term1, A2term2, A3term1, A3term2;
++  double ka, k20, k30, k23, k32, E2, E3, lambda1, lambda2, t, A1last, A2last, A3last, A2term1, A2term2, A3term1, A3term2;
+   int i;
+   DataFrame out = clone(d);
+ 
+@@ -26,7 +26,6 @@ DataFrame pk_2cmt_oral(DataFrame d){
+   }
+ 
+   // prepare initial state
+-  std::vector<int>::iterator it;
+   i = 0;
+   while(TIME[i] == 0) {
+     A1[i] = AMT[i] * F1[i];
+diff --git a/src/pk_3cmt_iv_bolus.cpp b/src/pk_3cmt_iv_bolus.cpp
+index 2782c151..f1be7c95 100644
+--- a/src/pk_3cmt_iv_bolus.cpp
++++ b/src/pk_3cmt_iv_bolus.cpp
+@@ -27,7 +27,6 @@ DataFrame pk_3cmt_iv_bolus(DataFrame d){
+   NumericVector AUC = out["AUC"];
+ 
+   // prepare initial state
+-  std::vector<int>::iterator it;
+   i = 0;
+   while(TIME[i] == 0) {
+     A1[i] = AMT[i];
+diff --git a/src/pk_3cmt_iv_infusion.cpp b/src/pk_3cmt_iv_infusion.cpp
+index 8cb8bc4b..7d05b063 100644
+--- a/src/pk_3cmt_iv_infusion.cpp
++++ b/src/pk_3cmt_iv_infusion.cpp
+@@ -28,7 +28,6 @@ DataFrame pk_3cmt_iv_infusion(DataFrame d){
+   NumericVector AUC = out["AUC"];
+ 
+   // prepare initial state
+-  std::vector<int>::iterator it;
+   i = 0;
+   while(TIME[i] == 0) {
+     A1[i] = 0;
+diff --git a/src/pk_3cmt_oral.cpp b/src/pk_3cmt_oral.cpp
+index c8a1ce72..518a85ef 100644
+--- a/src/pk_3cmt_oral.cpp
++++ b/src/pk_3cmt_oral.cpp
+@@ -5,9 +5,9 @@ using namespace Rcpp;
+ // [[Rcpp::export]]
+ DataFrame pk_3cmt_oral(DataFrame d){
+ 
+-  double ka, k10, k20, k23, k32, k24, k42, k30, k40, E1, E2, E3, E4;
++  double ka, k20, k23, k32, k24, k42, k30, k40, E2, E3, E4;
+   double lambda1, lambda2, lambda3, alpha, beta, gamma, theta;
+-  double A1last, A2last, A3last, A4last, A1term1, A1term2, A2term1, A2term2, A2term3, A3term1, A3term2, A3term3, A4term1, A4term2, A4term3;
++  double A1last, A2last, A3last, A4last, A2term1, A2term2, A2term3, A3term1, A3term2, A3term3, A4term1, A4term2, A4term3;
+   double a, b, c, m, n, q, B, C, I, J, t;
+   int i;
+   DataFrame out = clone(d);
+@@ -32,7 +32,6 @@ DataFrame pk_3cmt_oral(DataFrame d){
+   }
+ 
+   // prepare initial state
+-  std::vector<int>::iterator it;
+   i = 0;
+   while(TIME[i] == 0) {
+     A1[i] = AMT[i] * F1[i];

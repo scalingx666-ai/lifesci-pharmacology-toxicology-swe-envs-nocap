@@ -1,0 +1,65 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-96"
+description = "set up actions"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "60583a09e2f4e73b64d0c06ac7aba6c56345304e"
+reference = "https://github.com/InsightRX/PKPDsim/pull/96"
+source_access = "auto"
+built_at = "2026-11-16T19:40:45.969938+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:b3d68c8f9be92d9a439ec66386cc3d05c6c926aa412bc2e20fda37211ea42cf0"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2024-04-22T20:17:02Z"
+diff_format = "unified"
+context_files = [
+    ".github/workflows/R-CMD-check.yaml",
+    "Jenkinsfile",
+    "tests/testthat/test_new_ode_model.R",
+    "tests/testthat/test_overlapping_doses.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 132
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

@@ -1,0 +1,62 @@
+diff --git a/R/create_event_table.R b/R/create_event_table.R
+index 2e2993ca..31b28a6c 100644
+--- a/R/create_event_table.R
++++ b/R/create_event_table.R
+@@ -113,9 +113,9 @@ create_event_table <- function(
+   }
+ 
+   # parse list to a design (data.frame)
+-  # For boluses/oral, set infusion time to 0. For all other methods, assume
+-  # infusion time was provided correctly
+-  is_bolus <- regimen$type %in% c("oral", "bolus", "covariate")
++  # For boluses, oral, sc, im, and covariates, set infusion time to 0. For all
++  # other methods, assume infusion time was provided correctly
++  is_bolus <- regimen$type %in% c("oral", "bolus", "sc", "im", "covariate")
+   regimen$t_inf[is_bolus] <- 0
+   dos <- data.frame(cbind(t = regimen$dose_times,
+                   dose = regimen$dose_amts,
+@@ -126,7 +126,7 @@ create_event_table <- function(
+                   evid = regimen$evid,
+                   bioav = bioav,
+                   rate = 0))
+-  if(sum(regimen$t_inf) > 0) {
++  if(sum(regimen$t_inf, na.rm = TRUE) > 0) {
+     dos$rate[regimen$t_inf > 0] <- regimen$dose_amts[regimen$t_inf > 0] / regimen$t_inf[regimen$t_inf > 0]
+   }
+   if(any(regimen$t_inf > 0)) {
+diff --git a/tests/testthat/test_create_event_table.R b/tests/testthat/test_create_event_table.R
+index 3c798913..7c3f3229 100644
+--- a/tests/testthat/test_create_event_table.R
++++ b/tests/testthat/test_create_event_table.R
+@@ -114,3 +114,31 @@ test_that("simulatenous doses in different cmts do not remove infusion stops", {
+   expect_true(all((reg$dose_amts/reg$t_inf) %in% res$rate)) # rates are right
+ })
+ 
++test_that("sc, im are considered to have t_inf = 0", {
++  reg1 <- new_regimen(
++    amt = c(100, 100),
++    times = c(0, 12),
++    type = rep("im", 2)
++  )
++  reg2 <- new_regimen(
++    amt = c(100, 100),
++    times = c(0, 12),
++    type = rep("sc", 2)
++  )
++
++  res1 <- create_event_table(
++    regimen = reg1,
++    t_obs = 24,
++    covariates = list(WT = new_covariate(value = 50))
++  )
++  res2 <- create_event_table(
++    regimen = reg2,
++    t_obs = 24,
++    covariates = list(WT = new_covariate(value = 50))
++  )
++
++  expect_true(all(res1$rate == 0))
++  expect_true(all(res2$rate == 0))
++  expect_true(all(res1$t_inf == 0))
++  expect_true(all(res2$t_inf == 0))
++})

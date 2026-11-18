@@ -1,0 +1,65 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-43"
+description = "RXR-1042 allow sc dosing in new_regimen()"
+
+[metadata]
+difficulty = "medium"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "35c65a96a3e5271bc2f44eb92af14cf6d2fbffd6"
+reference = "https://github.com/InsightRX/PKPDsim/pull/43"
+source_access = "auto"
+built_at = "2026-11-16T19:41:43.917313+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:e08cd305d42a7f040d50af693565e3ddda195df121326e99424bcbf371b09017"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2022-05-31T18:38:52Z"
+diff_format = "unified"
+context_files = [
+    "R/new_regimen.R",
+    "man/new_regimen.Rd",
+    "man/parse_obs_types.Rd",
+    "tests/testthat/test_new_regimen.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 26
+difficulty = "medium"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

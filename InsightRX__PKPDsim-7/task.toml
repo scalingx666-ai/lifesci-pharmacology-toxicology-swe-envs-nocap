@@ -1,0 +1,62 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-7"
+description = "fix minor typo error in R/sim_ode_shiny.R"
+
+[metadata]
+difficulty = "easy"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "41a01ca4d0b6cfb22e0037c255935f1825451713"
+reference = "https://github.com/InsightRX/PKPDsim/pull/7"
+source_access = "auto"
+built_at = "2026-11-16T19:42:15.308446+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:99ecfe76b7f78e94045f17b127bc49dd1a20890118097a045387524c6a851bd3"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2018-08-20T17:19:45Z"
+diff_format = "unified"
+context_files = [
+    "R/sim_ode_shiny.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 2
+difficulty = "trivial"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

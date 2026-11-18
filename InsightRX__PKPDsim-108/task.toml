@@ -1,0 +1,67 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-108"
+description = "RXR-2224: fix indexing issue iov bins"
+
+[metadata]
+difficulty = "medium"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "a1064be53890aeb89d60677b74bee48a90c9a777"
+reference = "https://github.com/InsightRX/PKPDsim/pull/108"
+source_access = "auto"
+built_at = "2026-11-16T19:40:31.257061+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:80eff9940b485424d92b1eff8bb22847fe76fb6d173da8d32fbff2d52f4f92f1"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2024-12-20T21:45:17Z"
+diff_format = "unified"
+context_files = [
+    ".github/workflows/pkgdown.yaml",
+    "DESCRIPTION",
+    "R/compile_sim_cpp.R",
+    "R/sim.R",
+    "man/sim.Rd",
+    "tests/testthat/test_iov.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 77
+difficulty = "medium"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

@@ -1,0 +1,63 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-61"
+description = "RXR-1298: Include development info in installed package"
+
+[metadata]
+difficulty = "easy"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "21283703b37ab42cd2510fddd419e27fc370dc54"
+reference = "https://github.com/InsightRX/PKPDsim/pull/61"
+source_access = "auto"
+built_at = "2026-11-16T19:41:27.020649+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:b5da556edef069d875fe0df6591b1064f19b1d5283651f14bcb7054ca1f9e478"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2022-11-23T17:34:16Z"
+diff_format = "unified"
+context_files = [
+    "R/new_ode_model.R",
+    "inst/template/R/model.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 2
+difficulty = "trivial"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

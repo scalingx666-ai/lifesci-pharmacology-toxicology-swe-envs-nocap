@@ -1,0 +1,69 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-66"
+description = "RXR-1226: Determine fixed params from size of omega matrix if not specified"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "dc0349d6ec8ce7674422dd62f29b39eff05dcab8"
+reference = "https://github.com/InsightRX/PKPDsim/pull/66"
+source_access = "auto"
+built_at = "2026-11-16T19:41:20.907039+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:5d57c2eb78a826fe58132a38f4f1a6c84e4be97028f7d21c6783a14edbbf8035"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2023-02-25T00:31:55Z"
+diff_format = "unified"
+context_files = [
+    "DESCRIPTION",
+    "R/get_fixed_parameters.R",
+    "R/model_from_api.R",
+    "R/triangle_to_full.R",
+    "man/get_fixed_parameters.Rd",
+    "man/lower_triangle_mat_size.Rd",
+    "man/new_ode_model.Rd",
+    "tests/testthat/test_get_fixed_parameters.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 114
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

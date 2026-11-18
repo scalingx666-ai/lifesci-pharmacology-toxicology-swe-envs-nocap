@@ -1,0 +1,64 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-39"
+description = "RXR-927 allow rounding to be specified in new_covariate()"
+
+[metadata]
+difficulty = "medium"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "da55a3fa276569f75a143ee3fa5aca0f5e625332"
+reference = "https://github.com/InsightRX/PKPDsim/pull/39"
+source_access = "auto"
+built_at = "2026-11-16T19:41:48.021299+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:1ba2401b2b499ecbd8c756f35e6089f7b82adb30e15de25016b1ca2ede40e379"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2022-04-22T19:37:11Z"
+diff_format = "unified"
+context_files = [
+    "R/new_covariate.R",
+    "man/new_covariate.Rd",
+    "tests/testthat/test_new_covariate.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 33
+difficulty = "medium"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

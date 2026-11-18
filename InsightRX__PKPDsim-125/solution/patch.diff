@@ -1,0 +1,164 @@
+diff --git a/R/sim.R b/R/sim.R
+index f622c89a..eefd899d 100644
+--- a/R/sim.R
++++ b/R/sim.R
+@@ -11,7 +11,11 @@
+ #'   population PK parameters are supplied, a value of `1` or `2` should be
+ #'   passed, since currently only two mixture groups are supported.
+ #' @param omega vector describing the lower-diagonal of the between-subject variability matrix
+-#' @param omega_type exponential or normal, specified as vector
++#' @param omega_type `exponential` or `normal`, specified as vector or single 
++#' value. This specifies the shape of the between-subject variability terms.
++#' `exponential` corresponds to this NONMEM code `PAR = TVPAR * EXP(ETA(x))`, 
++#' while `normal` corresponds to `PAR = TVPAR + ETA(x)`. Default is
++#' `exponential`.
+ #' @param res_var residual variability. Expected a list with arguments `prop`, `add`, and/or `exp`. NULL by default.
+ #' @param iov_bins allow override of the default IOV bins for a model. Specified
+ #' as a vector of timepoints specifying the bin separators, e.g.
+@@ -45,7 +49,7 @@
+ #' @param return_event_table return the event table for the simulation only, does not run the actual simulation. Useful for iterative use of sim().
+ #' @param return_design returns the design (event table and several other details) for the simulation, does not run the actual simulation. Useful for iterative functions like estimation in combination with `sim_core()`, e.g. for estimation and optimal design.
+ #' @param verbose show more output
+-#' @param ... extra parameters
++#' 
+ #' @return a data frame of compartments with associated concentrations at requested times
+ #' @export
+ #' @seealso \link{sim_ode_shiny}
+@@ -114,8 +118,7 @@ sim <- function (ode = NULL,
+                  verbose = FALSE,
+                  return_event_table = FALSE,
+                  return_design = FALSE,
+-                 output_include = list(parameters = FALSE, covariates = FALSE),
+-                 ...
++                 output_include = list(parameters = FALSE, covariates = FALSE)
+                  ) {
+ 
+   if(!is.null(t_obs)) {
+diff --git a/man/parse_lagtime.Rd b/man/parse_lagtime.Rd
+index 658ec85d..5a420875 100644
+--- a/man/parse_lagtime.Rd
++++ b/man/parse_lagtime.Rd
+@@ -4,12 +4,14 @@
+ \alias{parse_lagtime}
+ \title{Parse lagtime specified to main sim() function}
+ \usage{
+-parse_lagtime(lagtime, ode)
++parse_lagtime(lagtime, ode, parameters)
+ }
+ \arguments{
+ \item{lagtime}{either a value (numeric) or a parameter (character) or NULL.}
+ 
+ \item{ode}{function describing the ODE system}
++
++\item{parameters}{model parameters}
+ }
+ \value{
+ a vector of character or numeric values
+diff --git a/man/sim.Rd b/man/sim.Rd
+index 22d4ee23..12ab074e 100644
+--- a/man/sim.Rd
++++ b/man/sim.Rd
+@@ -40,8 +40,7 @@ sim(
+   verbose = FALSE,
+   return_event_table = FALSE,
+   return_design = FALSE,
+-  output_include = list(parameters = FALSE, covariates = FALSE),
+-  ...
++  output_include = list(parameters = FALSE, covariates = FALSE)
+ )
+ }
+ \arguments{
+@@ -60,7 +59,11 @@ passed, since currently only two mixture groups are supported.}
+ 
+ \item{omega}{vector describing the lower-diagonal of the between-subject variability matrix}
+ 
+-\item{omega_type}{exponential or normal, specified as vector}
++\item{omega_type}{\code{exponential} or \code{normal}, specified as vector or single
++value. This specifies the shape of the between-subject variability terms.
++\code{exponential} corresponds to this NONMEM code \code{PAR = TVPAR * EXP(ETA(x))},
++while \code{normal} corresponds to \code{PAR = TVPAR + ETA(x)}. Default is
++\code{exponential}.}
+ 
+ \item{res_var}{residual variability. Expected a list with arguments \code{prop}, \code{add}, and/or \code{exp}. NULL by default.}
+ 
+@@ -123,8 +126,6 @@ number of bins is higher than defined for the model an error will be thrown.}
+ \item{return_design}{returns the design (event table and several other details) for the simulation, does not run the actual simulation. Useful for iterative functions like estimation in combination with \code{sim_core()}, e.g. for estimation and optimal design.}
+ 
+ \item{output_include}{list specifying what to include in output table, with keys \code{parameters} and \code{covariates}. Both are FALSE by default.}
+-
+-\item{...}{extra parameters}
+ }
+ \value{
+ a data frame of compartments with associated concentrations at requested times
+diff --git a/tests/testthat/test_get_var_y.R b/tests/testthat/test_get_var_y.R
+index 150b4434..264843f6 100644
+--- a/tests/testthat/test_get_var_y.R
++++ b/tests/testthat/test_get_var_y.R
+@@ -111,7 +111,7 @@ test_that("Two compartment model", {
+     parameters = par2,
+     t_obs = t_obs,
+     regimen = reg,
+-    mega = omega2
++    omega = omega2
+   )
+   v2 <- get_var_y(
+     model = mod_2cmt_iv,
+@@ -123,8 +123,8 @@ test_that("Two compartment model", {
+     n_ind = 2000
+   )
+ 
+-  expect_true(all(abs(((v1$regular - v2$regular)/v2$regular)) < 0.2))
+-  expect_equal(round(v1$regular, 3), c(2.282, 1.028))
++  expect_true(all(abs(((v1$regular - v2$regular)/v2$regular)) < 0.05))
++  expect_equal(round(v1$regular, 3), c(2.729, 1.181))
+ 
+ })
+ 
+@@ -148,7 +148,7 @@ test_that("One compartment with MM kinetics", {
+     parameters = par3,
+     t_obs = t_obs,
+     regimen = reg,
+-    mega = omega3
++    omega = omega3
+   )
+   v2 <- get_var_y(
+     model = mod3,
+@@ -160,7 +160,7 @@ test_that("One compartment with MM kinetics", {
+     n_ind = 2000
+   )
+ 
+-  expect_true(all(abs(v1$regular - v2$regular)/res$y < 0.5))
+-  expect_equal(round(v1$regular, 3), c(0.120, 4.206))
++  expect_true(all(abs(v1$regular - v2$regular)/res$y < 0.05))
++  expect_equal(round(v1$regular, 3), c(2.964, 5.246))
+ 
+ })
+diff --git a/vignettes/variability.Rmd b/vignettes/variability.Rmd
+index 146fd3e0..25d91d8d 100644
+--- a/vignettes/variability.Rmd
++++ b/vignettes/variability.Rmd
+@@ -38,22 +38,8 @@ dat <- sim(
+ )
+ ```
+ 
+-will simulate out data for 50 patients, assuming an Omega matrix as defined above. Alternatively, the $\Omega$ could also have been defined as:
+-
+-```{r omega-2}
+-dat <- sim(
+-  ode = model,
+-  parameters = parameters,
+-  regimen = regimen,
+-  n = 50,
+-  omega_matrix = matrix(c(
+-    0.2, 0.05, 
+-    0.05, 0.2
+-  ), ncol = 2)
+-)
+-```
+-
+-Or also using the coefficient of variation and without correlation between parameters:
++will simulate out data for 50 patients, assuming an Omega matrix as defined above. 
++Alternatively, the coefficient of variation can be specified (assuming no correlation between parameters):
+ 
+ ```{r omega-3}
+ dat <- sim(

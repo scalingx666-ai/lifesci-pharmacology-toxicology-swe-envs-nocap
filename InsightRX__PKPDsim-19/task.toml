@@ -1,0 +1,63 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-19"
+description = "RXR-602 fix issue lag time for models with multiple compartments"
+
+[metadata]
+difficulty = "small"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "c8c60ba5869382d0228c027224b778b9537b379f"
+reference = "https://github.com/InsightRX/PKPDsim/pull/19"
+source_access = "auto"
+built_at = "2026-11-16T19:42:11.406817+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:423b84ad3a49d49b0aa088088c5a572cf0a3a25e0659521293ce2a8ecb1c636c"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2021-11-17T04:38:31Z"
+diff_format = "unified"
+context_files = [
+    "R/apply_lagtime.R",
+    "tests/testthat/test_apply_lagtime.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 19
+difficulty = "small"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

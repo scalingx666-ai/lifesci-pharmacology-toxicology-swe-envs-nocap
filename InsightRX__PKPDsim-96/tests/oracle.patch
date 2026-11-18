@@ -1,0 +1,183 @@
+diff --git a/.github/workflows/R-CMD-check.yaml b/.github/workflows/R-CMD-check.yaml
+new file mode 100644
+index 00000000..4dea5fed
+--- /dev/null
++++ b/.github/workflows/R-CMD-check.yaml
+@@ -0,0 +1,58 @@
++# Workflow derived from https://github.com/r-lib/actions/tree/v2/examples
++# Need help debugging build failures? Start at https://github.com/r-lib/actions#where-to-find-help
++on:
++  push:
++    branches: [master]
++  pull_request:
++    branches: [master]
++
++name: R-CMD-check
++
++jobs:
++  R-CMD-check:
++
++    runs-on: ${{ matrix.config.os }}
++
++    name: ${{ matrix.config.os }} (${{ matrix.config.r }})
++    
++    strategy:
++      fail-fast: false
++      matrix:
++        config:
++          - {os: ubuntu-latest,   r: 'release'}
++          #- {os: macos-latest,   r: 'release'}
++          #- {os: windows-latest, r: 'release'}
++          #- {os: ubuntu-latest,   r: 'devel', http-user-agent: 'release'}
++          
++          
++    env:
++      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
++      R_KEEP_PKG_SOURCE: yes
++    
++    steps:
++      - uses: actions/checkout@v4
++
++      - uses: r-lib/actions/setup-pandoc@v2
++      
++      - name: Install curl
++        run: sudo apt-get install -y libcurl4-openssl-dev
++
++      - uses: r-lib/actions/setup-r@v2
++        with:
++          r-version: ${{ matrix.config.r }}
++          http-user-agent: ${{ matrix.config.http-user-agent }}
++          use-public-rspm: true
++
++      - uses: r-lib/actions/setup-r-dependencies@v2
++        with:
++          pak-version: devel
++          extra-packages: |
++            any::rcmdcheck
++          needs: check
++          
++      - uses: r-lib/actions/check-r-package@v2
++        with:
++          args: 'c("--no-manual", "--as-cran")'
++          upload-snapshots: true
++          error-on: '"error"'
++          check-dir: '"check"'
+diff --git a/Jenkinsfile b/Jenkinsfile
+deleted file mode 100755
+index a9f774c2..00000000
+--- a/Jenkinsfile
++++ /dev/null
+@@ -1,52 +0,0 @@
+-#!groovy
+-
+-pipeline {
+-  agent {
+-    label 'docker-runner'
+-  }
+-  stages{
+-    stage('Run docker container') {
+-      environment {
+-        AWS_ACCESS_KEY_ID = credentials('AWS_ACCESS_KEY_ID')
+-        AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
+-      }
+-      steps {
+-        echo "Building Docker image"
+-        sh """
+-        \$(aws ecr get-login --no-include-email --region us-west-2 &> /dev/null)
+-        docker build -t pkpdsim .
+-        """
+-      }
+-
+-    }
+-    stage('Build & test PKPDsim') {
+-      steps {
+-        echo 'Installing and checking PKPDsim'
+-        /*
+-        The command to Sys.setlocale('LC_ALL','C') is required due to a bug in processx, which has
+-        already been fixed in the dev version as of May 26th 2021, but is not yet in the CRAN version.
+-        This line can be removed when processx (called by rcmdcheck) is updated.
+-        */
+-        sh """
+-        docker run -d -t --name ${BUILD_TAG} pkpdsim:latest
+-        docker exec -i ${BUILD_TAG} Rscript -e "Sys.setlocale('LC_ALL','C'); devtools::check()"
+-        """
+-      }
+-    }
+-  }
+-  post {
+-    always {
+-      sh """
+-      docker rm -f ${BUILD_TAG} &>/dev/null && echo 'Removed container'
+-      """
+-    }
+-    failure {
+-      sh "chmod +x slack_notification.sh"
+-      sh "./slack_notification.sh"
+-    }
+-  }
+-  environment {
+-    KHALEESI_SLACK_TOKEN = credentials('KHALEESI_SLACK_TOKEN')
+-    JENKINS_SLACKBOT = credentials('JENKINS_SLACKBOT')
+-  }
+-}
+diff --git a/tests/testthat/test_new_ode_model.R b/tests/testthat/test_new_ode_model.R
+index 85a9b7c6..5b5141a6 100644
+--- a/tests/testthat/test_new_ode_model.R
++++ b/tests/testthat/test_new_ode_model.R
+@@ -141,23 +141,25 @@ test_that("adding development info works", {
+     n_tdms = 200,
+     age = list(min = 15, median = 50, max = 90, unit = "years")
+   )
+-  mod_1cmt_iv <- new_ode_model(
+-    "pk_1cmt_iv",
++  mod_1cmt_tmp <- new_ode_model(
++    code = "
++      dAdt[1] = -KA * A[1];
++      dAdt[2] = -(CL/V) * A[2] + KA*A[1];
++    ",
+     development = dev
+   )
+-
+   expect_identical(
+-    attr(mod_1cmt_iv, "development"),
++    attr(mod_1cmt_tmp, "development"),
+     dev
+   )
+ })
+ 
+ test_that("specifying overlapping covariates and variables throws error", {
+-  expect_error(
+-    new_ode_model(
++  expect_error({
++    tmp <- new_ode_model(
+       code = "dAdt[1] = -(CL*WT/V)*A[1]; CONC = 1000*A[1]/V; METAB = CONC/2; METAB2 = CONC * t; ACT = 15",
+       covariates = list(WT = new_covariate(70)),
+       declare_variables = c("WT")
+     )
+-  )
++  })
+ })
+diff --git a/tests/testthat/test_overlapping_doses.R b/tests/testthat/test_overlapping_doses.R
+index e800c3ce..2eeba3f4 100644
+--- a/tests/testthat/test_overlapping_doses.R
++++ b/tests/testthat/test_overlapping_doses.R
+@@ -9,8 +9,8 @@ test_that("continuous infusion with overlapping doses are simulated ok", {
+   )
+   par <- list(CL = 5, V = 50)
+   ## RK: needs to be run twice to confirm no memory issues!
+-  res <- sim_ode(mod_1cmt_iv, parameters = par, reg = reg, only_obs = TRUE)
+-  res <- sim_ode(mod_1cmt_iv, parameters = par, reg = reg, only_obs = TRUE)
++  res <- sim(ode = mod_1cmt_iv, parameters = par, regimen = reg, only_obs = TRUE)
++  res <- sim(ode = mod_1cmt_iv, parameters = par, regimen = reg, only_obs = TRUE)
+ 
+   expect_true(res[res$t == 7,]$y > res[res$t == 6,]$y)
+   expect_true(res[res$t == 8,]$y > res[res$t == 7,]$y)
+@@ -23,7 +23,7 @@ test_that("continuous infusion with overlapping doses are simulated ok", {
+     type = "infusion",
+     t_inf = c(2, 6, 2, 6)
+   )
+-  res2 <- sim_ode(mod_1cmt_iv, parameters = par, reg = reg2, only_obs = TRUE)
++  res2 <- sim(ode = mod_1cmt_iv, parameters = par, regimen = reg2, only_obs = TRUE)
+   expect_true(res2[res2$t == 12,]$y[1] > res2[res2$t == 6,]$y[1])
+   expect_true(res2[res2$t == 14,]$y[1] > res2[res2$t == 12,]$y[1])
+   expect_true(res2[res2$t == 18,]$y[1] < res2[res2$t == 14,]$y[1])

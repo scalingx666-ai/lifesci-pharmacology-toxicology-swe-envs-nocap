@@ -1,0 +1,64 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-89"
+description = "RXR-1884: timevarying covariates were not interpolated when in PK block"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "d1b7e6af8811e9541ba2a4088e3d7e1f60d44566"
+reference = "https://github.com/InsightRX/PKPDsim/pull/89"
+source_access = "auto"
+built_at = "2026-11-16T19:40:53.811424+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:fd9b67212c8b2f9f4fe3b2e5e605c5e9952da55641c61ac0a787c6e38d4ab4e3"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2024-02-14T18:15:45Z"
+diff_format = "unified"
+context_files = [
+    "R/compile_sim_cpp.R",
+    "inst/cpp/sim.cpp",
+    "tests/testthat/test_timevar_cov.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 117
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

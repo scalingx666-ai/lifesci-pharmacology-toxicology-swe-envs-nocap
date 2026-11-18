@@ -1,0 +1,71 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-129"
+description = "RXR-2907: add new models for open access, fix misnamed fields"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "8c109c07f9c50fee5abdd0f92c5d7ea9a2354113"
+reference = "https://github.com/InsightRX/PKPDsim/pull/129"
+source_access = "auto"
+built_at = "2026-11-16T19:40:09.335330+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:816d25b449acda1a39ce38aaf55c008222f52bbaf124fa0ce963d2a85aa697fb"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2025-11-24T23:15:11Z"
+diff_format = "unified"
+context_files = [
+    "inst/models/pk_vanco_adane.json5",
+    "inst/models/pk_vanco_brooks.json5",
+    "inst/models/pk_vanco_buelga.json5",
+    "inst/models/pk_vanco_carreno.json5",
+    "inst/models/pk_vanco_goti.json5",
+    "inst/models/pk_vanco_hughes.json5",
+    "inst/models/pk_vanco_thomson_capped.json5",
+    "inst/models/pk_vanco_tong.json5",
+    "inst/models/pkpd_neutropenia_template1.json5",
+    "inst/models/pkpd_neutropenia_template2.json5",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 480
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

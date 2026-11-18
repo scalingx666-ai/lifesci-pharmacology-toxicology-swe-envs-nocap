@@ -1,0 +1,66 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-60"
+description = "RXR-1298: add info about development population to model"
+
+[metadata]
+difficulty = "medium"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "7883cf2803c3fd47c4849071d31497da19177201"
+reference = "https://github.com/InsightRX/PKPDsim/pull/60"
+source_access = "auto"
+built_at = "2026-11-16T19:41:28.697359+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:a43583fe7dd2ce159ccd404b7241d74e41ac3655d1bea2e3fbc522c00f0621c2"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2022-11-18T17:45:01Z"
+diff_format = "unified"
+context_files = [
+    "DESCRIPTION",
+    "R/model_from_api.R",
+    "R/new_ode_model.R",
+    "man/new_ode_model.Rd",
+    "tests/testthat/test_new_ode_model.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 28
+difficulty = "medium"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

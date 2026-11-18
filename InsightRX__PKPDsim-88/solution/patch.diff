@@ -1,0 +1,93 @@
+diff --git a/R/get_t_obs_from_regimen.R b/R/get_t_obs_from_regimen.R
+index 214e77aa..274f517e 100644
+--- a/R/get_t_obs_from_regimen.R
++++ b/R/get_t_obs_from_regimen.R
+@@ -38,12 +38,12 @@ get_t_obs_from_regimen <- function(
+       }
+     }
+     t_obs <- unique(c(t_obs, regimen$dose_times))
+-    if(any(regimen$type == "infusion")) {
+-      t_obs <- unique(c(t_obs, regimen$t_inf[regimen$type == "infusion"]))
++    if(isTRUE(any(regimen$t_inf > 0))) {
++      t_obs <- unique(c(t_obs, regimen$t_inf[regimen$t_inf > 0]))
+     }
+   }
+   ## add timepoints at which covariate is changing to t_obs:
+-  if(extra_t_obs) {
++  if(isTRUE(extra_t_obs)) {
+     func <- function(x) { return(x$times) }
+     if(!is.null(covariates) && !is.null(covariates$times)) {
+       t_obs <- unique(c(t_obs, unique(unlist(lapply(covariates, func )))))
+diff --git a/R/regimen_to_nm.R b/R/regimen_to_nm.R
+index 4e6830e3..bc9b33c4 100644
+--- a/R/regimen_to_nm.R
++++ b/R/regimen_to_nm.R
+@@ -37,8 +37,8 @@ regimen_to_nm <- function(
+       suppressWarnings(
+         bioav_dose <- as.numeric(bioav[dose_cmt])
+       )
+-      if(!is.na(bioav_dose)) {
+-        if(bioav_dose != 1) {
++      if(!any(is.na(bioav_dose))) {
++        if(!all(bioav_dose == 1)) {
+           dat$RATE <- dat$RATE * bioav_dose
+           message("Recalculating infusion rates to reflect bioavailability for infusion.")
+         }
+diff --git a/tests/testthat/test_get_t_obs_from_regimen.R b/tests/testthat/test_get_t_obs_from_regimen.R
+new file mode 100644
+index 00000000..64d02bf2
+--- /dev/null
++++ b/tests/testthat/test_get_t_obs_from_regimen.R
+@@ -0,0 +1,11 @@
++test_that("Appropriate t obs returned", {
++  reg <- new_regimen(amt = 100, type = "infusion", n = 3, interval = 12)
++  expect_equal(get_t_obs_from_regimen(reg, extra_t_obs = FALSE), 0:36)
++  reg <- new_regimen(amt = 100, type = "oral", n = 3, interval = 12)
++  expect_equal(get_t_obs_from_regimen(reg, extra_t_obs = FALSE), 0:36)
++  reg <- new_regimen(amt = 100, type = "infusion", n = 3, interval = 12, t_inf = 0.33)
++  expect_equal(get_t_obs_from_regimen(reg, extra_t_obs = FALSE), c(0:36, 0.33))
++  reg <- new_regimen(amt = 100, type = "inf_drug", n = 3, interval = 12, t_inf = 0.33)
++  expect_equal(get_t_obs_from_regimen(reg, extra_t_obs = FALSE), c(0:36, 0.33))
++})
++
+diff --git a/tests/testthat/test_regimen_to_nm.R b/tests/testthat/test_regimen_to_nm.R
+index 6928d98e..159fefb6 100644
+--- a/tests/testthat/test_regimen_to_nm.R
++++ b/tests/testthat/test_regimen_to_nm.R
+@@ -55,7 +55,7 @@ test_that("rate is calculated for any regimen with an infusion length", {
+     n = 5,
+     interval = 12,
+     t_inf = c(0, 0, 0.5, 0.5, 0),
+-    type = "drug_1"
++    type = c("d1", "d2", "d1", "d2", "d2") # must correspond to dose_cmt arg
+   )
+   expect_message(
+     {
+@@ -67,6 +67,17 @@ test_that("rate is calculated for any regimen with an infusion length", {
+     },
+     "Recalculating infusion rates"
+   )
++  expect_message(
++    {
++      c <- regimen_to_nm(
++        a,
++        t_obs = c(1, 2, 3),
++        dose_cmt = c(1, 2, 1, 2, 2),
++        bioav = c(0.5, 1)
++      )
++    },
++    "Recalculating infusion rates"
++  )
+   expected_cols <- c(
+     "ID",
+     "TIME",
+@@ -78,7 +89,9 @@ test_that("rate is calculated for any regimen with an infusion length", {
+     "RATE"
+   )
+   expect_true(all(expected_cols %in% colnames(b)))
++  expect_true(all(expected_cols %in% colnames(c)))
+   # in NONMEM, oral doses have a RATE of zero, which indicates a bolus dose
+   expect_equal(b$RATE, c(0, 0, 0, 0, 0, 10, 10, 0))
++  expect_equal(c$RATE, c(0, 0, 0, 0, 0, 10, 20, 0))
+ })
+ 

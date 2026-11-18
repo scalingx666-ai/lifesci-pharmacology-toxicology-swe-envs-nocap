@@ -1,0 +1,89 @@
+diff --git a/R/new_regimen.R b/R/new_regimen.R
+index 16208240..92b55946 100644
+--- a/R/new_regimen.R
++++ b/R/new_regimen.R
+@@ -5,7 +5,7 @@
+ #' @param interval dosing interval (requires n as argument)
+ #' @param n number of doses (requires interval as argument)
+ #' @param times vector describing dosing times. Overrides specified times using interval and n arguments
+-#' @param type either "infusion", "oral" or "bolus".
++#' @param type either "infusion", "bolus", "oral", "sc" (subcutaneous), or "im" (intramuscular).
+ #' @param t_inf infusion time (if `type`==`infusion`)
+ #' @param rate infusion rate (if `type`==`infusion`). `NULL` by default. If specified, overrides `t_inf`
+ #' @param t_lag lag time (can be applied to any dose type, not only oral). Will just be added to `times`
+@@ -53,17 +53,17 @@ new_regimen <- function(
+         reg$type <- rep("infusion", length(reg$t_inf))
+         reg$type[reg$t_inf == 0] <- "bolus"
+         if(any(reg$t_inf > 0)) {
+-          warning("Please specify regimen `type` explicitly (either 'infusion', 'bolus', or 'oral'). Will assume `type='infusion'` for doses with `t_inf` > 0.")
++          warning("Please specify regimen `type` explicitly (either 'infusion', 'bolus', 'oral', 'sc' or 'im'). Will assume `type='infusion'` for doses with `t_inf` > 0.")
+         }
+       } else {
+         reg$type <- "bolus"
+       }
+     }
+-    if(!is.null(reg$type) && (any(is.null(reg$type)) || any(is.na(reg$type)) || any(length(reg$type) == 0) || !(all(reg$type %in% c("bolus", "oral", "infusion"))))) {
++    if(!is.null(reg$type) && (any(is.null(reg$type)) || any(is.na(reg$type)) || any(length(reg$type) == 0) || !(all(reg$type %in% c("bolus", "oral", "infusion", "sc", "im"))))) {
+       if(!is.null(t_inf) || !is.null(rate)) {
+         reg$type <- "infusion" # assume all infusions
+       } else {
+-        message("Type argument should be one of 'bolus', 'oral', or 'infusion'. Assuming bolus for all doses.")
++        message("Type argument should be one of 'bolus', infusion', 'oral', 'sc' or 'im'. Assuming bolus for all doses.")
+         reg$type <- "bolus"
+       }
+     }
+diff --git a/man/new_regimen.Rd b/man/new_regimen.Rd
+index 0d99eec5..2b7f6f4e 100644
+--- a/man/new_regimen.Rd
++++ b/man/new_regimen.Rd
+@@ -29,7 +29,7 @@ new_regimen(
+ 
+ \item{times}{vector describing dosing times. Overrides specified times using interval and n arguments}
+ 
+-\item{type}{either "infusion", "oral" or "bolus".}
++\item{type}{either "infusion", "bolus", "oral", "sc" (subcutaneous), or "im" (intramuscular).}
+ 
+ \item{t_inf}{infusion time (if `type`==`infusion`)}
+ 
+diff --git a/man/parse_obs_types.Rd b/man/parse_obs_types.Rd
+index 5b6de0f3..7caf43f7 100644
+--- a/man/parse_obs_types.Rd
++++ b/man/parse_obs_types.Rd
+@@ -7,8 +7,8 @@
+ parse_obs_types(obs)
+ }
+ \arguments{
+-\item{obs}{specified observation object including at least a description of 
+-which variable(s) are associated with a particular compartment, e.g. 
++\item{obs}{specified observation object including at least a description of
++which variable(s) are associated with a particular compartment, e.g.
+ `list(variable="CONC", scale="1")`.}
+ }
+ \description{
+diff --git a/tests/testthat/test_new_regimen.R b/tests/testthat/test_new_regimen.R
+index 749467e8..e4373afb 100644
+--- a/tests/testthat/test_new_regimen.R
++++ b/tests/testthat/test_new_regimen.R
+@@ -7,12 +7,20 @@ test_that("Regimen type parsed correctly", {
+   reg_oral <- new_regimen(amt = 100, n = 4, interval = 4, type = "oral")
+   reg_bolus <- new_regimen(amt = 100, n=4, interval = 4, type = "bolus")
+   reg_inf <- new_regimen(amt = 100, n = 4, interval = 4, type = "infusion")
+-  reg_mixed <- new_regimen(amt = 100, n = 3, interval = 4, type = c("bolus", "infusion", "oral"))
++  reg_sc <- new_regimen(amt = 100, n = 4, interval = 4, type = "sc")
++  reg_im <- new_regimen(amt = 100, n = 4, interval = 4, type = "im")
++  reg_mixed <- new_regimen(amt = 100, n = 5, interval = 4, type = c("bolus", "infusion", "oral", "sc", "im"))
+ 
+   expect_equal(reg_oral$type, rep("oral", 4))
+   expect_equal(reg_bolus$type, rep("bolus", 4))
+   expect_equal(reg_inf$type, rep("infusion", 4))
+-  expect_equal(reg_mixed$type, c("bolus", "infusion", "oral"))
++  expect_equal(reg_sc$type, rep("sc", 4))
++  expect_equal(reg_im$type, rep("im", 4))
++  expect_equal(reg_mixed$type, c("bolus", "infusion", "oral", "sc", "im"))
++  expect_message(
++    new_regimen(amt = 100, n = 3, interval = 4, type = c("bolus", "bolus", "blabla")),
++    "Type argument should be one of 'bolus', infusion', 'oral', 'sc' or 'im'. Assuming bolus for all doses."
++  )
+ })
+ 
+ test_that("Auto-detect infusion vs bolus", {

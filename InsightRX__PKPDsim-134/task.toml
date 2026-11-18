@@ -1,0 +1,67 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-134"
+description = "Fix handling of rate in regimen_to_nm() function for iv + bioavailability"
+
+[metadata]
+difficulty = "medium"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "73da416fe90d2172907280ecf4ebc17a8c22ced1"
+reference = "https://github.com/InsightRX/PKPDsim/pull/134"
+source_access = "auto"
+built_at = "2026-11-16T19:40:05.896455+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:6447139b4f872a6bd19c81b37eb3e50651f70b0f1f61f72e1ba8eadf774b59df"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2026-02-18T23:38:02Z"
+diff_format = "unified"
+context_files = [
+    "R/regimen_to_nm.R",
+    "man/adherence_binomial.Rd",
+    "man/adherence_markov.Rd",
+    "man/new_adherence.Rd",
+    "man/regimen_to_nm.Rd",
+    "tests/testthat/test_regimen_to_nm.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 40
+difficulty = "medium"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

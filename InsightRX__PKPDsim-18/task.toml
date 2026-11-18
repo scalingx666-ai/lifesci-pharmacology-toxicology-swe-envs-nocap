@@ -1,0 +1,66 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-18"
+description = "RXR-597 fix handling of multiple observation types"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "6c8198ddcb8b6bc4a0a795d360f0c7eb95f6f703"
+reference = "https://github.com/InsightRX/PKPDsim/pull/18"
+source_access = "auto"
+built_at = "2026-11-16T19:42:13.578114+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:096166d05ce8749bc632a1afdf13853a22b39fba26146f3c94886c4644e48e4e"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2021-11-09T16:54:53Z"
+diff_format = "unified"
+context_files = [
+    "R/compile_sim_cpp.R",
+    "R/new_ode_model.R",
+    "R/parse_obs_types.R",
+    "man/parse_obs_types.Rd",
+    "tests/testthat/test_parse_obs_types.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 112
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

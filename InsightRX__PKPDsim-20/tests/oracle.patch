@@ -1,0 +1,116 @@
+diff --git a/DESCRIPTION b/DESCRIPTION
+index 1dc7c73c..bffad434 100644
+--- a/DESCRIPTION
++++ b/DESCRIPTION
+@@ -14,5 +14,5 @@ Description: Simulate dose regimens for PKPD models described by DE
+         systems or analytical equations.
+ License: MIT + file LICENSE
+ LazyData: TRUE
+-RoxygenNote: 7.1.1
++RoxygenNote: 7.1.2
+ Config/testthat/edition: 3
+diff --git a/R/apply_lagtime.R b/R/apply_lagtime.R
+index 4e68cb8f..9aa94efc 100644
+--- a/R/apply_lagtime.R
++++ b/R/apply_lagtime.R
+@@ -3,9 +3,15 @@
+ #' @param regimen PKPDsim regimen
+ #' @param lagtime lagtime object, either single value / parameter name or vector of values/parameter names for all compartments.
+ #' @param parameters parameter list, required if parameters are specified.
++#' @param cmt_mapping map of administration types to compartments, e.g. `list("oral" = 1, "infusion" = 2, "bolus" = 2)`.
+ #'
+ #' @export
+-apply_lagtime <- function(regimen, lagtime, parameters) {
++apply_lagtime <- function(
++  regimen,
++  lagtime,
++  parameters,
++  cmt_mapping = NULL
++) {
+     if(class(lagtime) %in% c("numeric", "integer")) {
+       if(length(lagtime) == 1) {
+         regimen$dose_times <- regimen$dose_times + lagtime
+@@ -18,7 +24,11 @@ apply_lagtime <- function(regimen, lagtime, parameters) {
+         regimen$dose_times <- regimen$dose_times + parameters[[lagtime]]
+       } else {
+         if(is.null(regimen$cmt)) {
+-          regimen$cmt <- rep(1, length(regimen$dose_times))
++          if(!is.null(cmt_mapping)) {
++            regimen$cmt <- as.numeric(cmt_mapping[regimen$type])
++          } else {
++            regimen$cmt <- rep(1, length(regimen$dose_times))
++          }
+         }
+         par_tmp <- parameters
+         par_tmp[["0"]] <- 0
+diff --git a/R/sim.R b/R/sim.R
+index bdcb5195..fa88e592 100644
+--- a/R/sim.R
++++ b/R/sim.R
+@@ -143,7 +143,7 @@ sim <- function (ode = NULL,
+     }
+   }
+   if(!is.null(lagtime)) {
+-    regimen <- apply_lagtime(regimen, lagtime, parameters)
++    regimen <- apply_lagtime(regimen, lagtime, parameters, attr(ode, "cmt_mapping"))
+   }
+   if(t_init != 0) regimen$dose_times <- regimen$dose_times + t_init
+   p <- as.list(parameters)
+diff --git a/man/apply_lagtime.Rd b/man/apply_lagtime.Rd
+index 22cb77a8..5af06414 100644
+--- a/man/apply_lagtime.Rd
++++ b/man/apply_lagtime.Rd
+@@ -4,7 +4,7 @@
+ \alias{apply_lagtime}
+ \title{Apply lagtime to a regimen}
+ \usage{
+-apply_lagtime(regimen, lagtime, parameters)
++apply_lagtime(regimen, lagtime, parameters, cmt_mapping)
+ }
+ \arguments{
+ \item{regimen}{PKPDsim regimen}
+@@ -12,6 +12,8 @@ apply_lagtime(regimen, lagtime, parameters)
+ \item{lagtime}{lagtime object, either single value / parameter name or vector of values/parameter names for all compartments.}
+ 
+ \item{parameters}{parameter list, required if parameters are specified.}
++
++\item{cmt_mapping}{map of administration types to compartments, e.g. `list("oral" = 1, "infusion" = 2, "bolus" = 2)`.}
+ }
+ \description{
+ Apply lagtime to a regimen
+diff --git a/tests/testthat/test_apply_lagtime.R b/tests/testthat/test_apply_lagtime.R
+index a5f7f6d8..5ff1c599 100644
+--- a/tests/testthat/test_apply_lagtime.R
++++ b/tests/testthat/test_apply_lagtime.R
+@@ -30,3 +30,31 @@ test_that("lagtime applied when multiple compartments and no compartment specifi
+   expect_true("regimen" %in% class(lag3))
+   expect_equal(lag3$dose_times, reg1$dose_times + 0.5)
+ })
++
++test_that("lagtime applied when multiple compartments and no compartment specified in regimen but cmt_mapping available (oral)", {
++  lag4a <- apply_lagtime(
++    regimen = reg1,
++    lagtime = c("TLAG", 0, 0),
++    parameters = list(CL = 5, V = 50, TLAG = .5),
++    cmt_mapping = list(oral = 1, infusion = 2, bolus = 2)
++  )
++  expect_true("regimen" %in% class(lag4a))
++  expect_equal(lag4a$dose_times, reg1$dose_times + 0.5)
++})
++
++test_that("lagtime applied when multiple compartments and no compartment specified in regimen but cmt_mapping available (infusion): dose times should not be altered", {
++  reg2 <- new_regimen(
++    amt = 1000,
++    n = 12,
++    interval = 12,
++    type = "infusion"
++  )
++  lag4b <- apply_lagtime(
++    regimen = reg2,
++    lagtime = c("TLAG", 0, 0),
++    parameters = list(CL = 5, V = 50, TLAG = .5),
++    cmt_mapping = list(oral = 1, infusion = 2, bolus = 2)
++  )
++  expect_true("regimen" %in% class(lag4b))
++  expect_equal(lag4b$dose_times, reg2$dose_times)
++})

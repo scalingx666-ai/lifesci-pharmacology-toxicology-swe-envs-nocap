@@ -1,0 +1,115 @@
+diff --git a/R/compile_sim_cpp.R b/R/compile_sim_cpp.R
+index 64e6916c..9b9914aa 100644
+--- a/R/compile_sim_cpp.R
++++ b/R/compile_sim_cpp.R
+@@ -253,7 +253,7 @@ compile_sim_cpp <- function(
+   }
+   cpp_code[idx18] <- paste0(
+     "  boost::array<double, ",size,"> b = { ", paste(rep(0, size), collapse=", ")," };\n",
+-    "  const state_type& A_dum = b;\n",
++    "  state_type& A_dum = b;\n",
+     "  state_type dAdt_dum = b;")
+   sim_func <-
+     paste0(paste0(readLines(paste0(folder, "/cpp/sim_header.cpp")), collapse = "\n"),
+diff --git a/inst/cpp/sim.cpp b/inst/cpp/sim.cpp
+index a9d312a8..f20e575a 100644
+--- a/inst/cpp/sim.cpp
++++ b/inst/cpp/sim.cpp
+@@ -84,11 +84,14 @@ List sim_wrapper_cpp (NumericVector A, List design, List par, NumericVector iov_
+   prv_dose = doses[0];
+   t_prv_dose = times[0];
+ 
+-  // Main call to ODE solver
+-  ode(A_dum, dAdt_dum, 0);
+-
+   // insert_state_init
+   NumericVector Aupd = clone(A);
++  
++  // Main call to ODE solver
++  for(int i = 0; i < n_comp; i++) { // make sure A and variables in ode block are initialized before start
++    A_dum[i] = Aupd[i];
++  }
++  ode(A_dum, dAdt_dum, 0);
+ 
+   for(int i = 0; i < (len-1); i++) {
+     t_start = times[i];
+@@ -117,15 +120,14 @@ List sim_wrapper_cpp (NumericVector A, List design, List par, NumericVector iov_
+         start = 0;
+       }
+     }
+-    if(start == 0) { // make a separate call to sim_cpp to make sure observation variables are initialized and stored
++    ode_out tmp = sim_cpp(Aupd, t_start, t_end, step_size);
++    if(start == 0) { // make sure observation variables are stored
+       int k = 0;
+-      ode_out tmp = sim_cpp(Aupd, t_start, t_start, step_size);
+       // insert time-dependent covariates scale
+       // insert scale definition for observation
+       // insert saving initial observations to obs object(s)
+       // insert copy variables into all variables
+     }
+-    ode_out tmp = sim_cpp(Aupd, t_start, t_end, step_size);
+     state_type tail = tmp.y.back();
+     if(start == 0) {
+       t.insert(t.end(), tmp.time.begin(), tmp.time.end());
+diff --git a/tests/testthat/test_t_init.R b/tests/testthat/test_t_init.R
+index 49c5988d..c7db9f36 100644
+--- a/tests/testthat/test_t_init.R
++++ b/tests/testthat/test_t_init.R
+@@ -3,34 +3,35 @@
+ ## e.g. TDM before first dose:
+ ## at t=-8, conc=10000
+ ## Use this as true value in the simulations
++par   <- list(CL = 7.67, V = 97.7, TDM_INIT = 500)
++mod <- new_ode_model(
++  code = "dAdt[1] = -(CL/V)*A[1]; CONC = A[1]/V",
++  state_init = "A[1] = TDM_INIT * V",
++  parameters = par,
++  obs = list(cmt = 1, scale = "V"),
++  declare_variables = c("CONC"),
++  cpp_show_code = F
++)
++reg <- new_regimen(amt = 100000, times=c(0, 24), type="bolus")
++s <- sim(
++  ode = mod,
++  parameters = par,
++  n_ind = 1,
++  regimen = reg,
++  only_obs = TRUE,
++  output_include = list(variables = TRUE),
++  t_init = 10
++)
+ 
+ test_that("TDM before first dose is considered a true initial value", {
+-  skip_on_cran()
+-  par   <- list(CL = 7.67, V = 97.7, TDM_INIT = 500)
+-  mod <- new_ode_model(
+-    code = "dAdt[1] = -(CL/V)*A[1];",
+-    state_init = "A[1] = TDM_INIT * V",
+-    parameters = par,
+-    obs = list(cmt = 1, scale = "V"),
+-    cpp_show_code=F
+-  )
+-  fits <- c()
+-  omega <- c(0.0406, 0.0623, 0.117)
+-  reg <- new_regimen(amt = 100000, times=c(0, 24), type="bolus")
+-
+-  s <- sim(
+-    ode = mod,
+-    parameters = par,
+-    n_ind = 1,
+-    regimen = reg,
+-    only_obs = TRUE,
+-    t_init = 10
+-  )
+-
+   expect_equal(sum(is.na(s$y)), 0)
+   expect_equal(s$y[1], 500)
+   expect_equal(round(s$y[3]), 427)
+   expect_equal(round(s$y[13]),1157)
++})
+ 
++test_that("Variables are set (also in first row) when TDM before first dose", {
++  expect_equal(round(s$CONC[1:5], 1), c(500, 462.2, 427.3, 395.1, 365.3))
+ })
+ 
++

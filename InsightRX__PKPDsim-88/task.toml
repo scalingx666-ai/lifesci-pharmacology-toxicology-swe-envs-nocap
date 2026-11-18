@@ -1,0 +1,65 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-88"
+description = "ensure if always has length 1 result"
+
+[metadata]
+difficulty = "medium"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "90f8a84e0cd448383acd5a20694ed009f45fb643"
+reference = "https://github.com/InsightRX/PKPDsim/pull/88"
+source_access = "auto"
+built_at = "2026-11-16T19:40:55.293654+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:8212329edb24a448e3b76ea336eb1f64a4c36a9463ca1537799a31e3525da05f"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2024-01-12T18:17:08Z"
+diff_format = "unified"
+context_files = [
+    "R/get_t_obs_from_regimen.R",
+    "R/regimen_to_nm.R",
+    "tests/testthat/test_get_t_obs_from_regimen.R",
+    "tests/testthat/test_regimen_to_nm.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 36
+difficulty = "medium"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

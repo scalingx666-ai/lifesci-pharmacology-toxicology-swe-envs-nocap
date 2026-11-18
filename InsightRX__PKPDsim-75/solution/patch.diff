@@ -1,0 +1,197 @@
+diff --git a/inst/cpp/sim.cpp b/inst/cpp/sim.cpp
+index f20e575a..c639c050 100644
+--- a/inst/cpp/sim.cpp
++++ b/inst/cpp/sim.cpp
+@@ -84,13 +84,16 @@ List sim_wrapper_cpp (NumericVector A, List design, List par, NumericVector iov_
+   prv_dose = doses[0];
+   t_prv_dose = times[0];
+ 
++  // Main call to ODE solver, initialize any variables in ode code
++  ode(A_dum, dAdt_dum, 0);
++
+   // insert_state_init
+   NumericVector Aupd = clone(A);
+-  
+-  // Main call to ODE solver
++
+   for(int i = 0; i < n_comp; i++) { // make sure A and variables in ode block are initialized before start
+     A_dum[i] = Aupd[i];
+   }
++  // call ode() again, make sure variables derived from compartment amounts are initialized
+   ode(A_dum, dAdt_dum, 0);
+ 
+   for(int i = 0; i < (len-1); i++) {
+diff --git a/src/pk_1cmt_iv_bolus.cpp b/src/pk_1cmt_iv_bolus.cpp
+index e2495d9b..2a48b0fe 100644
+--- a/src/pk_1cmt_iv_bolus.cpp
++++ b/src/pk_1cmt_iv_bolus.cpp
+@@ -17,7 +17,6 @@ DataFrame pk_1cmt_iv_bolus(DataFrame d){
+   NumericVector AUC = out["AUC"];
+ 
+   // prepare initial state
+-  std::vector<int>::iterator it;
+   i = 0;
+   while(TIME[i] == 0) {
+     A1[i] = AMT[i];
+diff --git a/src/pk_1cmt_iv_bolus_covariates.cpp b/src/pk_1cmt_iv_bolus_covariates.cpp
+index 7342afda..bbd30ea2 100644
+--- a/src/pk_1cmt_iv_bolus_covariates.cpp
++++ b/src/pk_1cmt_iv_bolus_covariates.cpp
+@@ -5,12 +5,9 @@ using namespace Rcpp;
+ DataFrame pk_1cmt_iv_bolus_covariates(DataFrame data, List parameters, StringVector covariates, Function covariate_model){
+ 
+   double k10, t, A1last;
+-  double CLi, Vi, tmp;
+   int i, j;
+   DataFrame out = clone(data);
+ 
+-  double CL = parameters["CL"];
+-  double V  = parameters["V"];
+   NumericVector A1 = out["A1"];
+   NumericVector DV = out["DV"];
+   NumericVector TIME = out["TIME"];
+@@ -20,7 +17,6 @@ DataFrame pk_1cmt_iv_bolus_covariates(DataFrame data, List parameters, StringVec
+   List p_in, p_upd;
+ 
+   // prepare initial state
+-  std::vector<int>::iterator it;
+   i = 0;
+   while(TIME[i] == 0) {
+     A1[i] = AMT[i];
+diff --git a/src/pk_1cmt_iv_infusion.cpp b/src/pk_1cmt_iv_infusion.cpp
+index 658bcda7..9d04070d 100644
+--- a/src/pk_1cmt_iv_infusion.cpp
++++ b/src/pk_1cmt_iv_infusion.cpp
+@@ -17,7 +17,6 @@ DataFrame pk_1cmt_iv_infusion(DataFrame d){
+   NumericVector AUC = out["AUC"];
+ 
+   // prepare initial state
+-  std::vector<int>::iterator it;
+   i = 0;
+   while(TIME[i] == 0) {
+     A1[i] = 0;
+diff --git a/src/pk_1cmt_oral.cpp b/src/pk_1cmt_oral.cpp
+index 8c117d41..eebeb2c0 100644
+--- a/src/pk_1cmt_oral.cpp
++++ b/src/pk_1cmt_oral.cpp
+@@ -22,7 +22,6 @@ DataFrame pk_1cmt_oral(DataFrame d){
+   }
+ 
+   // prepare initial state
+-  std::vector<int>::iterator it;
+   i = 0;
+   while(TIME[i] == 0) {
+     A1[i] = AMT[i] * F1[i];
+diff --git a/src/pk_2cmt_iv_bolus.cpp b/src/pk_2cmt_iv_bolus.cpp
+index 54759e62..46924fa3 100644
+--- a/src/pk_2cmt_iv_bolus.cpp
++++ b/src/pk_2cmt_iv_bolus.cpp
+@@ -21,7 +21,6 @@ DataFrame pk_2cmt_iv_bolus(DataFrame d){
+   NumericVector AUC = out["AUC"];
+ 
+   // prepare initial state
+-  std::vector<int>::iterator it;
+   i = 0;
+   while(TIME[i] == 0) {
+     A1[i] = AMT[i];
+diff --git a/src/pk_2cmt_iv_infusion.cpp b/src/pk_2cmt_iv_infusion.cpp
+index 840eb837..5cfdad07 100644
+--- a/src/pk_2cmt_iv_infusion.cpp
++++ b/src/pk_2cmt_iv_infusion.cpp
+@@ -22,7 +22,6 @@ DataFrame pk_2cmt_iv_infusion(DataFrame d){
+   NumericVector AUC = out["AUC"];
+ 
+   // prepare initial state
+-  std::vector<int>::iterator it;
+   i = 0;
+   while(TIME[i] == 0) {
+     A1[i] = 0;
+diff --git a/src/pk_2cmt_oral.cpp b/src/pk_2cmt_oral.cpp
+index 3fc5c27a..53cfc541 100644
+--- a/src/pk_2cmt_oral.cpp
++++ b/src/pk_2cmt_oral.cpp
+@@ -5,7 +5,7 @@ using namespace Rcpp;
+ // [[Rcpp::export]]
+ DataFrame pk_2cmt_oral(DataFrame d){
+ 
+-  double ka, k10, k20, k30, k23, k32, E1, E2, E3, lambda1, lambda2, t, A1last, A2last, A3last, A2term1, A2term2, A3term1, A3term2;
++  double ka, k20, k30, k23, k32, E2, E3, lambda1, lambda2, t, A1last, A2last, A3last, A2term1, A2term2, A3term1, A3term2;
+   int i;
+   DataFrame out = clone(d);
+ 
+@@ -26,7 +26,6 @@ DataFrame pk_2cmt_oral(DataFrame d){
+   }
+ 
+   // prepare initial state
+-  std::vector<int>::iterator it;
+   i = 0;
+   while(TIME[i] == 0) {
+     A1[i] = AMT[i] * F1[i];
+diff --git a/src/pk_3cmt_iv_bolus.cpp b/src/pk_3cmt_iv_bolus.cpp
+index 2782c151..f1be7c95 100644
+--- a/src/pk_3cmt_iv_bolus.cpp
++++ b/src/pk_3cmt_iv_bolus.cpp
+@@ -27,7 +27,6 @@ DataFrame pk_3cmt_iv_bolus(DataFrame d){
+   NumericVector AUC = out["AUC"];
+ 
+   // prepare initial state
+-  std::vector<int>::iterator it;
+   i = 0;
+   while(TIME[i] == 0) {
+     A1[i] = AMT[i];
+diff --git a/src/pk_3cmt_iv_infusion.cpp b/src/pk_3cmt_iv_infusion.cpp
+index 8cb8bc4b..7d05b063 100644
+--- a/src/pk_3cmt_iv_infusion.cpp
++++ b/src/pk_3cmt_iv_infusion.cpp
+@@ -28,7 +28,6 @@ DataFrame pk_3cmt_iv_infusion(DataFrame d){
+   NumericVector AUC = out["AUC"];
+ 
+   // prepare initial state
+-  std::vector<int>::iterator it;
+   i = 0;
+   while(TIME[i] == 0) {
+     A1[i] = 0;
+diff --git a/src/pk_3cmt_oral.cpp b/src/pk_3cmt_oral.cpp
+index c8a1ce72..518a85ef 100644
+--- a/src/pk_3cmt_oral.cpp
++++ b/src/pk_3cmt_oral.cpp
+@@ -5,9 +5,9 @@ using namespace Rcpp;
+ // [[Rcpp::export]]
+ DataFrame pk_3cmt_oral(DataFrame d){
+ 
+-  double ka, k10, k20, k23, k32, k24, k42, k30, k40, E1, E2, E3, E4;
++  double ka, k20, k23, k32, k24, k42, k30, k40, E2, E3, E4;
+   double lambda1, lambda2, lambda3, alpha, beta, gamma, theta;
+-  double A1last, A2last, A3last, A4last, A1term1, A1term2, A2term1, A2term2, A2term3, A3term1, A3term2, A3term3, A4term1, A4term2, A4term3;
++  double A1last, A2last, A3last, A4last, A2term1, A2term2, A2term3, A3term1, A3term2, A3term3, A4term1, A4term2, A4term3;
+   double a, b, c, m, n, q, B, C, I, J, t;
+   int i;
+   DataFrame out = clone(d);
+@@ -32,7 +32,6 @@ DataFrame pk_3cmt_oral(DataFrame d){
+   }
+ 
+   // prepare initial state
+-  std::vector<int>::iterator it;
+   i = 0;
+   while(TIME[i] == 0) {
+     A1[i] = AMT[i] * F1[i];
+diff --git a/tests/testthat/test_t_init.R b/tests/testthat/test_t_init.R
+index c7db9f36..f0e1a63a 100644
+--- a/tests/testthat/test_t_init.R
++++ b/tests/testthat/test_t_init.R
+@@ -5,11 +5,11 @@
+ ## Use this as true value in the simulations
+ par   <- list(CL = 7.67, V = 97.7, TDM_INIT = 500)
+ mod <- new_ode_model(
+-  code = "dAdt[1] = -(CL/V)*A[1]; CONC = A[1]/V",
+-  state_init = "A[1] = TDM_INIT * V",
++  code = "CLi = CL; Vi = V; dAdt[1] = -(CLi/Vi)*A[1]; CONC = A[1]/Vi",
++  state_init = "A[1] = TDM_INIT * Vi",
+   parameters = par,
+-  obs = list(cmt = 1, scale = "V"),
+-  declare_variables = c("CONC"),
++  obs = list(cmt = 1, scale = "Vi"),
++  declare_variables = c("CONC", "CLi", "Vi"),
+   cpp_show_code = F
+ )
+ reg <- new_regimen(amt = 100000, times=c(0, 24), type="bolus")

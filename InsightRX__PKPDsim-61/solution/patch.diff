@@ -1,0 +1,24 @@
+diff --git a/R/new_ode_model.R b/R/new_ode_model.R
+index b8099612..3090b2e2 100644
+--- a/R/new_ode_model.R
++++ b/R/new_ode_model.R
+@@ -337,6 +337,7 @@ new_ode_model <- function (model = NULL,
+                        "\\[LAGTIME\\]", lagtime,
+                        "\\[USE_IOV\\]", as.character(use_iov),
+                        "\\[IOV\\]", PKPDsim::print_list(iov, FALSE),
++                       "\\[DEVELOPMENT\\]", print_list(development, FALSE),
+                        "\\[LTBS\\]", as.character(ltbs),
+                        "\\[MISC\\]", paste0(deparse(misc), collapse = ""),
+                        "\\[CMT_MAPPING\\]", paste0(deparse(cmt_mapping), collapse = ""),
+diff --git a/inst/template/R/model.R b/inst/template/R/model.R
+index 83445de8..b00ea8ae 100644
+--- a/inst/template/R/model.R
++++ b/inst/template/R/model.R
+@@ -20,6 +20,7 @@ model <- function(mod = NULL) {
+   attr(ret, "cmt_mapping") <- [CMT_MAPPING]
+   attr(ret, "int_step_size") <- [INT_STEP_SIZE]
+   attr(ret, "iov") <- list([IOV])
++  attr(ret, "development") <- list([DEVELOPMENT])
+   attr(ret, "cmt_mapping") <- [CMT_MAPPING]
+   attr(ret, "nonmem") <- "[NONMEM]"
+   attr(ret, "comments") <- "[COMMENTS]"

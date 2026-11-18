@@ -1,0 +1,72 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-109"
+description = "Fix grammar and code style in vignettes"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "458c026d81962e6ed0c30bc4da4625a9823d0fc1"
+reference = "https://github.com/InsightRX/PKPDsim/pull/109"
+source_access = "auto"
+built_at = "2026-11-16T19:40:29.760284+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:94ffae5219df44594a8f42c70be375d5f68be9974f730b5638c17d7a40e27372"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2024-10-25T16:28:19Z"
+diff_format = "unified"
+context_files = [
+    "vignettes/PKPDsim.Rmd",
+    "vignettes/error.Rmd",
+    "vignettes/estimation-nlmixr.Rmd",
+    "vignettes/example-absorption-models.Rmd",
+    "vignettes/example-pkpd-model.Rmd",
+    "vignettes/export-model.Rmd",
+    "vignettes/model.Rmd",
+    "vignettes/output.Rmd",
+    "vignettes/regimen.Rmd",
+    "vignettes/speed.Rmd",
+    "vignettes/variability.Rmd",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 82
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

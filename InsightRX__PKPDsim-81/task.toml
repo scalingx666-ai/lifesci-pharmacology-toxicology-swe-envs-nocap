@@ -1,0 +1,65 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-81"
+description = "rm assumption non-inf types are t_inf = o"
+
+[metadata]
+difficulty = "medium"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "7134bc1ea560265679943436188320776ae89fa2"
+reference = "https://github.com/InsightRX/PKPDsim/pull/81"
+source_access = "auto"
+built_at = "2026-11-16T19:41:04.716557+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:2e56bd9c65906deec9ce41ac901fb11d5219fe6e1a4fc07fce0c090cd4916dd2"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2023-12-12T23:15:48Z"
+diff_format = "unified"
+context_files = [
+    "R/create_event_table.R",
+    "R/new_regimen.R",
+    "tests/testthat/test_create_event_table.R",
+    "tests/testthat/test_new_regimen.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 49
+difficulty = "medium"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

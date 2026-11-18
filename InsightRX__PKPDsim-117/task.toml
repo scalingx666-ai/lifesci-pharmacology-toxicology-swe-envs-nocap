@@ -1,0 +1,65 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-117"
+description = "RXR-2590: add support for additional \"types\" of oral dosing"
+
+[metadata]
+difficulty = "medium"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "639b5b383a3f293eed65a2c749e81449e7a7c72d"
+reference = "https://github.com/InsightRX/PKPDsim/pull/117"
+source_access = "auto"
+built_at = "2026-11-16T19:40:22.986890+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:48770937ae175407467a8e27996434aff37d5109ca72e89ac6a1448db98e5f89"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2025-05-14T19:22:18Z"
+diff_format = "unified"
+context_files = [
+    "R/create_event_table.R",
+    "R/new_regimen.R",
+    "tests/testthat/test_create_event_table.R",
+    "tests/testthat/test_new_regimen.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 44
+difficulty = "medium"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

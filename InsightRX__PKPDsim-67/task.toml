@@ -1,0 +1,69 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-67"
+description = "RXR-1373: prep for CRAN release"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "dc0349d6ec8ce7674422dd62f29b39eff05dcab8"
+reference = "https://github.com/InsightRX/PKPDsim/pull/67"
+source_access = "auto"
+built_at = "2026-11-16T19:41:19.578511+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:b9a89c944b4ecec8661d5c45ec0da329da69c2ad48cb58ff2fe81732f54f0fbd"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2023-02-27T19:15:27Z"
+diff_format = "unified"
+context_files = [
+    ".Rbuildignore",
+    "DESCRIPTION",
+    "R/check_iov_specification.R",
+    "R/compile_sim_cpp.R",
+    "R/misc.R",
+    "R/new_covariate.R",
+    "cran-comments.md",
+    "src/Makevars",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 94
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

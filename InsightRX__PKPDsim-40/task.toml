@@ -1,0 +1,62 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-40"
+description = "RXR-973: Use isTRUE when checking whether to build"
+
+[metadata]
+difficulty = "easy"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "ee137d8990f6d8c690ddc44013c7eb2312e1b985"
+reference = "https://github.com/InsightRX/PKPDsim/pull/40"
+source_access = "auto"
+built_at = "2026-11-16T19:41:46.552572+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:79e3a542613ad8009c0eec82201dd8a7e958ca5f23e5aaaab10eab0889c126b0"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2022-05-02T21:50:04Z"
+diff_format = "unified"
+context_files = [
+    "R/model_from_api.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 4
+difficulty = "trivial"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

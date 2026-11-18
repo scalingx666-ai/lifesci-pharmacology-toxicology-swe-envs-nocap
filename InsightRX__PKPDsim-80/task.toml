@@ -1,0 +1,65 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-80"
+description = "RXR-1771: Remove constraints on regimen type"
+
+[metadata]
+difficulty = "medium"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "3d214c97d0c6dc2fc535d573c27cb076e878447b"
+reference = "https://github.com/InsightRX/PKPDsim/pull/80"
+source_access = "auto"
+built_at = "2026-11-16T19:41:06.106095+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:1f755e04611f163413739f9b5c2b433807609381705c637968b8445134212da6"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2023-12-13T17:55:17Z"
+diff_format = "unified"
+context_files = [
+    "R/create_event_table.R",
+    "R/new_regimen.R",
+    "tests/testthat/test_create_event_table.R",
+    "tests/testthat/test_new_regimen.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 66
+difficulty = "medium"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

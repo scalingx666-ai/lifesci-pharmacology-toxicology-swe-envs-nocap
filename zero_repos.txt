@@ -25,7 +25,6 @@ Open-Systems-Pharmacology/OSPSuite-R
 Aitslab/BioNLP
 Open-Systems-Pharmacology/OSP-PBPK-Model-Library
 WangLabCSU/faers
-InsightRX/PKPDsim
 Daylily-Huang/ScholarFlow
 OpenVet-Projects/VetClaw
 esqLABS/esqlabsR

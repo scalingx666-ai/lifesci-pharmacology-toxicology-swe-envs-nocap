@@ -1,0 +1,200 @@
+diff --git a/R/compile_sim_cpp.R b/R/compile_sim_cpp.R
+index 70bc4e1a..0dc67129 100644
+--- a/R/compile_sim_cpp.R
++++ b/R/compile_sim_cpp.R
+@@ -122,8 +122,12 @@ compile_sim_cpp <- function(
+     pars <- paste0(pars, "double ", p[i], ";\n")
+   }
+   pars <- paste0(pars, "double prv_dose, t_prv_dose = 0;\n")
++  ## Initialize rate and bioav variables and insert temporary dummy values.
+   pars <- paste0(pars, paste0("double rate[] = { ", paste(rep(0, size), collapse=", "), " };\n"))
+-  pars <- paste0(pars, "double bioav = 1;\n")
++  if(length(dose$bioav) < size) {
++    dose$bioav <- c(dose$bioav, rep(1, size - length(dose$bioav)))
++  }
++  pars <- paste0(pars, paste0("double bioav[] = { ", paste(rep(1, size), collapse=", "), " };\n"))
+   if(!is.null(iov) && !is.null(iov$n_bins)) {
+     pars <- paste0(pars, paste0("Rcpp::NumericVector iov_bin(", (iov$n_bins+1) ,");\n"))
+     par_def <- paste0('  for(int i = 0; i < (iov_bin.size()); i++) { iov_bin[i] = iov_bins[i]; };\n', par_def);
+@@ -233,7 +237,12 @@ compile_sim_cpp <- function(
+     cpp_code[idx9] <- shift_state_indices(pk_code, -1)
+   }
+   if(!is.null(dose$bioav)) {
+-    cpp_code[idx10] <- paste0("    bioav = ", dose$bioav, ";")
++    not1 <- dose$bioav != 1 # keep C++ code clean and only redeclare F when not 1
++    if(any(not1)) {
++      for(i in (1:size)[not1]) {
++        cpp_code[idx10] <- paste(paste0("    bioav[", (1:size)[not1]-1, "] = ", dose$bioav[not1], ";"), collapse = "\n")
++      }
++    }
+   }
+   if(!is.null(dose_code)) {
+     cpp_code[idx11] <- shift_state_indices(dose_code, -1)
+diff --git a/R/merge_regimen.R b/R/merge_regimen.R
+index ec751fe7..0fdcddc3 100644
+--- a/R/merge_regimen.R
++++ b/R/merge_regimen.R
+@@ -9,6 +9,7 @@
+ #' @return Merged regimens
+ merge_regimen <- function(regimens) {
+   cols <- c("interval", "n", "type", "t_inf", "dose_times", "dose_amts", "first_dose_time")
++  if("cmt" %in% names(regimens[[1]])) { cols <- c(cols, "cmt") }
+   reg <- data.frame(regimens[[1]], stringsAsFactors = FALSE)[, cols]
+   if(length(regimens) > 1) {
+     for(i in 2:length(regimens)) {
+diff --git a/R/new_ode_model.R b/R/new_ode_model.R
+index 6636eaf7..3fc53a00 100644
+--- a/R/new_ode_model.R
++++ b/R/new_ode_model.R
+@@ -332,6 +332,7 @@ new_ode_model <- function (model = NULL,
+                        "\\[OBS_SCALE\\]", obs$scale,
+                        "\\[OBS_VARIABLE\\]", deparse(obs$variable),
+                        "\\[DOSE_BIOAV\\]", dose$bioav,
++                       "\\[DOSE_DUPLICATE\\]", deparse(dose$duplicate),
+                        "\\[CODE\\]", code,
+                        "\\[PK_CODE\\]", pk_code,
+                        "\\[DOSE_CODE\\]", dose_code,
+diff --git a/R/sim.R b/R/sim.R
+index a549b6c3..75b96833 100644
+--- a/R/sim.R
++++ b/R/sim.R
+@@ -128,7 +128,19 @@ sim <- function (ode = NULL,
+     t_ss <- 0
+     regimen_orig <- regimen
+   }
+-  if(!is.null(attr(ode, "lagtime")) && attr(ode, "lagtime") != "undefined" && attr(ode, "lagtime") != "NULL") {
++  ## Add duplicate "doses" to regimen, e.g. for double-absorption compartments
++  dose_dupl <- attr(ode, "dose")$duplicate
++  if(!is.null(dose_dupl)) {
++    if(is.null(regimen$cmt)) {
++      regimen$cmt <- attr(ode, "dose")$cmt
++    }
++    regimen_dupl <- regimen
++    for(i in 1:length(dose_dupl)) {
++      regimen_dupl$cmt <- dose_dupl[i]
++      regimen <- merge_regimen(list(regimen, regimen_dupl))
++    }
++  }
++  if(!is.null(attr(ode, "lagtime")) && attr(ode, "lagtime")[1] != "undefined" && attr(ode, "lagtime")[1] != "NULL") {
+     if(is.null(lagtime)) { # only override from metadata if not specified by user
+       lagtime <- attr(ode, "lagtime")
+     }
+diff --git a/inst/cpp/sim.cpp b/inst/cpp/sim.cpp
+index 9650c66e..cfc7bd7c 100644
+--- a/inst/cpp/sim.cpp
++++ b/inst/cpp/sim.cpp
+@@ -76,7 +76,8 @@ List sim_wrapper_cpp (NumericVector A, List design, List par, NumericVector iov_
+   // insert_parameter_definitions
+ 
+   // Initialize parameters, compartments, etc:
+-  pk_code(0, times, doses, 0, dose_cmt, dose_type, iov_bin);
++
++  pk_code(0, times, doses, doses[0], dose_cmt, dose_type, iov_bin);
+   // call ode() once to pre-calculate any initial variables
+   // insert A dAdt state_init
+   set_covariates(0);
+@@ -95,10 +96,12 @@ List sim_wrapper_cpp (NumericVector A, List design, List par, NumericVector iov_
+ 
+     // insert bioav definition
+     if(dummy[i] == 1 || (doses[i] > 0 && dose_type[i] == 1)) { // change rate if start of dose, or if end of infusion
+-      rate[dose_cmt[i]-1] = (rate[dose_cmt[i]-1])*1.0 + rates[i] * bioav;
++      rate[dose_cmt[i]-1] = (rate[dose_cmt[i]-1])*1.0 + rates[i] * bioav[dose_cmt[i]-1];
+     }
+     // insert scale definition for integration period
+ 
++    prv_dose = doses[0];
++    t_prv_dose = times[0];
+     pk_code(i, times, doses, prv_dose, dose_cmt, dose_type, iov_bin);
+ 
+     start = 0;
+@@ -109,7 +112,7 @@ List sim_wrapper_cpp (NumericVector A, List design, List par, NumericVector iov_
+       t_prv_dose = times[i];
+       prv_dose = doses[i];
+       if(dose_type[i] == 0) { // bolus
+-        Aupd[dose_cmt[i]-1] = Aupd[dose_cmt[i]-1] + doses[i] * bioav;
++        Aupd[dose_cmt[i]-1] = Aupd[dose_cmt[i]-1] + doses[i] * bioav[dose_cmt[i]-1];
+         start = 0;
+       }
+     }
+diff --git a/inst/template/R/model.R b/inst/template/R/model.R
+index 88b6dfc3..83445de8 100644
+--- a/inst/template/R/model.R
++++ b/inst/template/R/model.R
+@@ -4,7 +4,7 @@ model <- function(mod = NULL) {
+   attr(ret, "cpp") <- TRUE
+   attr(ret, "size") <- [N_COMP]
+   attr(ret, "obs") <- list("cmt" = [OBS_COMP], "scale" = "[OBS_SCALE]", "variable" = [OBS_VARIABLE])
+-  attr(ret, "dose") <- list("cmt" = [DOSE_COMP], "bioav" = [DOSE_BIOAV] )
++  attr(ret, "dose") <- list("cmt" = [DOSE_COMP], "bioav" = [DOSE_BIOAV], "duplicate" = [DOSE_DUPLICATE] )
+   attr(ret, "code") <- "[CODE]"
+   attr(ret, "pk_code") <- "[PK_CODE]"
+   attr(ret, "state_init") <- [STATE_INIT]
+diff --git a/tests/testthat/test_merge_regimen.R b/tests/testthat/test_merge_regimen.R
+index 1b28f24a..7adee177 100644
+--- a/tests/testthat/test_merge_regimen.R
++++ b/tests/testthat/test_merge_regimen.R
+@@ -6,4 +6,16 @@ test_that("merge regimens correctly", {
+   expect_equal(reg3$type, c("infusion", "oral", "infusion", "oral"))
+   expect_equal(reg3$dose_amts, c(1000, 500, 1000, 500))
+   expect_equal(reg3$t_inf, c(1, 0, 1, 0))
++  expect_null(reg3$cmt)
++})
++
++test_that("cmt info gets merged as well, when available", {
++  reg1 <- new_regimen(amt = 1000, times = c(0, 24), type = "infusion", t_inf = 1, cmt = 2)
++  reg2 <- new_regimen(amt = 500, times = c(12, 36), type = "oral", cmt = 1)
++  reg3 <- merge_regimen(regimens = list(reg1, reg2))
++  expect_equal(reg3$dose_times, c(0, 12, 24, 36))
++  expect_equal(reg3$type, c("infusion", "oral", "infusion", "oral"))
++  expect_equal(reg3$dose_amts, c(1000, 500, 1000, 500))
++  expect_equal(reg3$t_inf, c(1, 0, 1, 0))
++  expect_equal(reg3$cmt, c(2, 1, 2, 1))
+ })
+diff --git a/tests/testthat/test_new_ode_model.R b/tests/testthat/test_new_ode_model.R
+index b2624376..c57d2172 100644
+--- a/tests/testthat/test_new_ode_model.R
++++ b/tests/testthat/test_new_ode_model.R
+@@ -1,3 +1,38 @@
++test_that("Double absorption models work appropriately", {
++  skip_on_cran()
++  mod <- new_ode_model(
++    code = "dAdt[1] = -KA1*A[1]; dAdt[2] = -KA2*A[2]; dAdt[3] = KA1*A[1] + KA2*A[2] -(CL/V)*A[3]; ",
++    pk_code = NULL,
++    parameters = c("CL", "V", "KA1", "KA2"),
++    obs = list(cmt = 1, scale = 1),
++    dose = list(
++      cmt = 1,
++      duplicate = c(2),
++      bioav = c(0.3, 0.6, 0.9)
++    ),
++    lagtime = c(0, 1.5),
++    cpp = F
++  )
++  reg <- new_regimen(amt = 100, n = 12, interval = 12, type = "oral")
++  res <- sim(
++    mod,
++    regimen = reg,
++    parameters = list(
++      KA1 = 1,
++      KA2 = 1,
++      CL = 1,
++      V = 10
++    ),
++    only_obs = F,
++    output_include = list(variables=TRUE),
++    t_obs = seq(0, 24, .1)
++  )
++  expect_equal(attr(mod, "dose")$duplicate, 2)
++  expect_equal(round(res[res$comp == 1 & res$t == 0.1, ]$y, 2), 27.15) # abs comp 1
++  expect_equal(res[res$comp == 2 & res$t == 1.2, ]$y, 0) # abs comp 2: should still be 0 due to lagtime
++  expect_equal(round(res[res$comp == 2 & res$t == 1.6, ]$y, 1), 54.3) # abs comp 2: should be twice the amount of t=0.1&comp==1
++})
++
+ test_that("All IOV bins are properly activated", {
+   iov_bins <- c(0, 12, 24, 36, 48, 9999)
+   mod <- new_ode_model(
+@@ -36,4 +71,3 @@ test_that("All IOV bins are properly activated", {
+ 
+   expect_equal(round(res$kappa_CL, 2), c(0.10, 0.20, 0.30, 0.40, -0.50))
+ })
+-

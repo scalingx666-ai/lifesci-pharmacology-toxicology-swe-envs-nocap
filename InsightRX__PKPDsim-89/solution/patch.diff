@@ -1,0 +1,196 @@
+diff --git a/R/compile_sim_cpp.R b/R/compile_sim_cpp.R
+index 9b9914aa..339ceca9 100644
+--- a/R/compile_sim_cpp.R
++++ b/R/compile_sim_cpp.R
+@@ -142,7 +142,7 @@ compile_sim_cpp <- function(
+   cpp_code[idx] <- par_def
+   idx2 <- grep("insert_state_init", cpp_code)
+   cpp_code[idx2] <- paste("   ", code_init)
+-  cov_scale <- ""
++  cov_timevar <- ""
+   cov_names <- NULL
+   if(!is.null(covariates)) {
+     if(inherits(covariates, "character")) {
+@@ -176,7 +176,7 @@ compile_sim_cpp <- function(
+         cov_tmp <- paste0(cov_tmp, paste0('    t_prv_', nam, ' = 0 ;\n'))
+       }
+       cov_tmp <- paste0(cov_tmp, paste0('    ', nam, ' = ', nam,'_0;\n'))
+-      cov_scale <- paste0(cov_scale, paste0('      ', nam, ' = ', nam, '_0 + gr_', nam, ' * (tmp.time[k] - t_prv_', nam), ');\n')
++      cov_timevar <- paste0(cov_timevar, paste0('      ', nam, ' = ', nam, '_0 + gr_', nam, ' * (t_end - t_prv_', nam), ');\n')
+     }
+     idx3 <- grep("insert covariate definitions", cpp_code)
+     cpp_code[idx3] <- cov_def
+@@ -208,7 +208,7 @@ compile_sim_cpp <- function(
+     if(length(obs$cmt) == 1) {
+       cpp_code[idx5] <- paste0(cpp_code[idx5], "\n    scale = ", obs$scale[1], ";")
+       cpp_code[idx7] <- paste0(cpp_code[idx7], "\n      scale = ", obs$scale[1], ";")
+-      cpp_code[idx8] <- cov_scale
++      cpp_code[idx8] <- cov_timevar
+       cpp_code[idx12a] <- paste0(cpp_code[idx12a], "\n      obs.insert(obs.end(), tmp.y[k][", obs$cmt[1]-1,"] / scale);")
+       cpp_code[idx12b] <- paste0(cpp_code[idx12b], "\n      obs.insert(obs.end(), tmp.y[k][", obs$cmt[1]-1,"] / scale);")
+       cpp_code[idx13] <- paste0('  comb["obs"] = obs;\n');
+@@ -218,7 +218,7 @@ compile_sim_cpp <- function(
+       for(k in 1:length(obs$cmt)) {
+         cpp_code[idx5] <- paste0(cpp_code[idx5], "\n    scale", k," = ", obs$scale[k], ";")
+         cpp_code[idx7] <- paste0(cpp_code[idx7], "\n      scale", k," = ", obs$scale[k], ";")
+-        cpp_code[idx8] <- cov_scale
++        cpp_code[idx8] <- cov_timevar
+         cpp_code[idx12a] <- paste0(cpp_code[idx12a], "\n      obs",k,".insert(obs",k,".end(), tmp.y[k][", obs$cmt[k]-1,"] / scale", k,");")
+         cpp_code[idx12b] <- paste0(cpp_code[idx12b], "\n      obs",k,".insert(obs",k,".end(), tmp.y[k][", obs$cmt[k]-1,"] / scale", k,");")
+         cpp_code[idx13] <- paste0(cpp_code[idx13], '\n  comb["obs', k,'"] = obs', k,';');
+diff --git a/inst/cpp/sim.cpp b/inst/cpp/sim.cpp
+index c639c050..d071e541 100644
+--- a/inst/cpp/sim.cpp
++++ b/inst/cpp/sim.cpp
+@@ -106,6 +106,7 @@ List sim_wrapper_cpp (NumericVector A, List design, List par, NumericVector iov_
+       t_prv_dose = times[i];
+       prv_dose = doses[i];
+     }
++    // insert time-dependent covariates scale
+     pk_code(i, times, doses, prv_dose, dose_cmt, dose_type, iov_bin);
+     // insert bioav definition
+     if(dummy[i] == 1 || (doses[i] > 0 && dose_type[i] == 1)) { // change rate if start of dose, or if end of infusion
+@@ -126,7 +127,6 @@ List sim_wrapper_cpp (NumericVector A, List design, List par, NumericVector iov_
+     ode_out tmp = sim_cpp(Aupd, t_start, t_end, step_size);
+     if(start == 0) { // make sure observation variables are stored
+       int k = 0;
+-      // insert time-dependent covariates scale
+       // insert scale definition for observation
+       // insert saving initial observations to obs object(s)
+       // insert copy variables into all variables
+diff --git a/tests/testthat/test_timevar_cov.R b/tests/testthat/test_timevar_cov.R
+index cecb9f74..7e91ae32 100644
+--- a/tests/testthat/test_timevar_cov.R
++++ b/tests/testthat/test_timevar_cov.R
+@@ -1,9 +1,28 @@
++skip_on_cran()
++
++par <- list(CL = 3, V = 50, Q = 2.5, V2 = 70)
++reg <- new_regimen(
++  amt = 250,
++  n = 60,
++  interval = 6,
++  type = 'infusion',
++  t_inf = 1
++)
++mod <- new_ode_model(
++  code = "
++      dAdt[1] = -(Q/V)*A[1] + (Q/V2)*A[2] -(CLi/V)*A[1];
++      dAdt[2] = -(Q/V2)*A[2] + (Q/V)*A[1];
++    ",
++  pk_code = "CLi = CL + CRCL",
++  obs = list(cmt = 2, scale = "V"),
++  covariates = list(CRCL = new_covariate(5)), declare_variables = "CLi",
++  cpp = TRUE
++)
++
+ test_that("timevarying covariates handled", {
+-  skip_on_cran()
+   # CLi changes by several orders of magnitude after
+   # steady state is achieved, which should produce
+   # a new steady state that is much lower
+-
+   covs <- list(
+     CRCL = new_covariate(
+       value = c(4.662744, 5.798767, 6.195943, 6.2, 600),
+@@ -11,19 +30,7 @@ test_that("timevarying covariates handled", {
+       implementation = "locf"
+     )
+   )
+-  mod <- new_ode_model(
+-    code = "
+-      dAdt[1] = -(Q/V)*A[1] + (Q/V2)*A[2] -(CLi/V)*A[1];
+-      dAdt[2] = -(Q/V2)*A[2] + (Q/V)*A[1];
+-    ",
+-    pk_code = "CLi = CL + CRCL",
+-    obs = list(cmt = 2, scale = "V"),
+-    covariates = covs, declare_variables = "CLi"
+-  )
+-  par <- list(CL = 3, V = 50, Q = 2.5, V2 = 70)
+-  reg <- new_regimen(amt = 250, n = 60, interval = 6, type = 'infusion',t_inf = 1)
+   t_obs <- seq(0, 360, 0.1)
+-
+   sim1 <- sim_ode(
+     mod,
+     parameters = par,
+@@ -33,9 +40,79 @@ test_that("timevarying covariates handled", {
+     t_obs = t_obs,
+     output_include = list(parameters = TRUE, covariates = TRUE)
+   )
+-
+   expect_equal(sim1$CRCL[sim1$t == 209], 6.2)
+   expect_equal(sim1$CRCL[sim1$t == 210], 600)
+   expect_true(sim1$y[sim1$t == 35 * 6] > 10 * sim1$y[sim1$t == 60 * 6])
+ })
+ 
++test_that("timevarying covariates are interpolated and affect PK", {
++  covs_locf <- list(
++    CRCL = new_covariate(
++      times = c(0, 48, 96),
++      value = c(3, 10, 3),
++      implementation = "locf"
++    )
++  )
++  covs_inter <- list(
++    CRCL = new_covariate(
++      times = c(0, 48, 96),
++      value = c(3, 10, 3),
++      implementation = "interpolate"
++    )
++  )
++  t_obs <- seq(0, 120, 2)
++  sim2_inter <- sim_ode(
++    mod,
++    parameters = par,
++    regimen = reg,
++    covariates = covs_inter,
++    only_obs = TRUE,
++    t_obs = t_obs,
++    output_include = list(parameters = TRUE, covariates = TRUE, variables = TRUE)
++  )
++  sim2_locf <- sim_ode(
++    mod,
++    parameters = par,
++    regimen = reg,
++    covariates = covs_locf,
++    only_obs = TRUE,
++    t_obs = t_obs,
++    output_include = list(parameters = TRUE, covariates = TRUE, variables = TRUE)
++  )
++
++  ## Check covariate changing for inter, but not for locf
++  expect_equal(
++    round(sim2_inter$CRCL, 3)[1:10],
++    c(3, 3.292, 3.583, 3.875, 4.167, 4.458, 4.75, 5.042, 5.333, 5.625)
++  )
++  expect_equal(
++    round(sim2_locf$CRCL, 3)[1:10],
++    rep(3, 10)
++  )
++
++  ## Check interpolated covariates actually affect PK parameters
++  expect_equal(
++    round(sim2_inter$CLi, 3)[1:10],
++    c(6, 6.292, 6.583, 6.875, 7.167, 7.458, 7.75, 8.042, 8.333, 8.625)
++  )
++  expect_equal(
++    round(sim2_locf$CLi, 3)[1:10],
++    rep(6, 10)
++  )
++
++  ## Check interpolated covariates actually affect simulated conc
++  expect_equal(
++    round(sim2_inter$y, 3)[1:10],
++    c(0, 0.32, 0.611, 0.788, 1.205, 1.531, 1.708, 2.098, 2.379, 2.503),
++  )
++  expect_equal(
++    round(sim2_locf$y, 3)[1:10],
++    c(0, 0.321, 0.617, 0.805, 1.239, 1.598, 1.813, 2.251, 2.598, 2.792)
++  )
++
++  ## Visual check:
++  # ggplot(sim2_inter, aes(x = t, y = y)) +
++  #   geom_line() +
++  #   geom_line(data = sim2_locf, colour = "blue")
++
++})

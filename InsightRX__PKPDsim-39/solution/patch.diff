@@ -1,0 +1,85 @@
+diff --git a/R/new_covariate.R b/R/new_covariate.R
+index d4c749cc..30b0bbb8 100644
+--- a/R/new_covariate.R
++++ b/R/new_covariate.R
+@@ -7,6 +7,7 @@
+ #' @param interpolation_join_limit for `interpolate` option, if covariate timepoints are spaced too close together, the ODE solver sometimes chokes. This argument sets a lower limit on the space between timepoints. It will create average values on joint timepoints instead. If undesired set to NULL or 0.
+ #' @param unit specify covariate unit (optional, for documentation purposes only)
+ #' @param remove_negative_times `TRUE`` or `FALSE`
++#' @param round_times round times to specified number of digits. If `NULL`, will not round.
+ #' @param comments `NULL`, or vector of length equal to `value` specifying comments to each observation
+ #' @param verbose verbosity
+ #' @export
+@@ -19,6 +20,7 @@ new_covariate <- function(
+   unit = NULL,
+   interpolation_join_limit = 1,
+   remove_negative_times = TRUE,
++  round_times = NULL,
+   comments = NULL,
+   verbose = TRUE) {
+   if(is.null(value)) {
+@@ -114,11 +116,16 @@ new_covariate <- function(
+   if(length(new_unit) > length(new_values)) {
+     new_unit <- new_unit[1:length(new_values)]
+   }
+-  cov <- list(value = new_values,
+-              times = new_times,
+-              implementation = implementation,
+-              unit = new_unit,
+-              comments = comments)
++  if(!is.null(round_times)) {
++    new_times <- round(new_times, round_times)
++  }
++  cov <- list(
++    value = new_values,
++    times = new_times,
++    implementation = implementation,
++    unit = new_unit,
++    comments = comments
++  )
+   class(cov) <- c("covariate", class(cov))
+   return(cov)
+ }
+diff --git a/man/new_covariate.Rd b/man/new_covariate.Rd
+index c387f215..8b0979b1 100644
+--- a/man/new_covariate.Rd
++++ b/man/new_covariate.Rd
+@@ -11,6 +11,7 @@ new_covariate(
+   unit = NULL,
+   interpolation_join_limit = 1,
+   remove_negative_times = TRUE,
++  round_times = NULL,
+   comments = NULL,
+   verbose = TRUE
+ )
+@@ -28,6 +29,8 @@ new_covariate(
+ 
+ \item{remove_negative_times}{\verb{TRUE`` or }FALSE`}
+ 
++\item{round_times}{round times to specified number of digits. If \code{NULL}, will not round.}
++
+ \item{comments}{\code{NULL}, or vector of length equal to \code{value} specifying comments to each observation}
+ 
+ \item{verbose}{verbosity}
+diff --git a/tests/testthat/test_new_covariate.R b/tests/testthat/test_new_covariate.R
+index e88d6bcb..fb64cefb 100644
+--- a/tests/testthat/test_new_covariate.R
++++ b/tests/testthat/test_new_covariate.R
+@@ -48,4 +48,17 @@ test_that("Joining works as expected", {
+   expect_equal(length(tmp_join$value), 2)
+ })
+ 
++test_that("Interpolated times are rounded properly", {
++  expect_message(
++    tmp_rnd <- new_covariate(
++      value = c(1,2,3),
++      times = c(0, 3.321252, 3.5111234),
++      interpolation_join_limit = 1,
++      round_times = 3
++    )
++  )
++  expect_equal(tmp_rnd$times[2], 3.416)
++})
++
++
+ 

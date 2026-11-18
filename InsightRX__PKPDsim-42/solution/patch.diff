@@ -1,0 +1,172 @@
+diff --git a/R/create_event_table.R b/R/create_event_table.R
+index 973a35a8..0510866e 100644
+--- a/R/create_event_table.R
++++ b/R/create_event_table.R
+@@ -222,13 +222,16 @@ create_event_table <- function(
+   }
+   design <- design[design$t <= max(t_obs),]
+   if(!is.null(obs_type)) {
++    design$idx <- 1:nrow(design)
+     design <- merge(design, data.frame(t = t_obs, obs_type), all=TRUE)
+     design$obs_type <- ifelse(is.na(design$obs_type), 0, as.integer(design$obs_type))
+-    # merging can induce multiple infusion stop events, should reset those:
+-    duplicate_stop <- design$evid == 2 & duplicated(paste(design$t, design$evid, design$rate))
+-    if(any(duplicate_stop)) {
+-      design$rate[duplicate_stop] <- 0
++
++    # merging can induce multiple doses and/or multiple infusion stop events, should reset those to being observations
++    duplicate_event <- design$evid %in% c(1,2) & duplicated(design$idx)
++    if(any(duplicate_event)) {
++      design[duplicate_event, c("dose", "rate", "evid", "type", "t_inf", "dose_cmt", "bioav")] <- 0
+     }
++    design$idx <- NULL
+   }
+   design <- design[order(design$t, design$type, design$dum, decreasing=FALSE),]
+   if(t_init != 0) { # add event line at t=0, to start integration
+diff --git a/R/parse_obs_types.R b/R/parse_obs_types.R
+index 0fda6e71..3450be17 100644
+--- a/R/parse_obs_types.R
++++ b/R/parse_obs_types.R
+@@ -1,7 +1,7 @@
+ #' Parse observation types to simulation code
+ #'
+-#' @param obs specified observation object including at least a description of 
+-#'       which variable(s) are associated with a particular compartment, e.g. 
++#' @param obs specified observation object including at least a description of
++#'       which variable(s) are associated with a particular compartment, e.g.
+ #'       `list(variable="CONC", scale="1")`.
+ parse_obs_types <- function(obs) {
+   if(is.null(obs$scale)) obs$scale <- "1.0"
+@@ -19,17 +19,17 @@ parse_obs_types <- function(obs) {
+       tmp <- c(
+         tmp,
+         paste0(
+-          "      ", str_if, " (obs_type[i+1]==", i, ")", 
+-          " { obs.insert(obs.end(), ", obs$variable[i], "/(", obs$scale[i], ")); } ", 
++          "      ", str_if, " (obs_type[row]==", i, ")",
++          " { obs.insert(obs.end(), ", obs$variable[i], "/(", obs$scale[i], ")); } ",
+           str_else, " "
+         )
+       )
+     }
+     # make sure something is pushed on obs stack
+     tmp <- c(
+-      tmp, 
++      tmp,
+       paste0("         { obs.insert(obs.end(), ", obs$variable[1], "/(", obs$scale[1], ")); }")
+-    ) 
++    )
+   }
+   return(paste0(tmp, collapse = "\n"))
+ }
+diff --git a/inst/cpp/sim.cpp b/inst/cpp/sim.cpp
+index 1a709a06..6f1fde20 100644
+--- a/inst/cpp/sim.cpp
++++ b/inst/cpp/sim.cpp
+@@ -69,6 +69,7 @@ List sim_wrapper_cpp (NumericVector A, List design, List par, NumericVector iov_
+   obs_type = as<std::vector<int> >(design["obs_type"]);
+   int len = times.size();
+   int start;
++  int row = 0;
+   memset(rate, 0, sizeof(rate));
+   // insert observation compartment
+   // insert bioavailability definition
+@@ -117,6 +118,15 @@ List sim_wrapper_cpp (NumericVector A, List design, List par, NumericVector iov_
+         start = 0;
+       }
+     }
++    if(start == 0) { // make a separate call to sim_cpp to make sure observation variables are initialized and stored
++      int k = 0;
++      ode_out tmp = sim_cpp(Aupd, t_start, t_start, step_size);
++      // insert time-dependent covariates scale
++      // insert scale definition for observation
++      // insert saving observations to obs object(s)
++      // insert copy variables into all variables
++      row++;
++    }
+     ode_out tmp = sim_cpp(Aupd, t_start, t_end, step_size);
+     state_type tail = tmp.y.back();
+     if(start == 0) {
+@@ -132,11 +142,12 @@ List sim_wrapper_cpp (NumericVector A, List design, List par, NumericVector iov_
+     for (int k = 0; k < n_comp; k++) {
+       Aupd[k] = tail[k];
+     }
+-    for (int k = start; k < tmp.y.size(); k++) {
++    for (int k = 1; k < tmp.y.size(); k++) {
+       // insert time-dependent covariates scale
+       // insert scale definition for observation
+       // insert saving observations to obs object(s)
+       // insert copy variables into all variables
++      row++;
+     }
+   }
+ 
+diff --git a/tests/testthat/test_multi_obs.R b/tests/testthat/test_multi_obs.R
+index af8a2c8c..5196d989 100644
+--- a/tests/testthat/test_multi_obs.R
++++ b/tests/testthat/test_multi_obs.R
+@@ -1,9 +1,9 @@
+ # Example multiple observation types (e.g. different compartments! not just different residual errors)
+ 
+ ## define parameters
+-vars <- c("CONC", "METAB", "METAB2")
++vars <- c("CONC", "METAB", "METAB2", "ACT")
+ pk1 <- new_ode_model(
+-  code = "dAdt[1] = -(CL/V)*A[1]; CONC = 1000*A[1]/V; METAB = CONC/2; METAB2 = CONC * t;",
++  code = "dAdt[1] = -(CL/V)*A[1]; CONC = 1000*A[1]/V; METAB = CONC/2; METAB2 = CONC * t; ACT = 15",
+   obs = list(variable = vars, scale = 1),
+   declare_variables = vars,
+   cpp_show_code = F
+@@ -142,3 +142,24 @@ test_that("specifying ruv as multi-type when only 1 obs_type", {
+   expect_equal(s_multi1$y[c(1, 3)], s_single$y[c(1,3)])
+   expect_true(sum(abs(s_single$y[c(2,4)] - s_multi1$y[c(2,4)])) > 50)
+ })
++
++test_that("multi-obs with baseline and obs_time = dose_time works correctly", {
++  tmp <- sim(
++    pk1,
++    parameters = parameters,
++    regimen = regimen,
++    t_obs = c(0, 0, 6, 6),
++    obs_type = c(1, 4, 1, 4),
++    only_obs = TRUE,
++    output_include = list(variables = TRUE),
++    return_design = F
++  )
++  expect_equal(
++    tmp$y[tmp$obs_type == 1],
++    tmp$CONC[tmp$obs_type == 1]
++  )
++  expect_equal( 
++    tmp$y[tmp$obs_type == 4],
++    tmp$ACT[tmp$obs_type == 4]
++  )
++})
+diff --git a/tests/testthat/test_parse_obs_types.R b/tests/testthat/test_parse_obs_types.R
+index 458a5fe9..67a273f6 100644
+--- a/tests/testthat/test_parse_obs_types.R
++++ b/tests/testthat/test_parse_obs_types.R
+@@ -25,12 +25,12 @@ test_that("multiple observation type, scale is single", {
+     scale = 1
+   )
+   expect_warning(
+-    res <- parse_obs_types(obs3a),
++    res <- PKPDsim:::parse_obs_types(obs3a),
+     "Provided `scale` vector not same length as `variable` vector."
+   )
+   expect_equal(
+     res,
+-    "      if (obs_type[i+1]==1) { obs.insert(obs.end(), CONC/(1)); } else if \n         (obs_type[i+1]==2) { obs.insert(obs.end(), CONCM/(1)); } else if \n         (obs_type[i+1]==3) { obs.insert(obs.end(), PD/(1)); } else \n         { obs.insert(obs.end(), CONC/(1)); }"
++    "      if (obs_type[row]==1) { obs.insert(obs.end(), CONC/(1)); } else if \n         (obs_type[row]==2) { obs.insert(obs.end(), CONCM/(1)); } else if \n         (obs_type[row]==3) { obs.insert(obs.end(), PD/(1)); } else \n         { obs.insert(obs.end(), CONC/(1)); }"
+   )
+ })
+ 
+@@ -41,7 +41,7 @@ test_that("multiple observation type, scale is same-length", {
+   )
+   expect_equal(
+     parse_obs_types(obs3b),
+-    "      if (obs_type[i+1]==1) { obs.insert(obs.end(), CONC/(1)); } else if \n         (obs_type[i+1]==2) { obs.insert(obs.end(), CONCM/(2)); } else if \n         (obs_type[i+1]==3) { obs.insert(obs.end(), PD/(3)); } else \n         { obs.insert(obs.end(), CONC/(1)); }"
++    "      if (obs_type[row]==1) { obs.insert(obs.end(), CONC/(1)); } else if \n         (obs_type[row]==2) { obs.insert(obs.end(), CONCM/(2)); } else if \n         (obs_type[row]==3) { obs.insert(obs.end(), PD/(3)); } else \n         { obs.insert(obs.end(), CONC/(1)); }"
+   )
+ })
+ 

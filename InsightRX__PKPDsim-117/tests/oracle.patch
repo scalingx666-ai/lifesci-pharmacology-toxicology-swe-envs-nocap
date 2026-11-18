@@ -1,0 +1,93 @@
+diff --git a/R/create_event_table.R b/R/create_event_table.R
+index a2aba175..1a3b2317 100644
+--- a/R/create_event_table.R
++++ b/R/create_event_table.R
+@@ -120,9 +120,9 @@ create_event_table <- function(
+   }
+ 
+   # parse list to a design (data.frame)
+-  # For boluses, oral, sc, im, and covariates, set infusion time to 0. For all
++  # For boluses, oral, and covariates, set infusion time to 0. For all
+   # other methods, assume infusion time was provided correctly
+-  is_bolus <- regimen$type %in% c("oral", "bolus", "sc", "im", "covariate")
++  is_bolus <- regimen$type %in% c("bolus", "covariate") | grepl("oral", regimen$type)
+   regimen$t_inf[is_bolus] <- 0
+   dos <- data.frame(cbind(t = regimen$dose_times,
+                   dose = regimen$dose_amts,
+diff --git a/R/new_regimen.R b/R/new_regimen.R
+index 79c5ab65..77e82b3b 100644
+--- a/R/new_regimen.R
++++ b/R/new_regimen.R
+@@ -137,9 +137,9 @@ new_regimen <- function(
+     reg$t_inf[reg$type == "bolus"] <- 0
+     reg$rate[reg$type == "bolus"] <- 0
+   }
+-  if(any(reg$type == "oral")) {
+-    reg$t_inf[reg$type == "oral"] <- 0
+-    reg$rate[reg$type == "oral"] <- 0
++  if(any(grepl("oral", reg$type))) {
++    reg$t_inf[grepl("oral", reg$type)] <- 0
++    reg$rate[grepl("oral", reg$type)] <- 0
+   }
+   if(!is.null(cmt)) {
+     if(length(cmt) != length(reg$dose_times)) {
+diff --git a/tests/testthat/test_create_event_table.R b/tests/testthat/test_create_event_table.R
+index 1f50a871..a4cf7620 100644
+--- a/tests/testthat/test_create_event_table.R
++++ b/tests/testthat/test_create_event_table.R
+@@ -135,31 +135,3 @@ test_that("useful cmt_mapping mismatch error is thrown", {
+   )
+ })
+ 
+-test_that("sc, im are considered to have t_inf = 0", {
+-  reg1 <- new_regimen(
+-    amt = c(100, 100),
+-    times = c(0, 12),
+-    type = rep("im", 2)
+-  )
+-  reg2 <- new_regimen(
+-    amt = c(100, 100),
+-    times = c(0, 12),
+-    type = rep("sc", 2)
+-  )
+-
+-  res1 <- create_event_table(
+-    regimen = reg1,
+-    t_obs = 24,
+-    covariates = list(WT = new_covariate(value = 50))
+-  )
+-  res2 <- create_event_table(
+-    regimen = reg2,
+-    t_obs = 24,
+-    covariates = list(WT = new_covariate(value = 50))
+-  )
+-
+-  expect_true(all(res1$rate == 0))
+-  expect_true(all(res2$rate == 0))
+-  expect_true(all(res1$t_inf == 0))
+-  expect_true(all(res2$t_inf == 0))
+-})
+diff --git a/tests/testthat/test_new_regimen.R b/tests/testthat/test_new_regimen.R
+index f5559b87..05a685eb 100644
+--- a/tests/testthat/test_new_regimen.R
++++ b/tests/testthat/test_new_regimen.R
+@@ -10,6 +10,7 @@ test_that("Regimen type parsed correctly", {
+   reg_sc <- new_regimen(amt = 100, n = 4, interval = 4, type = "sc")
+   reg_im <- new_regimen(amt = 100, n = 4, interval = 4, type = "im")
+   reg_mixed <- new_regimen(amt = 100, n = 5, interval = 4, type = c("bolus", "infusion", "oral", "sc", "im"))
++  reg_oral_susp <- new_regimen(amt = 1, n = 4, interval = 8, type = "oral_susp")
+ 
+   expect_equal(reg_oral$type, rep("oral", 4))
+   expect_equal(reg_bolus$type, rep("bolus", 4))
+@@ -17,6 +18,11 @@ test_that("Regimen type parsed correctly", {
+   expect_equal(reg_sc$type, rep("sc", 4))
+   expect_equal(reg_im$type, rep("im", 4))
+   expect_equal(reg_mixed$type, c("bolus", "infusion", "oral", "sc", "im"))
++  expect_equal(reg_oral_susp$type, rep("oral_susp", 4))
++
++  # oral-type regimens should have t_inf set to 0
++  expect_equal(reg_oral$t_inf, rep(0, 4))
++  expect_equal(reg_oral_susp$t_inf, rep(0, 4))
+ })
+ 
+ test_that("Auto-detect infusion vs bolus", {

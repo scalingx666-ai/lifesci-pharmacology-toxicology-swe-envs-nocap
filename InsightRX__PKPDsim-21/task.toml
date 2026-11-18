@@ -1,0 +1,64 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-21"
+description = "RXR-616: fix bug multiple infusion stop events"
+
+[metadata]
+difficulty = "medium"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "87f3574927fd3c18908ade39d53852cc5efa3000"
+reference = "https://github.com/InsightRX/PKPDsim/pull/21"
+source_access = "auto"
+built_at = "2026-11-16T19:42:08.763105+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:a4d5ee862f5214ef2cb4105f3e63588379392a0f6d97c2ed6794837bdadf1561"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2021-11-19T21:19:26Z"
+diff_format = "unified"
+context_files = [
+    "R/create_event_table.R",
+    "R/sim.R",
+    "tests/testthat/test_create_event_table.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 26
+difficulty = "medium"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

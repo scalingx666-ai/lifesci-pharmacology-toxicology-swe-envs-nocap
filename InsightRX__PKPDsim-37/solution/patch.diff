@@ -1,0 +1,285 @@
+diff --git a/DESCRIPTION b/DESCRIPTION
+index 5ce1fb04..20caacc3 100644
+--- a/DESCRIPTION
++++ b/DESCRIPTION
+@@ -1,8 +1,8 @@
+ Package: PKPDsim
+ Type: Package
+ Title: Tools for Performing Pharmacokinetic-Pharmacodynamic Simulations
+-Version: 1.1.0
+-Date: 2022-01-04
++Version: 1.1.1
++Date: 2022-03-31
+ Authors@R: c(
+         person("Ron", "Keizer", email = "ron@insight-rx.com", role = c("aut", "cre")),
+         person("Jasmine", "Hughes", email = "jasmine@insight-rx.com", role = "aut"),
+@@ -19,6 +19,7 @@ Description: Simulate dose regimens for pharmacokinetic-pharmacodynamic (PK-PD)
+         ADVAN-style analytical equations is also supported (Abuhelwa et al. (2015) 
+         <doi:10.1016/j.vascn.2015.03.004>).
+ License: MIT + file LICENSE
++URL: https://github.com/InsightRX/PKPDsim
+ LazyData: TRUE
+ RoxygenNote: 7.1.2
+ Config/testthat/edition: 3
+diff --git a/NEWS.md b/NEWS.md
+index 470f574e..3eadfeca 100644
+--- a/NEWS.md
++++ b/NEWS.md
+@@ -1,3 +1,3 @@
+-# PKPDsim 1.1.0
++# PKPDsim 1.1.1
+ 
+ This is the first version of PKPDsim that is released to CRAN. Previous versions were only made available at Github (InsightRX/PKPDsim).
+diff --git a/R/compile_sim_cpp.R b/R/compile_sim_cpp.R
+index 0dc67129..6b7eac24 100644
+--- a/R/compile_sim_cpp.R
++++ b/R/compile_sim_cpp.R
+@@ -145,10 +145,10 @@ compile_sim_cpp <- function(
+   cov_scale <- ""
+   cov_names <- NULL
+   if(!is.null(covariates)) {
+-    if(class(covariates) == "character") {
++    if(inherits(covariates, "character")) {
+       cov_names <- covariates
+     }
+-    if(class(covariates) == "list") {
++    if(inherits(covariates, "list")) {
+       cov_names <- names(covariates)
+     }
+   }
+diff --git a/R/mvrnorm2.R b/R/mvrnorm2.R
+index 0e415c05..495cc46d 100644
+--- a/R/mvrnorm2.R
++++ b/R/mvrnorm2.R
+@@ -22,7 +22,7 @@ mvrnorm2 <- function(n, mu, Sigma, exponential = FALSE, sequence = NULL, ...) {
+     )
+   }
+   if(is.null(dim(Sigma))) { # specified as lower triangle?
+-    if(class(Sigma) == "numeric") {
++    if(inherits(Sigma, "numeric")) {
+       Sigma_full <- triangle_to_full(Sigma)
+     } else {
+       stop("Covariance matrix not specified correctly.")
+diff --git a/R/new_ode_model.R b/R/new_ode_model.R
+index bb34d8f3..6b25f542 100644
+--- a/R/new_ode_model.R
++++ b/R/new_ode_model.R
+@@ -88,7 +88,7 @@ new_ode_model <- function (model = NULL,
+     stop(paste0("Either a model name (from the PKPDsim library), ODE code, an R function, or a file containing code for the ODE system have to be supplied to this function. The following models are available:\n  ", model_library()))
+   }
+   if (!is.null(func)) { # R function supplied, use deSolve approach
+-    if(class(func) != "function") {
++    if(!inherits(func, "function")) {
+       stop("The object specified in 'func' is not a valid R function.")
+     }
+     sim_out <- func
+@@ -107,7 +107,7 @@ new_ode_model <- function (model = NULL,
+     }
+     code_init_text <- ""
+     code <- gsub("(#).*?\\n", "\n", code) # remove comments
+-    if(class(state_init) == "character") {
++    if(inherits(state_init, "character")) {
+       code <- gsub("dadt", "dAdt", code)
+       code <- gsub("DADT", "dAdt", code)
+       code <- gsub("^\\n", "", code)
+@@ -182,7 +182,7 @@ new_ode_model <- function (model = NULL,
+       }
+       parameters <- get_parameters_from_code(comb_code, state_init, declare_variables)
+     } else {
+-      if(class(parameters) == "list") {
++      if(inherits(parameters, "list")) {
+         parameters <- names(parameters)
+       }
+     }
+@@ -194,10 +194,10 @@ new_ode_model <- function (model = NULL,
+     if(is.null(dose$cmt))  { dose$cmt <- 1 }
+     cov_names <- NULL
+     if(!is.null(covariates)) {
+-      if(class(covariates) == "character") {
++      if(inherits(covariates, "character")) {
+         cov_names <- covariates
+       }
+-      if(class(covariates) == "list") {
++      if(inherits(covariates, "list")) {
+         cov_names <- names(covariates)
+       }
+     }
+diff --git a/R/sim.R b/R/sim.R
+index 75732f81..f037bc34 100644
+--- a/R/sim.R
++++ b/R/sim.R
+@@ -179,10 +179,10 @@ sim <- function (ode = NULL,
+       }
+     }
+     if(is.null(analytical)) {
+-      if("function" %in% class(ode) && is.null(attr(ode, "cpp")) || attr(ode, "cpp") == FALSE) {
++      if(inherits(ode, "function") && !isTRUE(attr(ode, "cpp"))) {
+         stop("Sorry. Non-C++ functions are deprecated as input for ODE.")
+       } else {
+-        if("function" %in% class(ode)) {
++        if(inherits(ode, "function")) {
+           size <- attr(ode,  "size")
+         } else {
+           size <- attr(get(ode),  "size")
+@@ -207,7 +207,7 @@ sim <- function (ode = NULL,
+     #    stop("Please specify possible observation times for time-to-event analysis as 't_tte' argument!")
+     #  }
+     if(is.null(analytical)) {
+-      if("function" %in% class(ode) && is.null(attr(ode, "cpp")) || attr(ode, "cpp") == FALSE) {
++      if(inherits(ode, "function") && is.null(attr(ode, "cpp")) || attr(ode, "cpp") == FALSE) {
+         stop("Sorry. Non-C++ functions are deprecated.")
+       }
+     }
+@@ -215,12 +215,12 @@ sim <- function (ode = NULL,
+       if(!is.null(covariates_table)) {
+         stop("Both `covariates` and `covariates_table` are specified!")
+       }
+-      if(class(covariates) != "list") {
++      if(!inherits(covariates, "list")) {
+         stop("Covariates need to be specified as a list!")
+       } else {
+         for(key in names(covariates)) {
+-          if(!"covariate" %in% class(covariates[[key]])) {
+-            if(class(covariates[[key]]) == "numeric") { # auto-conversion for convenience
++          if(! inherits(covariates[[key]], "covariate")) {
++            if(inherits(covariates[[key]], "numeric")) { # auto-conversion for convenience
+               covariates[[key]] <- new_covariate(covariates[[key]])
+             }
+           }
+@@ -228,10 +228,10 @@ sim <- function (ode = NULL,
+       }
+     }
+     if(!is.null(parameters_table)) {
+-      if(class(parameters_table) %in% c("data.frame", "data.table")) {
++      if(inherits(parameters_table, "data.frame") || inherits(parameters_table, "data.table")) {
+         parameters_table <- table_to_list(parameters_table)
+       }
+-      if(class(parameters_table) != "list") {
++      if(!inherits(parameters_table, "list")) {
+         stop("Sorry, covariates for population seem to be misspecified. See manual for more information.")
+       }
+       if(length(parameters_table) != n_ind) {
+@@ -240,10 +240,10 @@ sim <- function (ode = NULL,
+       p <- parameters_table[[1]]
+     }
+     if(!is.null(covariates_table)) {
+-      if(class(covariates_table) %in% c("data.frame", "data.table")) {
++      if(inherits(covariates_table, "data.frame") || inherits(covariates_table, "data.table")) {
+         covariates_table <- covariates_table_to_list(covariates_table, covariates_implementation)
+       }
+-      if(class(covariates_table) != "list") {
++      if(! inherits(covariates_table, "list")) {
+         stop("Sorry, covariates for population seem to be misspecified. See manual for more information.")
+       }
+       if(length(covariates_table) != n_ind) {
+@@ -282,7 +282,7 @@ sim <- function (ode = NULL,
+         }
+       }
+     }
+-    if(! any(c("regimen", "regimen_multiple") %in% class(regimen))) {
++    if(! (inherits(regimen, "regimen") || inherits(regimen, "regimen_multiple"))) {
+       stop("Please create a regimen using the new_regimen() function!")
+     }
+     if(verbose) {
+@@ -292,10 +292,10 @@ sim <- function (ode = NULL,
+     size <- attr(ode, "size")
+   }
+   if (!is.null(omega)) {
+-    if(class(omega) == "matrix") {
++    if(inherits(omega, "matrix")) {
+       omega_mat <- omega
+     }
+-    if(class(omega) %in% c("numeric", "integer")) {
++    if(mode(omega) == "numeric") {
+       omega_mat <- triangle_to_full(omega)
+     }
+     etas <- mvrnorm2(n = n_ind, mu=rep(0, nrow(omega_mat)), Sigma=omega_mat, sequence=sequence)
+@@ -303,7 +303,7 @@ sim <- function (ode = NULL,
+       etas <- t(matrix(etas))
+     }
+   }
+-  if("regimen_multiple" %in% class(regimen)) {
++  if(inherits(regimen, "regimen_multiple")) {
+     n_ind <- length(regimen)
+   } else {
+     if(is.null(t_obs)) { # find reasonable default to output
+@@ -355,7 +355,7 @@ sim <- function (ode = NULL,
+     A_init <- rep(0, size)
+   }
+   events <- c() # only for tte
+-  if("regimen_multiple" %in% class(regimen) && !is.null(covariates_table)) {
++  if(inherits(regimen, "regimen_multiple") && !is.null(covariates_table)) {
+     stop("Sorry, can't simulate multiple regimens for a population in single call to PKPDsim. Use a loop instead.")
+   }
+ 
+@@ -402,7 +402,7 @@ sim <- function (ode = NULL,
+         p_i[[mixture_obj$parameter]] <- mixture_obj$values[mixture_group[i]]
+       }
+     }
+-    if("regimen_multiple" %in% class(regimen)) {
++    if(inherits(regimen, "regimen_multiple")) {
+       if(is.null(t_obs)) { # find reasonable default to output
+         t_obs <- get_t_obs_from_regimen(
+           regimen[[i]], obs_step_size, t_max,
+@@ -412,7 +412,7 @@ sim <- function (ode = NULL,
+         obs_type <- rep(1, length(t_obs))
+       }
+       design_i <- create_event_table(regimen[[i]], t_max, t_obs, t_tte, t_init = t_init, p_i, covariates_tmp)
+-      if("regimen_multiple" %in% class(regimen)) {
++      if(inherits(regimen, "regimen_multiple")) {
+         p_i$dose_times <- regimen[[i]]$dose_times
+         p_i$dose_amts <- regimen[[i]]$dose_amts
+       }
+diff --git a/cran-comments.md b/cran-comments.md
+index 186c6969..fece1e37 100755
+--- a/cran-comments.md
++++ b/cran-comments.md
+@@ -2,7 +2,7 @@
+ 
+ - The example in sim.R is put within \donttest{} since it often goes over the 5s limit on CRAN. The example is however very useful to users so would strongly prefer to keep it in. The example cannot be made to run faster as it contains a compilation step that takes 4-5 s.
+ 
+-- 2 NOTEs are expected during CRAN-submission.
++- several NOTEs are expected during CRAN-submission.
+ 
+ * checking CRAN incoming feasibility ... NOTE
+ Maintainer: 'Ron Keizer <ron@insight-rx.com>'
+@@ -32,6 +32,24 @@ Namespace in Imports field not imported from: 'BH'
+ 
+ Maintainer response: The BH package provides Boost C++ library headers. The BH library is not used in any of the code in /R or /src, but only in the C++ templates that comes with the package (in /inst/cpp). The C++ templates are used when creating a model using the new_ode_model() function, which is then compiled on-the-fly. If the BH package is removed from the Depends field, it won't be installed and hence models cannot be compiled and run. BH cannot be moved to the LinkingTo field.
+ 
++* CRAN repository db overrides:
++  X-CRAN-Comment: Archived on 2022-01-19 for policy violation.
++
++  On not remving debugging information.
++
++Maintainer response: to reduce file size, we were stripping logging information
++from the compiled code, to greatly reduce the compiled file size in /libs. 
++We did not realize this is against CRAN policy. The installed package size is
++now larger.
++
++* checking installed package size ... NOTE
++  installed size is 10.4Mb
++  sub-directories of 1Mb or more:
++    libs   9.8Mb
++    
++Maintainer response: see comment above. We attempted to reduce the file size
++of the compiled files, but this lead to a CRAN check failure.
++
+ ## Test environments
+ 
+ * MacOS MBP-M1 (local, R 4.1.2)
+diff --git a/src/Makevars b/src/Makevars
+index 347d79dc..b7cf3853 100644
+--- a/src/Makevars
++++ b/src/Makevars
+@@ -1,4 +1,7 @@
+-strippedLib: $(SHLIB)
+-	if test -e "/usr/bin/strip" & test -e "/bin/uname" & [[ `uname` == "Linux" ]] ; then /usr/bin/strip --strip-debug $(SHLIB); fi
+-.phony: strippedLib
++## The code below reduces the size of the installed package, but it makes a
++## CRAN test fail, so leaving this commented for now.
++
++# strippedLib: $(SHLIB)
++#  if test -e "/usr/bin/strip" & test -e "/bin/uname" & [[ `uname` == "Linux" ]] ; then /usr/bin/strip --strip-debug $(SHLIB); fi
++# .phony: strippedLib
+ 

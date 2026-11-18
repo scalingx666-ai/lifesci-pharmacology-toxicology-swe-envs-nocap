@@ -1,0 +1,233 @@
+diff --git a/NAMESPACE b/NAMESPACE
+index cf501c2b..145be003 100644
+--- a/NAMESPACE
++++ b/NAMESPACE
+@@ -26,6 +26,13 @@ export(covariates_table_to_list)
+ export(cv_to_omega)
+ export(detect_ode_syntax)
+ export(f_cov)
++export(get_model_auc_compartment)
++export(get_model_covariates)
++export(get_model_fixed_parameters)
++export(get_model_iov)
++export(get_model_linearity)
++export(get_model_parameters)
++export(get_model_structure)
+ export(get_ode_model_size)
+ export(get_parameters_from_code)
+ export(get_var_y)
+diff --git a/R/get_fixed_parameters.R b/R/get_fixed_parameters.R
+index f3a74e6c..7a922948 100644
+--- a/R/get_fixed_parameters.R
++++ b/R/get_fixed_parameters.R
+@@ -1,6 +1,9 @@
+-#' Get fixed parameters
++#' Get fixed parameters from model defintion.
+ #'
+-#' Get fixed parameters listed in model definition.
++#' Get fixed parameters listed in model definition. This function is used when
++#' parsing model specifications before the model has been compiled. Please see
++#' `[get_model_fixed_parameters]` for accessing fixed parameters from a model
++#' that has already been built.
+ #'
+ #' @param def Model definition as output by [read_model_json()]
+ #' @md
+diff --git a/R/get_model_info.R b/R/get_model_info.R
+new file mode 100644
+index 00000000..d99e4096
+--- /dev/null
++++ b/R/get_model_info.R
+@@ -0,0 +1,62 @@
++#' Functions for getting information about a model
++#'
++#' PKPDsim models encode information about using the model that can be helpful
++#' for working with the model. This family of functions provides an easier API
++#' for accessing useful information. See also `attributes(model)` for less
++#' commonly used model metadata. Functions will return `NULL` if the requested
++#' field is not available.
++#'
++#' @name get_model_info
++#' @param model PKPDsim model
++NULL
++
++#' Get parameters required for a model
++#' @rdname get_model_info
++#' @returns get_model_parameters: returns a vector of PK parameter names
++#' @export
++get_model_parameters <- function(model) attr(model, "parameters")
++
++#' Get covariates required for a model
++#' @rdname get_model_info
++#' @returns get_model_covariates: returns a vector of covariate names
++#' @export
++get_model_covariates <- function(model) attr(model, "covariates")
++
++#' Get fixed parameters in model
++#' @rdname get_model_info
++#' @returns get_model_fixed_parameters: returns a vector of names of parameters
++#'   that are not associated with inter-individual or inter-occasion
++#'   variability.
++#' @export
++get_model_fixed_parameters <- function(model) attr(model, "fixed")
++
++#' Get model structure
++#' @rdname get_model_info
++#' @returns get_model_structure: returns a single string indicating model
++#'   structure. E.g.,: "1cmt_iv", "2cmt_oral".
++#' @export
++get_model_structure <- function(model) attr(model, "misc")[["model_type"]]
++
++#' Get model linearity
++#' @rdname get_model_info
++#' @returns get_model_linearity: returns a single string indicating model
++#'   linearity. E.g., "linear" or "nonlinear".
++#' @export
++get_model_linearity <- function(model) attr(model, "misc")[["linearity"]]
++
++#' Get AUC compartment
++#' @rdname get_model_info
++#' @returns get_model_auc_compartment: returns the index of the final
++#'   compartment, which is conventionally the AUC compartment. Note: will not
++#'   detect if the final compartment is actually encoded to describe AUC.
++#' @export
++get_model_auc_compartment <- function(model) attr(model, "size")
++
++#' Get inter-occasion variability specifications
++#' @rdname get_model_info
++#' @returns get_model_iov: returns information about the IOV structure. For
++#'   models without IOV, returns a single field (`list(n_bins = 1)`). Models
++#'   with IOV will return additional fields: n_bins, bin durations, and CV
++#'   associated with each PK parameter.
++#' @export
++get_model_iov <- function(model) attr(model, "iov")
+diff --git a/man/get_fixed_parameters.Rd b/man/get_fixed_parameters.Rd
+index 27e7cfbc..49174a7f 100644
+--- a/man/get_fixed_parameters.Rd
++++ b/man/get_fixed_parameters.Rd
+@@ -2,7 +2,7 @@
+ % Please edit documentation in R/get_fixed_parameters.R
+ \name{get_fixed_parameters}
+ \alias{get_fixed_parameters}
+-\title{Get fixed parameters}
++\title{Get fixed parameters from model defintion.}
+ \usage{
+ get_fixed_parameters(def)
+ }
+@@ -10,5 +10,8 @@ get_fixed_parameters(def)
+ \item{def}{Model definition as output by \code{\link[=read_model_json]{read_model_json()}}}
+ }
+ \description{
+-Get fixed parameters listed in model definition.
++Get fixed parameters listed in model definition. This function is used when
++parsing model specifications before the model has been compiled. Please see
++\verb{[get_model_fixed_parameters]} for accessing fixed parameters from a model
++that has already been built.
+ }
+diff --git a/man/get_model_info.Rd b/man/get_model_info.Rd
+new file mode 100644
+index 00000000..5da90783
+--- /dev/null
++++ b/man/get_model_info.Rd
+@@ -0,0 +1,61 @@
++% Generated by roxygen2: do not edit by hand
++% Please edit documentation in R/get_model_info.R
++\name{get_model_info}
++\alias{get_model_info}
++\alias{get_model_parameters}
++\alias{get_model_covariates}
++\alias{get_model_fixed_parameters}
++\alias{get_model_structure}
++\alias{get_model_linearity}
++\alias{get_model_auc_compartment}
++\alias{get_model_iov}
++\title{Functions for getting information about a model}
++\usage{
++get_model_parameters(model)
++
++get_model_covariates(model)
++
++get_model_fixed_parameters(model)
++
++get_model_structure(model)
++
++get_model_linearity(model)
++
++get_model_auc_compartment(model)
++
++get_model_iov(model)
++}
++\arguments{
++\item{model}{PKPDsim model}
++}
++\value{
++get_model_parameters: returns a vector of PK parameter names
++
++get_model_covariates: returns a vector of covariate names
++
++get_model_fixed_parameters: returns a vector of names of parameters
++that are not associated with inter-individual or inter-occasion
++variability.
++
++get_model_structure: returns a single string indicating model
++structure. E.g.,: "1cmt_iv", "2cmt_oral".
++
++get_model_linearity: returns a single string indicating model
++linearity. E.g., "linear" or "nonlinear".
++
++get_model_auc_compartment: returns the index of the final
++compartment, which is conventionally the AUC compartment. Note: will not
++detect if the final compartment is actually encoded to describe AUC.
++
++get_model_iov: returns information about the IOV structure. For
++models without IOV, returns a single field (\code{list(n_bins = 1)}). Models
++with IOV will return additional fields: n_bins, bin durations, and CV
++associated with each PK parameter.
++}
++\description{
++PKPDsim models encode information about using the model that can be helpful
++for working with the model. This family of functions provides an easier API
++for accessing useful information. See also \code{attributes(model)} for less
++commonly used model metadata. Functions will return \code{NULL} if the requested
++field is not available.
++}
+diff --git a/tests/testthat/setup.R b/tests/testthat/setup.R
+index a33e349d..9dc6bb2c 100644
+--- a/tests/testthat/setup.R
++++ b/tests/testthat/setup.R
+@@ -15,6 +15,7 @@ oral_1cmt_allometric <- new_ode_model( # also timevarying and dose-dependence fa
+       }
+       dAdt[1] = -KA * A[1]
+       dAdt[2] = KA*A[1] - (CLi/Vi)*A[2]
++      dAdt[3] = A[2]/Vi
+     ",
+   dose = list(cmt = 1, bioav = 1),
+   covariates = list(WT = new_covariate(50)),
+diff --git a/tests/testthat/test_get_model_info.R b/tests/testthat/test_get_model_info.R
+new file mode 100644
+index 00000000..3a57faca
+--- /dev/null
++++ b/tests/testthat/test_get_model_info.R
+@@ -0,0 +1,8 @@
++test_that("Model info can be accessed easily", {
++  expect_null(get_model_covariates(mod_1cmt_oral))
++  expect_equal(get_model_covariates(oral_1cmt_allometric), "WT")
++  expect_equal(get_model_parameters(oral_1cmt_allometric), c("KA", "CL", "V"))
++  expect_null(get_model_fixed_parameters(oral_1cmt_allometric))
++  expect_equal(get_model_auc_compartment(oral_1cmt_allometric), 3)
++  expect_equal(get_model_iov(oral_1cmt_allometric), list(n_bins = 1))
++})
+diff --git a/tests/testthat/test_model_from_api.R b/tests/testthat/test_model_from_api.R
+index 60deeb8d..62d00c81 100644
+--- a/tests/testthat/test_model_from_api.R
++++ b/tests/testthat/test_model_from_api.R
+@@ -7,6 +7,10 @@ test_that("Can specify a package from json", {
+     force = TRUE
+   )
+   expect_true("PKPDsim" %in% class(mod))
++  expect_equal(get_model_parameters(mod), c("CL", "V", "TDM_INIT"))
++  expect_equal(get_model_iov(mod), list(n_bins = 1))
++  expect_equal(get_model_linearity(mod), "linear")
++  expect_equal(get_model_structure(mod), "1cmt_iv")
+ })
+ 
+ test_that("Can install a package from json, and spec added to package", {

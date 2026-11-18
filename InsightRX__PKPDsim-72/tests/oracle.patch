@@ -1,0 +1,13 @@
+diff --git a/R/new_covariate.R b/R/new_covariate.R
+index 86d5f03c..d0e7fbee 100644
+--- a/R/new_covariate.R
++++ b/R/new_covariate.R
+@@ -110,7 +110,7 @@ new_covariate <- function(
+     } else {
+       # assume observation was at t=0
+       new_times <- c(0, new_times[-1])
+-      message("Note: time for first covariate measurement set to 0.")
++      if (verbose) message("Note: time for first covariate measurement set to 0.")
+     }
+   }
+   if(length(new_unit) > length(new_values)) {

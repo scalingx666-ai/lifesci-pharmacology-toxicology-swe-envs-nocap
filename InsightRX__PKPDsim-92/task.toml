@@ -1,0 +1,69 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-92"
+description = "RXR-1926 implement infusion duration scaling"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "66bb556e5fbeb56ef1a024e27c63c3e91c1dc881"
+reference = "https://github.com/InsightRX/PKPDsim/pull/92"
+source_access = "auto"
+built_at = "2026-11-16T19:40:50.386178+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:983d358a54d3ff3d7016a86bafa768a45ef4964f8408171112fc56ef2d34e7bb"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2024-04-03T18:43:48Z"
+diff_format = "unified"
+context_files = [
+    "NAMESPACE",
+    "R/apply_duration_scale.R",
+    "R/new_ode_model.R",
+    "R/sim.R",
+    "inst/template/R/model.R",
+    "man/apply_duration_scale.Rd",
+    "tests/testthat/test_apply_duration_scale.R",
+    "tests/testthat/test_timevar_cov.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 217
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

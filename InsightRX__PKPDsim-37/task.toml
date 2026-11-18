@@ -1,0 +1,69 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-37"
+description = "CRAN submit of 1.1.1"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "8b0126658da30f7e0d67490361bf25e307631d2c"
+reference = "https://github.com/InsightRX/PKPDsim/pull/37"
+source_access = "auto"
+built_at = "2026-11-16T19:41:50.735561+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:c12e7c5aa2b9b5f15f50eaae64e1c4b6d3a635344973d0ae138ba33d3974060b"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2022-04-20T04:36:25Z"
+diff_format = "unified"
+context_files = [
+    "DESCRIPTION",
+    "NEWS.md",
+    "R/compile_sim_cpp.R",
+    "R/mvrnorm2.R",
+    "R/new_ode_model.R",
+    "R/sim.R",
+    "cran-comments.md",
+    "src/Makevars",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 86
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0

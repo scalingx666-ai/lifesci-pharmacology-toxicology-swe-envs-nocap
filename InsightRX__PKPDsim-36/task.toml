@@ -1,0 +1,69 @@
+version = "1.0"
+
+[task]
+name = "default/InsightRX__PKPDsim-36"
+description = "RXR-794: Support scale as a vector"
+
+[metadata]
+difficulty = "large"
+category = "bugfix"
+keywords = [
+    "PKPDsim",
+    "pr_diff",
+]
+
+[metadata.repo2env]
+pipeline = "pr_diff"
+pipeline_version = "0.3.0"
+repo = "InsightRX/PKPDsim"
+ref = "35c65a96a3e5271bc2f44eb92af14cf6d2fbffd6"
+reference = "https://github.com/InsightRX/PKPDsim/pull/36"
+source_access = "auto"
+built_at = "2026-11-16T19:41:52.083844+00:00"
+reward_kinds = [
+    "diff_similarity",
+]
+spec_version = "0.2.0"
+content_hash = "sha256:8c0b6149db4d1cc33ced64ee2199545a82498b59827d4ff2dac153cb15ffad13"
+
+[metadata.repo2env.pr_diff]
+pr_merged_at = "2022-05-31T23:34:37Z"
+diff_format = "unified"
+context_files = [
+    "DESCRIPTION",
+    "R/new_ode_model.R",
+    "R/parse_obs_types.R",
+    "man/check_obs_input.Rd",
+    "man/parse_obs_types.Rd",
+    "tests/testthat/test_multi_obs.R",
+    "tests/testthat/test_new_ode_model.R",
+    "tests/testthat/test_parse_obs_types.R",
+]
+
+[metadata.repo2env.reward_calibration]
+baseline_reward = 0.0
+loc_changed = 181
+difficulty = "large"
+
+[metadata.repo2env.evaluation]
+schema_version = "1"
+status = "unverified"
+stage = "generation"
+reason_codes = [
+    "validation_not_run",
+]
+detail = "Generated task; validation has not been established."
+provenance = "unknown"
+evidence = []
+
+[metadata.repo2env.reproducibility]
+mode = "local_only"
+image_ref = "python:3.12-slim"
+image_tag = "python:3.12-slim"
+image_visibility = "private"
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 300.0
